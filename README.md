@@ -30,10 +30,13 @@ Pendant une intervention SAMU ou aux urgences :
 
 ## Démarrer
 
-1. Installer **Unity 6000.0 LTS** (le projet utilise URP 17.0 et Input System 1.11, voir
-   `Packages/manifest.json`).
-2. Dans Unity Hub : **Add › Add project from disk**, choisir ce dossier. Au premier lancement, Unity
-   crée `ProjectSettings/` et importe les paquets.
+1. Installer **Unity 6** : le projet déclare la version 6000.6.4f1 (`ProjectSettings/ProjectVersion.txt`).
+   Une autre version 6000.x convient aussi : Hub propose alors de convertir le projet. Les paquets
+   intégrés à l'éditeur (URP, uGUI) s'alignent automatiquement sur sa version.
+2. Dans Unity Hub : **Add › Add project from disk**. Choisir le dossier qui contient directement
+   `Assets`, `Packages` et `ProjectSettings`. Attention : après « Extraire tout » sous Windows, ce dossier
+   se trouve souvent un niveau plus bas (`BlouseBlanche\BlouseBlanche`). Au premier lancement, Unity
+   complète `ProjectSettings/` et importe les paquets.
 3. Une fenêtre propose de **configurer le projet** : accepter. On peut aussi utiliser le menu
    **Blouse Blanche › Configurer le projet**, qui fait les étapes suivantes (on peut le relancer sans
    risque) :
