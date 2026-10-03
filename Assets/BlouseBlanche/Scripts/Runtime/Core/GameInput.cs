@@ -134,6 +134,50 @@ namespace BlouseBlanche.Core
 #endif
         }
 
+        /// <summary>Clic droit maintenu (ou gâchette gauche) : roue des outils.</summary>
+        public static bool WheelHeld()
+        {
+#if ENABLE_INPUT_SYSTEM
+            var mouse = Mouse.current;
+            var pad = Gamepad.current;
+            return (mouse != null && mouse.rightButton.isPressed)
+                || (pad != null && pad.leftTrigger.isPressed);
+#elif ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetMouseButton(1);
+#else
+            return false;
+#endif
+        }
+
+        /// <summary>Raccourcis d'outils : 1..9, 0, -, = → indice 0..11 (-1 si aucun).</summary>
+        public static int ToolHotkeyDown()
+        {
+#if ENABLE_INPUT_SYSTEM
+            var kb = Keyboard.current;
+            if (kb == null) return -1;
+            for (int i = 0; i < HotkeyKeys.Length; i++)
+                if (kb[HotkeyKeys[i]].wasPressedThisFrame) return i;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+            for (int i = 0; i < HotkeyCodes.Length; i++)
+                if (Input.GetKeyDown(HotkeyCodes[i])) return i;
+#endif
+            return -1;
+        }
+
+#if ENABLE_INPUT_SYSTEM
+        static readonly Key[] HotkeyKeys =
+        {
+            Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6,
+            Key.Digit7, Key.Digit8, Key.Digit9, Key.Digit0, Key.Minus, Key.Equals
+        };
+#elif ENABLE_LEGACY_INPUT_MANAGER
+        static readonly KeyCode[] HotkeyCodes =
+        {
+            KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5, KeyCode.Alpha6,
+            KeyCode.Alpha7, KeyCode.Alpha8, KeyCode.Alpha9, KeyCode.Alpha0, KeyCode.Minus, KeyCode.Equals
+        };
+#endif
+
         public static bool AnyKeyDown()
         {
 #if ENABLE_INPUT_SYSTEM

@@ -22,11 +22,15 @@ namespace BlouseBlanche.Gameplay
 
         Texture2D tex;
         Color32[] px;
-        Material mat;
+        Material mat, original;
+        Renderer screen;
         float timer;
         public MonitorSignal Signal;
         public EmergencySession Session;
         public bool Alarm;
+
+        /// <summary>Image du scope (réutilisée par l'interface de l'intervention).</summary>
+        public Texture2D Texture => tex;
 
         public static LiveMonitor Attach(Renderer screen, MonitorSignal signal)
         {
@@ -41,7 +45,9 @@ namespace BlouseBlanche.Gameplay
         {
             tex = new Texture2D(W, H, TextureFormat.RGBA32, false, false) { name = "LiveMonitor", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
             px = new Color32[W * H];
-            mat = new Material(r.sharedMaterial) { name = "LiveMonitorMat" };
+            screen = r;
+            original = r.sharedMaterial;
+            mat = new Material(original) { name = "LiveMonitorMat" };
             mat.SetTexture("_BaseMap", tex);
             mat.SetTexture("_MainTex", tex);
             mat.SetTexture("_EmissionMap", tex);
@@ -144,6 +150,8 @@ namespace BlouseBlanche.Gameplay
 
         void OnDestroy()
         {
+            // L'écran du décor retrouve son matériau d'origine (le scope peut être réutilisé par un autre cas).
+            if (screen != null && original != null) screen.sharedMaterial = original;
             if (tex != null) Destroy(tex);
             if (mat != null) Destroy(mat);
         }

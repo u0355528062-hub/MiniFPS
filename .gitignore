@@ -46,3 +46,4 @@ crashlytics-build.properties
 # Local compile-check tooling output
 /Tools/CompileCheck/bin/
 /Tools/CompileCheck/obj/
+!/Tools/CompileCheck/CompileCheck.csproj

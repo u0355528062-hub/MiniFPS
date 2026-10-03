@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BlouseBlanche.Emergency;
 using BlouseBlanche.Medical;
 using BlouseBlanche.World;
 using UnityEngine;
@@ -17,19 +18,35 @@ namespace BlouseBlanche.UI
 
         static readonly Dictionary<MedicalTool, Texture2D> cache = new Dictionary<MedicalTool, Texture2D>();
 
+        static readonly Dictionary<EmergencyTool, Texture2D> emergencyCache = new Dictionary<EmergencyTool, Texture2D>();
+
         public static Texture2D Get(MedicalTool tool)
         {
             if (cache.TryGetValue(tool, out var t) && t != null) return t;
-            var p = Paint(tool, 128);
-            t = new Texture2D(p.W, p.H, TextureFormat.RGBA32, true, false)
+            t = ToTexture(Paint(tool, 128), "Icon_" + tool);
+            cache[tool] = t;
+            return t;
+        }
+
+        /// <summary>Icônes du matériel d'urgence (prototypes SAMU / urgences).</summary>
+        public static Texture2D Get(EmergencyTool tool)
+        {
+            if (emergencyCache.TryGetValue(tool, out var t) && t != null) return t;
+            t = ToTexture(Paint(tool, 128), "IconUrg_" + tool);
+            emergencyCache[tool] = t;
+            return t;
+        }
+
+        static Texture2D ToTexture(TexturePainter p, string name)
+        {
+            var t = new Texture2D(p.W, p.H, TextureFormat.RGBA32, true, false)
             {
-                name = "Icon_" + tool,
+                name = name,
                 wrapMode = TextureWrapMode.Clamp,
                 filterMode = FilterMode.Trilinear
             };
             t.SetPixels32(p.ToColor32());
             t.Apply(true, true);
-            cache[tool] = t;
             return t;
         }
 
@@ -51,6 +68,28 @@ namespace BlouseBlanche.UI
                 case MedicalTool.ECG: Ecg(p, u); break;
                 case MedicalTool.TestsRapides: RapidTest(p, u); break;
                 case MedicalTool.Balance: Scale(p, u); break;
+            }
+            return p;
+        }
+
+        public static TexturePainter Paint(EmergencyTool tool, int s)
+        {
+            var p = new TexturePainter(s, s, Clear);
+            float u = s / 128f;
+            switch (tool)
+            {
+                case EmergencyTool.Bilan: Clipboard(p, u); break;
+                case EmergencyTool.Scope: Monitor(p, u); break;
+                case EmergencyTool.ECG: Ecg(p, u); break;
+                case EmergencyTool.Defibrillateur: Defibrillator(p, u); break;
+                case EmergencyTool.RCP: Cpr(p, u); break;
+                case EmergencyTool.Oxygene: OxygenBottle(p, u); break;
+                case EmergencyTool.Perfusion: IvBag(p, u); break;
+                case EmergencyTool.Medicaments: Syringe(p, u); break;
+                case EmergencyTool.Glucometre: Glucometer(p, u); break;
+                case EmergencyTool.Immobilisation: Splint(p, u); break;
+                case EmergencyTool.Biologie: TestTubes(p, u); break;
+                case EmergencyTool.Imagerie: XRay(p, u); break;
             }
             return p;
         }
@@ -234,6 +273,129 @@ namespace BlouseBlanche.UI
             L(p, 64, 100, 72, 108, u, 4);
             for (int i = 0; i < 5; i++) L(p, 90, 44 + i * 10, 100, 44 + i * 10, u, 3);
             L(p, 104, 40, 104, 92, u, 4);
+        }
+
+        // ================================================================== matériel d'urgence
+
+        static void Clipboard(TexturePainter p, float u)
+        {
+            Outline(p, 26, 8, 102, 112, 12, u);
+            p.FillRoundRect(46 * u, 100 * u, 82 * u, 120 * u, 6 * u, W);
+            p.FillRoundRect(56 * u, 106 * u, 72 * u, 114 * u, 3 * u, Clear);
+            p.Polyline(new[] { new Vector2(42, 62) * u, new Vector2(58, 46) * u, new Vector2(88, 80) * u }, 9 * u, W);
+            L(p, 42, 28, 86, 28, u, 4);
+        }
+
+        static void Monitor(TexturePainter p, float u)
+        {
+            Outline(p, 8, 34, 120, 112, 12, u);
+            L(p, 64, 34, 64, 18, u, 8);
+            L(p, 40, 14, 88, 14, u, 8);
+            var pts = new[]
+            {
+                new Vector2(20, 74), new Vector2(40, 74), new Vector2(47, 92), new Vector2(55, 56), new Vector2(62, 74),
+                new Vector2(78, 74), new Vector2(84, 82), new Vector2(90, 74), new Vector2(108, 74)
+            };
+            for (int i = 0; i < pts.Length; i++) pts[i] *= u;
+            p.Polyline(pts, 5 * u, W);
+        }
+
+        static void Defibrillator(TexturePainter p, float u)
+        {
+            p.Polyline(new[] { new Vector2(74, 122) * u, new Vector2(50, 82) * u, new Vector2(72, 82) * u, new Vector2(54, 44) * u }, 9 * u, W);
+            p.FillRoundRect(8 * u, 8 * u, 52 * u, 32 * u, 9 * u, W);
+            p.FillRoundRect(76 * u, 8 * u, 120 * u, 32 * u, 9 * u, W);
+            L(p, 30, 32, 30, 52, u, 7);
+            L(p, 98, 32, 98, 52, u, 7);
+        }
+
+        static void Cpr(TexturePainter p, float u)
+        {
+            p.Heart(64 * u, 46 * u, 34 * u, W);
+            L(p, 64, 124, 64, 94, u, 8);
+            L(p, 64, 90, 50, 104, u, 7);
+            L(p, 64, 90, 78, 104, u, 7);
+        }
+
+        static void OxygenBottle(TexturePainter p, float u)
+        {
+            p.FillRoundRect(38 * u, 6 * u, 90 * u, 92 * u, 20 * u, W);
+            p.FillRect((int)(56 * u), (int)(90 * u), (int)(72 * u), (int)(104 * u), W);
+            p.FillRoundRect(46 * u, 102 * u, 82 * u, 116 * u, 4 * u, W);
+            L(p, 82, 110, 104, 110, u, 6);
+            p.Text("O2", (int)(47 * u), (int)(38 * u), Mathf.Max(1, Mathf.RoundToInt(3f * u)), Clear);
+        }
+
+        static void IvBag(TexturePainter p, float u)
+        {
+            Outline(p, 32, 54, 96, 120, 16, u);
+            p.FillRoundRect(42 * u, 64 * u, 86 * u, 88 * u, 6 * u, W);
+            L(p, 64, 54, 64, 42, u, 5);
+            p.FillRoundRect(55 * u, 22 * u, 73 * u, 44 * u, 5 * u, W);
+            L(p, 64, 22, 64, 4, u, 4);
+            L(p, 52, 120, 76, 120, u, 5);
+        }
+
+        static void Syringe(TexturePainter p, float u)
+        {
+            p.Line(34 * u, 34 * u, 86 * u, 86 * u, 24 * u, W);
+            p.Line(40 * u, 40 * u, 80 * u, 80 * u, 11 * u, Clear);
+            p.Line(40 * u, 40 * u, 58 * u, 58 * u, 11 * u, W);
+            L(p, 34, 34, 10, 10, u, 3.5f);
+            L(p, 76, 96, 96, 76, u, 6);
+            L(p, 86, 86, 106, 106, u, 6);
+            L(p, 98, 114, 114, 98, u, 7);
+        }
+
+        static void Glucometer(TexturePainter p, float u)
+        {
+            Outline(p, 26, 8, 94, 88, 16, u);
+            p.FillRoundRect(38 * u, 46 * u, 82 * u, 74 * u, 5 * u, W);
+            p.Text("1,0", (int)(43 * u), (int)(52 * u), Mathf.Max(1, Mathf.RoundToInt(2f * u)), Clear);
+            p.FillCircle(60 * u, 26 * u, 6 * u, W);
+            L(p, 60, 88, 60, 104, u, 8);
+            p.FillCircle(104 * u, 106 * u, 11 * u, W);
+            for (int y = 0; y < 16; y++)
+            {
+                float half = Mathf.Lerp(10f, 0.5f, y / 16f);
+                p.Line((104 - half) * u, (110 + y) * u, (104 + half) * u, (110 + y) * u, 1.6f * u, W);
+            }
+        }
+
+        static void Splint(TexturePainter p, float u)
+        {
+            L(p, 46, 12, 46, 116, u, 14);
+            L(p, 82, 12, 82, 116, u, 14);
+            for (int i = 0; i < 3; i++)
+            {
+                float y = 30 + i * 34;
+                p.FillRoundRect(30 * u, (y - 6) * u, 98 * u, (y + 6) * u, 4 * u, W);
+                p.FillRoundRect(54 * u, (y - 2) * u, 74 * u, (y + 2) * u, 1 * u, Clear);
+            }
+        }
+
+        static void TestTubes(TexturePainter p, float u)
+        {
+            foreach (float x in new[] { 24f, 56f, 88f })
+            {
+                p.FillRoundRect(x * u, 12 * u, (x + 18) * u, 110 * u, 9 * u, W);
+                p.FillRoundRect((x + 5) * u, 17 * u, (x + 13) * u, 104 * u, 4 * u, Clear);
+                p.FillRoundRect((x + 5) * u, 17 * u, (x + 13) * u, (x == 56f ? 70 : 52) * u, 4 * u, W);
+                L(p, x - 4, 110, x + 22, 110, u, 5);
+            }
+            L(p, 12, 72, 116, 72, u, 6);
+        }
+
+        static void XRay(TexturePainter p, float u)
+        {
+            Outline(p, 10, 10, 118, 118, 12, u);
+            L(p, 64, 26, 64, 102, u, 6);
+            for (int i = 0; i < 4; i++)
+            {
+                float y = 92 - i * 17;
+                Curve(p, u, 5, new Vector2(64, y), new Vector2(46, y + 3), new Vector2(30, y - 6));
+                Curve(p, u, 5, new Vector2(64, y), new Vector2(82, y + 3), new Vector2(98, y - 6));
+            }
         }
     }
 }

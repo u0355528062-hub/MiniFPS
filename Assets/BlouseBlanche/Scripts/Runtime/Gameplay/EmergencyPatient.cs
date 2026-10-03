@@ -18,6 +18,8 @@ namespace BlouseBlanche.Gameplay
         public HumanAnimator WitnessAnim;
         public EmergencyCase Case;
         public EmergencyLocation Location;
+        public Sex Sex;
+        public int Age;
         public EmergencySession Session;
         public bool InCare;
         public float CompressionVisual;
@@ -56,6 +58,8 @@ namespace BlouseBlanche.Gameplay
             p.Anim = anim;
             p.Case = c;
             p.Location = loc;
+            p.Sex = sex;
+            p.Age = age;
             p.onInteract = onInteract;
             p.InstanceSkin(look);
 
@@ -96,10 +100,17 @@ namespace BlouseBlanche.Gameplay
 
         public void ShockJolt() { if (Anim != null) Anim.Jolt = 1f; }
 
+        /// <summary>Retire le patient, son témoin et le matériau de peau instancié.</summary>
+        public void Despawn()
+        {
+            if (WitnessRig != null) Destroy(WitnessRig.gameObject);
+            if (skinMat != null) Destroy(skinMat);
+            Destroy(gameObject);
+        }
+
         void Update()
         {
             var cam = GameRoot.Instance != null && GameRoot.Instance.CameraDirector != null ? GameRoot.Instance.CameraDirector.Cam : null;
-            var s = Session != null ? Session.S : (Case.Initial != null ? null : null);
             PatientState st = Session != null ? Session.S : null;
 
             if (st != null)
