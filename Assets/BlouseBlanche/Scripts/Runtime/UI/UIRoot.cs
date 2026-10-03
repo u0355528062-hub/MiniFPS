@@ -30,12 +30,15 @@ namespace BlouseBlanche.UI
         public MainMenuView Menu { get; private set; }
         public SettingsView Settings { get; private set; }
         public PauseView Pause { get; private set; }
-        public DayIntroView DayIntro { get; private set; }
-        public AgendaView Agenda { get; private set; }
         public ConsultationView Consult { get; private set; }
+        public EmergencyView Emergency { get; private set; }
         public ToolWheelView Wheel { get; private set; }
         public ResultView Result { get; private set; }
+#if BB_STORY_MODE
+        public DayIntroView DayIntro { get; private set; }
+        public AgendaView Agenda { get; private set; }
         public DaySummaryView Summary { get; private set; }
+#endif
 
         VisualElement loading;
         VisualElement loadingFill;
@@ -88,12 +91,15 @@ namespace BlouseBlanche.UI
 
             Hud = new HudView(this, LayerHud);
             Menu = new MainMenuView(this, LayerScreens, game);
+#if BB_STORY_MODE
             DayIntro = new DayIntroView(this, LayerScreens, game);
             Agenda = new AgendaView(this, LayerScreens, game);
+            Summary = new DaySummaryView(this, LayerScreens, game);
+#endif
             Consult = new ConsultationView(this, LayerScreens, game);
+            Emergency = new EmergencyView(this, LayerScreens, game);
             Wheel = new ToolWheelView(this, LayerScreens, game);
             Result = new ResultView(this, LayerScreens, game);
-            Summary = new DaySummaryView(this, LayerScreens, game);
             Pause = new PauseView(this, LayerModal, game);
             Settings = new SettingsView(this, LayerModal, game);
             Ready = true;
@@ -131,7 +137,7 @@ namespace BlouseBlanche.UI
             UIX.Div(mark, "logo-cross-h");
             var titles = UIX.Div(brand, "col");
             UIX.Text(titles, "BLOUSE BLANCHE", "w800", "t-h1");
-            UIX.Text(titles, "Simulateur de médecine générale", "t-body");
+            UIX.Text(titles, "Simulateur médical", "t-body");
             UIX.Spacer(loading, 48);
             var bar = UIX.Div(loading, "loading-bar");
             loadingFill = UIX.Div(bar, "loading-fill");
@@ -195,6 +201,9 @@ namespace BlouseBlanche.UI
         }
 
         public void Fade(bool toBlack) => layerFade?.EnableInClassList("on", toBlack);
+
+        /// <summary>Écrans de prise en charge : notifications et sous-titres se décalent pour ne pas masquer les panneaux.</summary>
+        public void SetInCare(bool inCare) => Root?.EnableInClassList("in-care", inCare);
 
         // ================================================================== boîte de dialogue
 

@@ -27,7 +27,6 @@ namespace BlouseBlanche.Gameplay
 
         Material skinMat;
         Color skinBase;
-        Material[] lipMats;
 
         public static EmergencyPatient Spawn(WorldKit kit, EmergencyLocation loc, EmergencyCase c, int seed, Transform parent, System.Action onInteract)
         {

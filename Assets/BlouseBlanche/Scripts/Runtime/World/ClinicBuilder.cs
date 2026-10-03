@@ -111,7 +111,7 @@ namespace BlouseBlanche.World
 
         void BuildWalls()
         {
-            float H = L.WallHeight, e = L.ExteriorThickness, t = L.InteriorThickness * 0.5f;
+            float e = L.ExteriorThickness, t = L.InteriorThickness * 0.5f;
             const float paintDepth = 0.05f;
 
             // --- Murs extérieurs : couche intérieure peinte + couche extérieure enduite

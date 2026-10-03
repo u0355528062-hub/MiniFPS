@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using BlouseBlanche.Core;
 using BlouseBlanche.Medical;
+using BlouseBlanche.UI;
 using BlouseBlanche.World;
 using UnityEngine;
 

@@ -153,6 +153,7 @@
 }
 .bb-root .menu-item:hover { color: var(--text); border-left-color: var(--accent); translate: 8px 0; background-color: rgba(47, 212, 192, 0.06); }
 .bb-root .menu-item:disabled { opacity: 0.35; }
+.bb-root .menu-item.selected { color: var(--accent); border-left-color: var(--accent); background-color: rgba(47, 212, 192, 0.08); }
 
 /* ---------------------------------------------------------------- puces */
 .chip { padding: 4px 10px; border-radius: 999px; font-size: 12px; background-color: rgba(255, 255, 255, 0.08); color: var(--dim); -unity-font-definition: url("/Assets/BlouseBlanche/Fonts/Inter-SemiBold.ttf"); }
@@ -192,10 +193,12 @@
 
 .subtitle { position: absolute; left: 0; right: 0; bottom: 190px; align-items: center; opacity: 0; transition-property: opacity; transition-duration: 0.3s; }
 .subtitle.visible { opacity: 1; }
+.bb-root.in-care .subtitle { bottom: 300px; }
 .subtitle-box { max-width: 1000px; padding: 12px 22px; border-radius: 12px; background-color: rgba(6, 10, 18, 0.72); }
 
 /* ---------------------------------------------------------------- notifications */
 .toasts { position: absolute; right: 36px; top: 170px; width: 380px; }
+.bb-root.in-care .toasts { top: 236px; right: 640px; }
 .toast { flex-direction: row; margin-bottom: 10px; border-radius: 14px; background-color: var(--panel-2); border-width: 1px; border-color: var(--stroke-2); overflow: hidden; opacity: 0; translate: 40px 0; transition-property: opacity, translate; transition-duration: 0.3s; transition-timing-function: ease-out-back; }
 .toast.visible { opacity: 1; translate: 0 0; }
 .toast-bar { width: 5px; background-color: var(--accent-2); }
@@ -248,6 +251,10 @@
 .finding.critique { border-color: var(--danger); background-color: rgba(255, 90, 106, 0.09); }
 .dialog-line { margin-bottom: 8px; }
 .avatar { width: 56px; height: 56px; border-radius: 28px; background-color: var(--accent-dark); border-width: 2px; border-color: var(--accent); align-items: center; justify-content: center; }
+
+/* ---------------------------------------------------------------- intervention SAMU / urgences */
+.scope-box { width: 388px; height: 242px; border-radius: 10px; overflow: hidden; background-color: rgb(3, 7, 10); border-width: 1px; border-color: rgba(70, 255, 120, 0.25); }
+.result-banner { padding: 12px 18px; border-radius: 12px; background-color: rgba(10, 16, 28, 0.82); border-width: 1px; border-left-width: 3px; border-color: var(--stroke-2); border-left-color: var(--accent); white-space: normal; }
 
 /* ---------------------------------------------------------------- roue d'outils */
 .wheel-backdrop { background-color: rgba(4, 8, 14, 0.45); }

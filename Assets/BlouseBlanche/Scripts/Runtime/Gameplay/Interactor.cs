@@ -1,4 +1,5 @@
 using BlouseBlanche.Core;
+using BlouseBlanche.UI;
 using UnityEngine;
 
 namespace BlouseBlanche.Gameplay

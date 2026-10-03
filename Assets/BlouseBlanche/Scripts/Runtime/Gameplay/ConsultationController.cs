@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using BlouseBlanche.Characters;
 using BlouseBlanche.Core;
 using BlouseBlanche.Medical;
 using BlouseBlanche.World;
@@ -283,6 +284,19 @@ namespace BlouseBlanche.Gameplay
             held.Show(null);
             Tool = null;
             Finished?.Invoke(result);
+        }
+
+        /// <summary>Abandon sans évaluation (changement de cas, retour au menu) : l'hôte n'est pas prévenu.</summary>
+        public void Abort()
+        {
+            StopAllCoroutines();
+            Session = null;
+            Visit = null;
+            host = null;
+            Busy = false;
+            Tool = null;
+            if (held != null) held.Show(null);
+            if (root != null && root.PostFX != null) root.PostFX.SetFocus(false);
         }
 
         /// <summary>Après l'écran de résultat : le patient part, le joueur reprend la main.</summary>

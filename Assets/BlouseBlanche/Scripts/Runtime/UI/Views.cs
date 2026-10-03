@@ -27,13 +27,14 @@ namespace BlouseBlanche.UI
         public virtual void Hide() { Visible = false; UIX.Fade(Root, false); }
     }
 
+
     // ====================================================================== HUD
 
     public sealed class HudView : View
     {
-        readonly Label day, time, status, nextCaption, nextName, nextDetail, waiting, promptVerb, promptTarget, promptKey;
-        readonly VisualElement crosshair, prompt, promptBox, objectives, objList, skipHint, nextCard;
-        readonly Label urgentChip;
+        readonly Label day, time, status, nextCaption, nextName, nextDetail, waiting, promptVerb, promptTarget, promptKey, urgentChip;
+        readonly VisualElement crosshair, prompt, promptBox, objectives, objList, hints, nextCard;
+        string hintsSignature, objectivesSignature;
 
         public HudView(UIRoot ui, VisualElement parent) : base(ui)
         {
@@ -45,7 +46,7 @@ namespace BlouseBlanche.UI
 
             nextCard = UIX.Div(Root, "hud-next");
             var nrow = UIX.Div(nextCard, "row");
-            nextCaption = UIX.Text(nrow, "PROCHAIN PATIENT", "t-caption", "w600");
+            nextCaption = UIX.Text(nrow, "", "t-caption", "w600");
             UIX.Div(nrow, "spacer");
             urgentChip = UIX.Chip(nrow, "URGENCE", "solid-bad");
             UIX.Spacer(nextCard, 6);
@@ -70,10 +71,8 @@ namespace BlouseBlanche.UI
             promptVerb = UIX.Text(pcol, "", "w600", "t-h3");
             promptTarget = UIX.Text(pcol, "", "t-small");
 
-            var hints = UIX.Div(Root, "hud-hints");
-            Hint(hints, "Tab", "Agenda");
-            Hint(hints, "Échap", "Pause");
-            skipHint = Hint(hints, "F", "Avancer le temps");
+            hints = UIX.Div(Root, "hud-hints");
+            SetHints("E", "Interagir", "Maj", "Courir", "Échap", "Pause");
             UIX.IgnorePicking(Root);
         }
 
@@ -87,61 +86,97 @@ namespace BlouseBlanche.UI
             return row;
         }
 
-        public void SetObjectives(string[] items)
+        /// <summary>Raccourcis affichés en bas à gauche : paires (touche, action).</summary>
+        public void SetHints(params string[] pairs)
         {
+            string sig = string.Join("|", pairs);
+            if (sig == hintsSignature) return;
+            hintsSignature = sig;
+            hints.Clear();
+            for (int i = 0; i + 1 < pairs.Length; i += 2) Hint(hints, pairs[i], pairs[i + 1]);
+            UIX.IgnorePicking(hints);
+        }
+
+        /// <summary>Carte horloge (en haut à gauche).</summary>
+        public void SetClock(string caption, string clock, string detail)
+        {
+            day.text = caption ?? "";
+            time.text = clock ?? "";
+            status.text = detail ?? "";
+        }
+
+        /// <summary>Carte d'information (en haut à droite) : patient, intervention…</summary>
+        public void SetCard(string caption, string name, string detail, string chip = null, bool urgent = false)
+        {
+            nextCaption.text = caption ?? "";
+            nextName.text = name ?? "";
+            nextDetail.text = detail ?? "";
+            urgentChip.EnableInClassList("hidden", !urgent);
+            waiting.text = chip ?? "";
+            UIX.Show(waiting, !string.IsNullOrEmpty(chip));
+        }
+
+        public void SetObjectives(string[] items, bool[] done = null)
+        {
+            string sig = items == null ? "" : string.Join("|", items);
+            if (done != null) foreach (var d in done) sig += d ? "1" : "0";
+            if (sig == objectivesSignature) return;
+            objectivesSignature = sig;
             objList.Clear();
             if (items == null) return;
-            foreach (var s in items)
+            for (int i = 0; i < items.Length; i++)
             {
+                bool ok = done != null && i < done.Length && done[i];
                 var row = UIX.Div(objList, "row");
                 row.style.marginBottom = 4;
-                var d = UIX.Div(row, "dot", "good");
+                var d = UIX.Div(row, "dot", ok ? "good" : "");
                 d.style.marginTop = 0;
-                UIX.Text(row, s, "t-small");
+                var t = UIX.Text(row, items[i], "t-small", ok ? "t-muted" : "");
+                t.style.flexShrink = 1;
             }
             UIX.IgnorePicking(objList);
         }
 
-        public void Tick(GameRoot g)
+#if BB_STORY_MODE
+        /// <summary>Mode histoire : horloge, patients vus, prochain patient, salle d'attente.</summary>
+        public void TickStory(GameRoot g)
         {
             if (!Visible) return;
             var dd = g.Day;
-            day.text = dd.Plan != null ? ("JOUR " + (dd.Plan.Index + 1) + " · " + dd.Plan.DateLabel.ToUpperInvariant()) : "";
-            time.text = GameClock.Format(g.Clock.Minutes);
             int seen = 0, total = dd.Visits.Count, waitingCount = 0;
             foreach (var v in dd.Visits)
             {
                 if (v.Status == VisitStatus.Done) seen++;
                 if (v.Status == VisitStatus.Waiting) waitingCount++;
             }
-            status.text = seen + " / " + total + " patients vus · " + g.Save.money + " €";
+            SetClock(dd.Plan != null ? ("JOUR " + (dd.Plan.Index + 1) + " · " + dd.Plan.DateLabel.ToUpperInvariant()) : "",
+                GameClock.Format(g.Clock.Minutes), seen + " / " + total + " patients vus · " + g.Save.money + " €");
 
             var next = dd.NextToCall();
             var active = dd.ActiveConsultVisit();
-            urgentChip.EnableInClassList("hidden", next == null || !next.IsUrgent);
+            string chip = waitingCount == 0 ? "Salle d'attente vide" : waitingCount + (waitingCount > 1 ? " patients en attente" : " patient en attente");
             if (active != null)
             {
-                nextCaption.text = active.Status == VisitStatus.Called ? "PATIENT APPELÉ" : "AU CABINET";
-                nextName.text = active.Patient.DisplayName;
-                nextDetail.text = active.Status == VisitStatus.Called ? "Se rend dans votre cabinet…" : "Vous attend dans le cabinet : allez lui parler (E).";
+                SetCard(active.Status == VisitStatus.Called ? "PATIENT APPELÉ" : "AU CABINET", active.Patient.DisplayName,
+                    active.Status == VisitStatus.Called ? "Se rend dans votre cabinet…" : "Vous attend dans le cabinet : allez lui parler (E).", chip, active.IsUrgent);
             }
             else if (next != null)
             {
-                nextCaption.text = "EN SALLE D'ATTENTE";
-                nextName.text = next.Patient.DisplayName + " · " + next.Patient.AgeLabel;
-                nextDetail.text = next.Patient.Case.Motif + (next.Plan.WalkIn ? " · sans rendez-vous" : " · RDV " + GameClock.FormatSpoken(next.ScheduledTime));
+                SetCard("EN SALLE D'ATTENTE", next.Patient.DisplayName + " · " + next.Patient.AgeLabel,
+                    next.Patient.Case.Motif + (next.Plan.WalkIn ? " · sans rendez-vous" : " · RDV " + GameClock.FormatSpoken(next.ScheduledTime)), chip, next.IsUrgent);
             }
             else
             {
                 VisitRuntime up = null;
                 foreach (var v in dd.Visits) if (v.Status == VisitStatus.Upcoming && !v.Plan.WalkIn && (up == null || v.ScheduledTime < up.ScheduledTime)) up = v;
-                nextCaption.text = up != null ? "PROCHAIN RENDEZ-VOUS" : (dd.AllDone ? "JOURNÉE TERMINÉE" : "EN ATTENTE");
-                nextName.text = up != null ? up.Patient.DisplayName : (dd.AllDone ? "Tous les patients ont été vus" : "Aucun patient pour l'instant");
-                nextDetail.text = up != null ? "RDV " + GameClock.FormatSpoken(up.ScheduledTime) + " · " + up.Patient.Case.Motif : "";
+                SetCard(up != null ? "PROCHAIN RENDEZ-VOUS" : (dd.AllDone ? "JOURNÉE TERMINÉE" : "EN ATTENTE"),
+                    up != null ? up.Patient.DisplayName : (dd.AllDone ? "Tous les patients ont été vus" : "Aucun patient pour l'instant"),
+                    up != null ? "RDV " + GameClock.FormatSpoken(up.ScheduledTime) + " · " + up.Patient.Case.Motif : "", chip);
             }
-            waiting.text = waitingCount == 0 ? "Salle d'attente vide" : waitingCount + (waitingCount > 1 ? " patients en attente" : " patient en attente");
-            skipHint.EnableInClassList("hidden", !dd.CanSkipTime());
+            if (dd.CanSkipTime()) SetHints("Tab", "Agenda", "E", "Interagir", "F", "Avancer le temps", "Échap", "Pause");
+            else SetHints("Tab", "Agenda", "E", "Interagir", "Échap", "Pause");
         }
+#endif
 
         public void SetPrompt(IInteractable it)
         {
@@ -155,18 +190,35 @@ namespace BlouseBlanche.UI
         }
 
         public override void Show() { base.Show(); Root.RemoveFromClassList("hidden"); }
-        public override void Hide() { base.Hide(); Root.AddToClassList("hidden"); }
+        public override void Hide() { base.Hide(); Root.AddToClassList("hidden"); SetPrompt(null); }
 
         public void SetObjectivesVisible(bool v) => objectives.EnableInClassList("hidden", !v);
     }
 
     // ====================================================================== Menu principal
 
+    /// <summary>
+    /// Menu principal : choix d'un prototype (consultation, SAMU, urgences) puis d'un cas.
+    /// Le mode histoire n'apparaît qu'avec le symbole BB_STORY_MODE.
+    /// </summary>
     public sealed class MainMenuView : View
     {
         readonly GameRoot game;
-        readonly Button continueBtn;
+        readonly VisualElement picker, caseList;
+        readonly Label pickCaption, pickTitle, pickDesc, pickCount;
+        readonly Button launchBtn;
+        readonly Dictionary<PrototypeKind, Button> protoButtons = new Dictionary<PrototypeKind, Button>();
+        readonly Dictionary<string, Button> caseRows = new Dictionary<string, Button>();
+        PrototypeKind? current;
+        string selectedCase;
+        float lastSelectTime;
+#if BB_STORY_MODE
+        readonly VisualElement storyPanel;
+        readonly Button continueBtn, storyBtn;
         readonly Label stats;
+#endif
+
+        public PrototypeKind? CurrentPrototype => current;
 
         public MainMenuView(UIRoot ui, VisualElement parent, GameRoot game) : base(ui)
         {
@@ -179,7 +231,7 @@ namespace BlouseBlanche.UI
             var col = UIX.Div(s, "col");
             col.style.position = Position.Absolute;
             col.style.left = 120;
-            col.style.top = 150;
+            col.style.top = 130;
             col.style.width = 560;
 
             var brand = UIX.Div(col, "row");
@@ -191,49 +243,91 @@ namespace BlouseBlanche.UI
             var t2 = UIX.Text(titles, "BLANCHE", "w800", "t-display", "t-accent");
             t2.style.marginTop = -26;
             UIX.Spacer(col, 6);
-            UIX.Text(col, "Simulateur de médecine générale · Mode histoire", "t-body");
-            UIX.Spacer(col, 56);
+            UIX.Text(col, "Simulateur médical · prototypes jouables", "t-body");
+            UIX.Spacer(col, 44);
 
-            continueBtn = UIX.Plain(col, "Continuer", () => game.ContinueGame(), "menu-item");
-            UIX.Plain(col, "Nouvelle partie", () =>
+            UIX.Text(col, "PROTOTYPES", "t-caption", "w600");
+            UIX.Spacer(col, 6);
+            foreach (var k in PrototypeCatalog.All)
+            {
+                var kind = k;
+                protoButtons[k] = UIX.Plain(col, PrototypeCatalog.Name(k), () => OpenPicker(kind), "menu-item");
+            }
+#if BB_STORY_MODE
+            storyBtn = UIX.Plain(col, "Mode histoire", OpenStory, "menu-item");
+#endif
+            UIX.Spacer(col, 18);
+            UIX.Plain(col, "Paramètres", () => game.OpenSettings(), "menu-item");
+            UIX.Plain(col, "Quitter", () => game.QuitGame(), "menu-item");
+
+            // ------------------------------------------------------------ sélection du cas
+            picker = UIX.Div(s, "panel", "col");
+            picker.style.position = Position.Absolute;
+            picker.style.right = 80;
+            picker.style.top = 90;
+            picker.style.bottom = 90;
+            picker.style.width = 720;
+            var head = UIX.Div(picker, "row");
+            var hcol = UIX.Div(head, "col", "grow");
+            pickCaption = UIX.Text(hcol, "", "t-caption", "w600");
+            pickTitle = UIX.Text(hcol, "", "w800", "t-h2");
+            UIX.Btn(head, "Fermer", ClosePicker, "ghost", "small");
+            UIX.Spacer(picker, 10);
+            pickDesc = UIX.Text(picker, "", "t-body");
+            UIX.Spacer(picker, 16);
+            pickCount = UIX.Text(picker, "", "t-caption", "w600");
+            UIX.Spacer(picker, 8);
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.flexGrow = 1;
+            picker.Add(scroll);
+            caseList = scroll.contentContainer;
+            UIX.Spacer(picker, 14);
+            var foot = UIX.Div(picker, "row");
+            UIX.Btn(foot, "Cas au hasard", () => { if (current.HasValue) game.StartPrototype(current.Value, null); });
+            UIX.Div(foot, "spacer");
+            launchBtn = UIX.Btn(foot, "Lancer le cas", Launch, "primary", "big");
+            UIX.Show(picker, false);
+
+#if BB_STORY_MODE
+            storyPanel = UIX.Div(s, "panel", "col");
+            storyPanel.style.position = Position.Absolute;
+            storyPanel.style.right = 80;
+            storyPanel.style.top = 90;
+            storyPanel.style.width = 720;
+            UIX.Text(storyPanel, "MODE HISTOIRE · EXPÉRIMENTAL", "t-caption", "w600");
+            UIX.Text(storyPanel, "Le cabinet des Tilleuls", "w800", "t-h2");
+            UIX.Spacer(storyPanel, 10);
+            UIX.Text(storyPanel, "Reprenez la patientèle du Dr Lemoine : des matinées entières de consultations, des imprévus, des urgences, une réputation à construire.", "t-body");
+            UIX.Spacer(storyPanel, 14);
+            stats = UIX.Text(storyPanel, "", "t-small");
+            UIX.Spacer(storyPanel, 18);
+            var srow = UIX.Div(storyPanel, "row");
+            continueBtn = UIX.Btn(srow, "Continuer", () => game.ContinueGame(), "primary", "big");
+            UIX.HSpace(srow, 12);
+            UIX.Btn(srow, "Nouvelle partie", () =>
             {
                 if (SaveSystem.HasSave()) ui.Confirm("Nouvelle partie", "Votre progression actuelle sera effacée. Commencer une nouvelle carrière au cabinet des Tilleuls ?", "Commencer", game.NewGame);
                 else game.NewGame();
-            }, "menu-item");
-            UIX.Plain(col, "Paramètres", () => game.OpenSettings(), "menu-item");
-            UIX.Plain(col, "Quitter", () => game.QuitGame(), "menu-item");
-            UIX.Spacer(col, 30);
-            stats = UIX.Text(col, "", "t-small");
+            });
+            UIX.Show(storyPanel, false);
+#endif
 
-            // Cartes de modes de jeu
-            var modes = UIX.Div(s, "row");
-            modes.style.position = Position.Absolute;
-            modes.style.right = 60;
-            modes.style.bottom = 60;
-            Mode(modes, "MODE HISTOIRE", "Médecin généraliste", "Disponible", true);
-            Mode(modes, "URGENCES", "Urgentiste / SAMU", "Bientôt", false);
-            Mode(modes, "BLOC OPÉRATOIRE", "Chirurgie", "Bientôt", false);
-            Mode(modes, "BAC À SABLE", "Création libre", "Bientôt", false);
-
-            var ver = UIX.Text(s, "Prototype 0.1 · contenu pédagogique de jeu, ne remplace pas un avis médical", "t-tiny");
+            var ver = UIX.Text(s, "Prototype 0.2 · contenu pédagogique de jeu, ne remplace pas un avis médical", "t-tiny");
             ver.style.position = Position.Absolute;
             ver.style.left = 120;
             ver.style.bottom = 36;
         }
 
-        static void Mode(VisualElement parent, string caption, string title, string state, bool active)
+        /// <summary>Affiche le menu ; ouvre directement la liste des cas d'un prototype si demandé.</summary>
+        public void Show(PrototypeKind? openPicker)
         {
-            var card = UIX.Div(parent, "mode-card", active ? "active" : "locked");
-            UIX.Text(card, caption, "t-caption", "w600");
-            UIX.Spacer(card, 8);
-            UIX.Text(card, title, "w700", "t-h3");
-            UIX.Div(card, "spacer");
-            UIX.Chip(card, state, active ? "accent" : "info").style.alignSelf = Align.FlexStart;
-            card.RegisterCallback<PointerEnterEvent>(_ => UIX.Sound(Sfx.UiHover, 0.3f));
+            if (openPicker.HasValue) OpenPicker(openPicker.Value);
+            Show();
         }
 
         public override void Show()
         {
+#if BB_STORY_MODE
             bool has = SaveSystem.HasSave();
             continueBtn.EnableInClassList("hidden", !has);
             if (has)
@@ -242,8 +336,93 @@ namespace BlouseBlanche.UI
                 continueBtn.text = "Continuer · Jour " + (sd.dayIndex + 1);
                 stats.text = "Réputation " + Mathf.RoundToInt(sd.reputation) + "/100 · " + sd.totalPatients + " patients soignés · note moyenne " + Mathf.RoundToInt(sd.AverageScore) + "/100";
             }
-            else stats.text = "";
+            else stats.text = "Aucune partie en cours.";
+#endif
             base.Show();
+        }
+
+        void OpenPicker(PrototypeKind kind)
+        {
+#if BB_STORY_MODE
+            UIX.Show(storyPanel, false);
+            storyBtn.RemoveFromClassList("selected");
+#endif
+            if (current != kind) selectedCase = null;
+            current = kind;
+            foreach (var kv in protoButtons) kv.Value.EnableInClassList("selected", kv.Key == kind);
+            pickCaption.text = PrototypeCatalog.Caption(kind);
+            pickTitle.text = PrototypeCatalog.Name(kind);
+            pickDesc.text = PrototypeCatalog.Description(kind);
+            RebuildCases();
+            UIX.Show(picker, true);
+        }
+
+        void ClosePicker()
+        {
+            current = null;
+            selectedCase = null;
+            foreach (var kv in protoButtons) kv.Value.RemoveFromClassList("selected");
+            UIX.Show(picker, false);
+        }
+
+#if BB_STORY_MODE
+        void OpenStory()
+        {
+            ClosePicker();
+            storyBtn.AddToClassList("selected");
+            UIX.Show(storyPanel, true);
+        }
+#endif
+
+        void RebuildCases()
+        {
+            caseList.Clear();
+            caseRows.Clear();
+            if (!current.HasValue) return;
+            var cases = PrototypeCatalog.Cases(current.Value);
+            pickCount.text = cases.Count + " CAS · DOUBLE-CLIC POUR LANCER";
+            foreach (var c in cases)
+            {
+                string id = c.Id;
+                var row = UIX.Plain(caseList, "", () => Select(id), "list-btn");
+                row.style.flexDirection = FlexDirection.Column;
+                row.style.alignItems = Align.Stretch;
+                var top = UIX.Div(row, "row");
+                var name = UIX.Text(top, c.Title, "w700");
+                name.style.flexGrow = 1;
+                name.style.flexShrink = 1;
+                if (c.Urgent) { UIX.Chip(top, "URGENCE VITALE", "solid-bad"); UIX.HSpace(top, 6); }
+                UIX.Chip(top, PrototypeCatalog.DifficultyLabel(c.Difficulty), c.Difficulty >= 3 ? "bad" : c.Difficulty == 2 ? "warn" : "ok");
+                UIX.Spacer(row, 4);
+                var detail = UIX.Text(row, c.Detail, "t-tiny");
+                detail.style.whiteSpace = WhiteSpace.Normal;
+                UIX.IgnorePicking(top);
+                detail.pickingMode = PickingMode.Ignore;
+                caseRows[id] = row;
+            }
+            RefreshSelection();
+        }
+
+        void Select(string id)
+        {
+            // Double clic sur le même cas : lancement direct.
+            bool again = id == selectedCase && Time.unscaledTime - lastSelectTime < 0.45f;
+            selectedCase = id;
+            lastSelectTime = Time.unscaledTime;
+            RefreshSelection();
+            if (again) Launch();
+        }
+
+        void RefreshSelection()
+        {
+            foreach (var kv in caseRows) kv.Value.EnableInClassList("selected", kv.Key == selectedCase);
+            launchBtn.SetEnabled(selectedCase != null);
+        }
+
+        void Launch()
+        {
+            if (!current.HasValue || selectedCase == null) return;
+            game.StartPrototype(current.Value, selectedCase);
         }
     }
 
@@ -251,6 +430,10 @@ namespace BlouseBlanche.UI
 
     public sealed class PauseView : View
     {
+        readonly Label subtitle;
+        readonly Button restartBtn;
+        string menuWarning = "La partie en cours sera abandonnée.";
+
         public PauseView(UIRoot ui, VisualElement parent, GameRoot game) : base(ui)
         {
             var s = MakeScreen(parent, "scrim");
@@ -260,15 +443,25 @@ namespace BlouseBlanche.UI
             p.style.width = 460;
             UIX.Text(p, "PAUSE", "t-caption", "w600");
             UIX.Spacer(p, 6);
-            UIX.Text(p, "Le cabinet est en suspens", "w700", "t-h2");
+            subtitle = UIX.Text(p, "Le temps est suspendu", "w700", "t-h2");
             UIX.Spacer(p, 22);
             UIX.Btn(p, "Reprendre", () => game.Resume(), "primary", "big");
             UIX.Spacer(p, 10);
+            restartBtn = UIX.Btn(p, "Recommencer ce cas", () => ui.Confirm("Recommencer", "Reprendre ce cas depuis le début ?", "Recommencer", game.RestartCase));
+            UIX.Spacer(p, 10);
             UIX.Btn(p, "Paramètres", () => game.OpenSettings());
             UIX.Spacer(p, 10);
-            UIX.Btn(p, "Menu principal", () => ui.Confirm("Retour au menu", "La journée en cours ne sera pas sauvegardée. Vous reprendrez au début de cette journée.", "Quitter la journée", game.BackToMenu));
+            UIX.Btn(p, "Menu principal", () => ui.Confirm("Retour au menu", menuWarning, "Quitter", game.BackToMenu));
             UIX.Spacer(p, 10);
-            UIX.Btn(p, "Quitter le jeu", () => ui.Confirm("Quitter", "Quitter Blouse Blanche ? La journée en cours sera perdue.", "Quitter", game.QuitGame), "ghost");
+            UIX.Btn(p, "Quitter le jeu", () => ui.Confirm("Quitter", "Quitter Blouse Blanche ? " + menuWarning, "Quitter", game.QuitGame), "ghost");
+        }
+
+        /// <summary>Adapte la pause au contexte (prototype ou journée du mode histoire).</summary>
+        public void Configure(string title, string warning, bool canRestart)
+        {
+            subtitle.text = title;
+            menuWarning = warning;
+            UIX.Show(restartBtn, canRestart);
         }
     }
 
