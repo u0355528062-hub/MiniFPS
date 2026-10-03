@@ -1,8 +1,0 @@
-* text=auto
-*.cs text eol=lf diff=csharp
-*.uss text eol=lf
-*.tss text eol=lf
-*.json text eol=lf
-*.md text eol=lf
-*.ttf binary
-*.png binary
