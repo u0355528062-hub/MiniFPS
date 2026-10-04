@@ -214,7 +214,7 @@ func _finish() -> void:
 	Sfx.play("fin", Vector3.INF, -2.0)
 	var again := "Appuie sur A pour revenir au menu." if is_vr else "Appuie sur ESPACE pour revenir au menu."
 	for ui in uis:
-		ui.show_end(elapsed, errors, stars, op.name + " réussie.\n" + again)
+		ui.show_end(elapsed, errors, stars, op.summary + "\n" + again)
 	finished.emit(elapsed, errors)
 
 
@@ -260,6 +260,7 @@ func _process(delta: float) -> void:
 		elapsed += delta
 	_sound_cd -= delta
 	_hint_cd -= delta
+	op.process(delta)
 	for ui in uis:
 		ui.set_status(elapsed, errors)
 
@@ -413,7 +414,9 @@ func _tick_trace() -> void:
 				Sfx.play("incision", p, -6.0, randf_range(0.9, 1.15))
 				_sound_cd = 0.12
 			h.pulse(0.25, 0.02)
-			if _trace >= 0.96:
+			# Fin : à moins de 3 mm du bout (ou 96 %) — s'adapte aux incisions courtes
+			var inc_len := patient.INC_A.distance_to(patient.INC_B)
+			if _trace >= 1.0 - maxf(0.04, 0.003 / maxf(inc_len, 0.01)):
 				_trace = 1.0
 				patient.incision_progress = 1.0
 				monitor.stress(4.0)

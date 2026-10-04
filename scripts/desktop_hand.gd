@@ -29,7 +29,16 @@ func _aim_point(mouse: Vector2) -> Vector3:
 		p += dir * step
 		if p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.3:
 			if p.y <= Patient.body_height(p.x, p.z):
-				return p
+				# Affinage par dichotomie : précision ~0,1 mm sur la peau
+				var lo := p - dir * step
+				var hi := p
+				for k in 6:
+					var mid := (lo + hi) * 0.5
+					if mid.y <= Patient.body_height(mid.x, mid.z):
+						hi = mid
+					else:
+						lo = mid
+				return hi
 		elif p.y <= InstrumentTray.TRAY_Y + 0.01:
 			return p
 	# Aucun contact : plan horizontal à hauteur du champ, à portée de bras au maximum

@@ -20,6 +20,9 @@ var wound_w := 0.022  ## demi-largeur de la plaie à ouverture 1
 var paint_r := Vector2(0.075, 0.085)  ## demi-axes (x, z) de la zone à désinfecter
 var bowl_radii := Vector3(0.1, 0.075, 0.08)  ## cavité : le long, en profondeur, en travers
 var op := "appendicectomie"
+var bowl_color := Color(0.55, 0.2, 0.17)
+var breathe_amp := 0.006
+var drape_mat: ShaderMaterial
 ## Pointe de l'appendice dans le fichier anatomie_appendice.glb (origine = base)
 const ANAT_TIP := Vector3(0.0089, -0.0287, -0.0467)
 
@@ -124,7 +127,8 @@ func build() -> void:
 
 
 func _build_drapes() -> void:
-	var m := Tex.drape(Color(0.2, 0.4, 0.5), WINDOW_MIN, WINDOW_MAX, 0.006)
+	var m := Tex.drape(Color(0.2, 0.4, 0.5), WINDOW_MIN, WINDOW_MAX, breathe_amp)
+	drape_mat = m
 	var mi := MeshInstance3D.new()
 	mi.name = "Champs"
 	mi.mesh = MeshUtil.height_grid(-0.64, -0.66, 1.84, 1.32, 150, 110, _drape_height)
@@ -391,7 +395,7 @@ func _build_wound() -> void:
 	sp.height = 2.0
 	sp.flip_faces = true
 	bowl.mesh = sp
-	bowl.material_override = _tissue(Color(0.55, 0.2, 0.17), 0.15, 0.9)
+	bowl.material_override = _tissue(bowl_color, 0.15, 0.9)
 	bowl.material_override.set_shader_parameter("clip_y", center.y - 0.012)
 	bowl.basis = Basis(dir3 * bowl_radii.x, Vector3.UP * bowl_radii.y, perp3 * bowl_radii.z)
 	bowl.position = center - Vector3.UP * bowl_radii.y
@@ -738,6 +742,13 @@ func set_opening(v: float) -> void:
 		return
 	skin_mat.set_shader_parameter("opening", v)
 	_rebuild_walls()
+
+
+## Amplitude de la respiration visible sur les champs (détresse = plus ample).
+func set_breathe(v: float) -> void:
+	breathe_amp = v
+	if drape_mat:
+		drape_mat.set_shader_parameter("breathe", v)
 
 
 func set_stitched(v: float) -> void:

@@ -248,7 +248,7 @@ func show_end(seconds: float, errors: int, stars: int, restart_hint: String) -> 
 	move_child(_end, -1)
 	_end.visible = true
 	_end_stars.text = "★".repeat(stars) + "☆".repeat(3 - stars)
-	_end_stats.text = "Durée : %02d:%02d     Erreurs : %d\nAppendice retiré, ligature en place, peau suturée.\n\n%s" % [int(seconds) / 60, int(seconds) % 60, errors, restart_hint]
+	_end_stats.text = "Durée : %02d:%02d     Erreurs : %d\n\n%s" % [int(seconds) / 60, int(seconds) % 60, errors, restart_hint]
 
 
 func _process(delta: float) -> void:

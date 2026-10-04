@@ -6,6 +6,8 @@ extends Node3D
 var heart_rate := 84.0
 var target_rate := 84.0
 var spo2 := 99.0
+var target_spo2 := -1.0  ## si >= 0, la SpO2 évolue doucement vers cette valeur
+var _alarm_t := 0.0
 var sys := 124
 var dia := 76
 var screen: MonitorScreen
@@ -50,6 +52,14 @@ func build() -> void:
 
 func _process(delta: float) -> void:
 	heart_rate = lerpf(heart_rate, target_rate, delta * 0.3)
+	if target_spo2 >= 0.0:
+		spo2 = move_toward(spo2, target_spo2, delta * 1.2)
+	# Alarme de désaturation
+	if spo2 < 90.0:
+		_alarm_t -= delta
+		if _alarm_t <= 0.0:
+			_alarm_t = 1.4
+			Sfx.play("bip_alarme", global_position, -8.0)
 	_beat_t += delta
 	var period := 60.0 / heart_rate
 	if _beat_t >= period:

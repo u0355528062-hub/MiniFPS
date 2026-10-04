@@ -14,6 +14,7 @@ func _init() -> void:
 	tagline = "Appendicite aiguë : incision de McBurney, ligature et ablation de l'appendice."
 	intro_text = "Lucas, 24 ans : appendicite aiguë confirmée au scanner. Il est endormi et installé. Tu vas faire l'appendicectomie, étape par étape. Suis les consignes et les repères lumineux."
 	with_dish = true
+	summary = "Appendice retiré, ligature en place, peau suturée."
 	catalog = [
 		["mikulicz", "Pince à badigeon", "pince_mikulicz", 0.0, 0.0],
 		["bistouri", "Bistouri lame 15", "manche_bistouri", 0.0, 0.0],

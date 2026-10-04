@@ -14,6 +14,7 @@ var name := ""
 var tagline := ""
 var intro_title := "Bienvenue au bloc"
 var intro_text := ""
+var summary := ""  ## phrase de l'écran de fin
 var surgeon_spot := Vector3(0.12, 0.0, 0.6)
 var tray_pos := Vector3(0.62, 0.0, 0.56)
 var with_dish := false
@@ -63,6 +64,11 @@ func define_steps() -> void:
 
 
 func on_start() -> void:
+	pass
+
+
+## Appelé à chaque image (animations propres à l'opération).
+func process(_delta: float) -> void:
 	pass
 
 

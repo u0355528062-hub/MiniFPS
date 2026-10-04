@@ -27,6 +27,9 @@ func _ready() -> void:
 	streams["ciseaux"] = _snip()
 	streams["badigeon"] = _noise(0.12, 900.0, 0.08)
 	streams["fil"] = _noise(0.25, 3500.0, 0.06)
+	streams["souffle"] = _noise(1.3, 5000.0, 0.16)
+	streams["bulles"] = _bubbles()
+	streams["aspiration"] = _noise(0.45, 1600.0, 0.14)
 	for i in 10:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 1.5
@@ -156,6 +159,26 @@ func _noise(dur: float, cutoff: float, gain: float) -> AudioStreamWAV:
 		lp += (rng.randf_range(-1, 1) - lp) * a
 		d[i] = lp * _env(i, n, 0.01, dur * 0.6)
 	return _to_wav(d, gain * 3.0)
+
+
+func _bubbles() -> AudioStreamWAV:
+	var n := int(0.6 * RATE)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	var starts := []
+	for k in 7:
+		starts.append([rng.randf_range(0.0, 0.5), rng.randf_range(300.0, 700.0)])
+	for i in n:
+		var t := float(i) / RATE
+		var v := 0.0
+		for b in starts:
+			var tb: float = t - b[0]
+			if tb > 0.0:
+				v += sin(TAU * b[1] * (1.0 + tb * 3.0) * tb) * exp(-tb * 40.0)
+		d[i] = v
+	return _to_wav(d, 0.25)
 
 
 func _snip() -> AudioStreamWAV:
