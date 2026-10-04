@@ -45,7 +45,7 @@ func _ready() -> void:
 	monitor.name = "Moniteur"
 	add_child(monitor)
 	monitor.build()
-	monitor.position = Vector3(-0.6, 1.9, -0.4)
+	monitor.position = Vector3(-0.72, 1.8, -0.45)
 	monitor.look_at(Vector3(0.12, 1.55, 0.65), Vector3.UP, true)
 
 	panel = GuidePanel.new()
