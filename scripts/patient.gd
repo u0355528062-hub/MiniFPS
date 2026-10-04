@@ -1,12 +1,16 @@
 class_name Patient
 extends Node3D
 ## Patient en décubitus dorsal sous les champs : tête à -X, pieds à +X, côté droit du patient vers +Z.
-## Contient la peau du champ opératoire (badigeon, incision, plaie), les organes procéduraux
+## Contient la peau du champ opératoire (badigeon, incision, plaie qui s'étire), les organes
 ## (cæcum, grêle, appendice inflammatoire) et les éléments posés pendant l'opération.
+## La plaie est physique : chaque bord a son ouverture, tirée par les écarteurs et rappelée par un
+## ressort (elle se détend quand on relâche). Toute la déformation est calculée par la carte graphique.
 
 const TABLE_TOP := 0.95
-## Incision de McBurney (coordonnées monde x, z)
-const MASK_RES := 64
+const MASK_RES := 96
+const HMAP_RES := 128
+## Pointe de l'appendice dans le fichier anatomie_appendice.glb (origine = base)
+const ANAT_TIP := Vector3(0.0089, -0.0287, -0.0467)
 
 # Réglages du champ opératoire (fixés par l'opération avant build())
 var INC_A := Vector2(0.1389, 0.0705)  ## début de l'incision (x, z)
@@ -16,46 +20,76 @@ var PATCH_SIZE := Vector2(0.31, 0.30)
 var WINDOW_MIN := Vector2(0.025, -0.005)  ## fenêtre du champ
 var WINDOW_MAX := Vector2(0.215, 0.2)
 var WOUND_DEPTH := 0.05
-var wound_w := 0.022  ## demi-largeur de la plaie à ouverture 1
+var wound_w := 0.022  ## écart d'un bord à ouverture 1
 var paint_r := Vector2(0.075, 0.085)  ## demi-axes (x, z) de la zone à désinfecter
 var bowl_radii := Vector3(0.1, 0.075, 0.08)  ## cavité : le long, en profondeur, en travers
 var op := "appendicectomie"
 var bowl_color := Color(0.55, 0.2, 0.17)
 var breathe_amp := 0.006
+var hole_limit := 1.0  ## profondeur maximale de la plaie ouverte (drain : la peau seule avant la dissection)
 var drape_mat: ShaderMaterial
-## Pointe de l'appendice dans le fichier anatomie_appendice.glb (origine = base)
-const ANAT_TIP := Vector3(0.0089, -0.0287, -0.0467)
 
-var skin_mat: ShaderMaterial
+var skin_mat: ShaderMaterial  ## grande grille de peau
+var zone_mat: ShaderMaterial  ## zone fendue de l'incision
+var wall_mat: ShaderMaterial
 var iodine_img: Image
 var iodine_tex: ImageTexture
-var opening := 0.0: set = set_opening
-var incision_progress := 0.0: set = set_incision_progress
+var height_tex: ImageTexture
+var zone_u := 0.06
+var zone_v := 0.07
 
 var dir3: Vector3  # direction de l'incision (A -> B), horizontale
-var perp3: Vector3  # perpendiculaire horizontale
+var perp3: Vector3  # perpendiculaire horizontale (côté +1)
 var center: Vector3  # centre de l'incision, sur la peau
+var half_len := 0.035
 
-var wall_mesh := ArrayMesh.new()
-var appendix_mesh := ArrayMesh.new()
+# ---- Plaie physique
+var open_l := 0.0  ## ouverture actuelle du bord gauche (v < 0)
+var open_r := 0.0
+var _vel_l := 0.0
+var _vel_r := 0.0
+var rest_open := 0.0  ## ouverture au repos (les bords baillent un peu après l'incision)
+var held_l := -1.0  ## bord tenu par un écarteur posé (l'aide le tient)
+var held_r := -1.0
+var drive_l := -1.0  ## bord tiré en ce moment par un instrument (remis à -1 à chaque image)
+var drive_r := -1.0
+var cut0 := 1.0  ## partie incisée [cut0, cut1] en t (0 = A, 1 = B), vide au départ
+var cut1 := 0.0
+var bleed0 := 1.0
+var bleed1 := 0.0
+var opening: float: set = set_opening, get = get_opening
+var incision_progress: float: set = set_incision_progress, get = get_incision_progress
+var _press := [Vector4.ZERO, Vector4.ZERO]
+var _press_set := [false, false]
+var bleb := Vector4.ZERO  ## x, z, rayon, hauteur
+var bleb_pale := 0.0
+
+# ---- Badigeon
+var _iodine_wet := 1.0
+var _iod_target := PackedByteArray()
+var _iod_total := 0
+var _iod_done := 0
+var _iod_dirty := false
+
+# ---- Organes
+var appendix_skel: Skeleton3D
 var appendix_node: MeshInstance3D
+var appendix_mat: ShaderMaterial
 var meso: MeshInstance3D
 var _anat_xf := Transform3D.IDENTITY
-var wound_light: OmniLight3D
-var _iodine_wet := 1.0
-var _app_index := PackedInt32Array()
-var _app_s := PackedFloat32Array()
-var _app_local := PackedVector3Array()
-var _app_nlocal := PackedVector3Array()
+var _app_mesh_stump: ArrayMesh
+var _app_mesh_piece: ArrayMesh
+var _app_skin: Skin
 var _rest_line := PackedVector3Array()
 var _rest_frames: Array[Basis] = []
 var appendix_base: Vector3
 var appendix_tip: Vector3
 var appendix_rest_tip: Vector3
 var appendix_cut := false
+var appendix_squeeze := 0.0  ## étranglement de la base par la ligature (0..1)
 var ligature: MeshInstance3D
 var stitches: Array[Node3D] = []
-
+var wound_light: OmniLight3D
 
 
 # ---------------------------------------------------------------- Forme du corps
@@ -338,42 +372,150 @@ func _build_skin() -> void:
 	iodine_img = Image.create(MASK_RES, MASK_RES, false, Image.FORMAT_L8)
 	iodine_img.fill(Color.BLACK)
 	iodine_tex = ImageTexture.create_from_image(iodine_img)
-	skin_mat = ShaderMaterial.new()
-	skin_mat.shader = preload("res://shaders/skin_field.gdshader")
-	skin_mat.set_shader_parameter("iodine_mask", iodine_tex)
-	skin_mat.set_shader_parameter("patch_min", PATCH_MIN)
-	skin_mat.set_shader_parameter("patch_size", PATCH_SIZE)
-	skin_mat.set_shader_parameter("inc_a", INC_A)
-	skin_mat.set_shader_parameter("inc_b", INC_B)
-	skin_mat.set_shader_parameter("wound_w", wound_w)
-	skin_mat.set_shader_parameter("win_min", WINDOW_MIN)
-	skin_mat.set_shader_parameter("win_max", WINDOW_MAX)
-	skin_mat.set_shader_parameter("skin_albedo", Tex.get_tex("skin_albedo"))
-	skin_mat.set_shader_parameter("skin_normal", Tex.get_tex("skin_normal"))
-	skin_mat.set_shader_parameter("skin_rough", Tex.get_tex("skin_rough"))
-	skin_mat.set_shader_parameter("blood_tex", Tex.get_tex("blood"))
+	# Zone à préparer (ellipse centrée sur l'incision) : comptée au fur et à mesure du badigeon
+	_iod_target.resize(MASK_RES * MASK_RES)
+	_iod_total = 0
+	for j in MASK_RES:
+		for i in MASK_RES:
+			var x := PATCH_MIN.x + (i + 0.5) / MASK_RES * PATCH_SIZE.x
+			var z := PATCH_MIN.y + (j + 0.5) / MASK_RES * PATCH_SIZE.y
+			var q := Vector2(x - center.x, z - center.z)
+			var inside := (q.x * q.x) / (paint_r.x * paint_r.x) + (q.y * q.y) / (paint_r.y * paint_r.y) <= 1.0
+			_iod_target[j * MASK_RES + i] = 1 if inside else 0
+			if inside:
+				_iod_total += 1
+	# Relief de la peau en texture : la carte graphique déplace la peau sans rien recalculer
+	var hmap := Image.create(HMAP_RES, HMAP_RES, false, Image.FORMAT_RF)
+	for j in HMAP_RES:
+		for i in HMAP_RES:
+			var x := PATCH_MIN.x + float(i) / (HMAP_RES - 1) * PATCH_SIZE.x
+			var z := PATCH_MIN.y + float(j) / (HMAP_RES - 1) * PATCH_SIZE.y
+			hmap.set_pixel(i, j, Color(body_height(x, z), 0, 0))
+	height_tex = ImageTexture.create_from_image(hmap)
+
+	half_len = INC_A.distance_to(INC_B) * 0.5
+	zone_u = half_len + 0.028
+	zone_v = clampf(wound_w * 3.2, 0.03, 0.075)
+	skin_mat = _skin_material(false)
+	zone_mat = _skin_material(true)
 	var mi := MeshInstance3D.new()
 	mi.name = "Peau"
-	mi.mesh = MeshUtil.height_grid(PATCH_MIN.x, PATCH_MIN.y, PATCH_SIZE.x, PATCH_SIZE.y, 110, 110, body_height)
+	mi.mesh = MeshUtil.height_grid(PATCH_MIN.x, PATCH_MIN.y, PATCH_SIZE.x, PATCH_SIZE.y, 100, 100, body_height)
 	mi.material_override = skin_mat
 	add_child(mi)
+	var zone := MeshInstance3D.new()
+	zone.name = "PeauIncision"
+	zone.mesh = _zone_mesh()
+	zone.material_override = zone_mat
+	add_child(zone)
 
 
-func _tissue(base: Color, inflamed := 0.0, vessels := 0.6, fibrin := 0.0, scale := 14.0) -> ShaderMaterial:
-	return Tex.tissue(base, inflamed, vessels, fibrin, scale)
+func _skin_material(is_zone: bool) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = preload("res://shaders/skin_field.gdshader")
+	m.set_shader_parameter("is_zone", 1.0 if is_zone else 0.0)
+	m.set_shader_parameter("iodine_mask", iodine_tex)
+	m.set_shader_parameter("win_min", WINDOW_MIN)
+	m.set_shader_parameter("win_max", WINDOW_MAX)
+	m.set_shader_parameter("zone_u", zone_u)
+	m.set_shader_parameter("skin_albedo", Tex.get_tex("skin_albedo"))
+	m.set_shader_parameter("skin_normal", Tex.get_tex("skin_normal"))
+	m.set_shader_parameter("skin_rough", Tex.get_tex("skin_rough"))
+	m.set_shader_parameter("blood_tex", Tex.get_tex("blood"))
+	_common_params(m)
+	return m
+
+
+## Paramètres partagés par la peau et les parois (géométrie de l'incision).
+func _common_params(m: ShaderMaterial) -> void:
+	m.set_shader_parameter("height_map", height_tex)
+	m.set_shader_parameter("patch_min", PATCH_MIN)
+	m.set_shader_parameter("patch_size", PATCH_SIZE)
+	m.set_shader_parameter("inc_a", INC_A)
+	m.set_shader_parameter("inc_b", INC_B)
+	m.set_shader_parameter("wound_w", wound_w)
+	m.set_shader_parameter("zone_v", zone_v)
+
+
+func _all_mats() -> Array[ShaderMaterial]:
+	var out: Array[ShaderMaterial] = []
+	for m in [skin_mat, zone_mat, wall_mat]:
+		if m:
+			out.append(m)
+	return out
+
+
+## Zone de l'incision : deux nappes (une par bord) jointes le long du trait, plus fines près du trait.
+func _zone_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var nu := 72
+	var nv := 20
+	var base := 0
+	for side in [-1.0, 1.0]:
+		for j in nv + 1:
+			var v: float = side * (zone_v + 0.001) * pow(float(j) / nv, 1.7)
+			for i in nu + 1:
+				var u := -(zone_u + 0.001) + 2.0 * (zone_u + 0.001) * i / nu
+				var p := center + dir3 * u + perp3 * v
+				st.set_uv(Vector2(u, v))
+				st.set_uv2(Vector2(side, 0.0))
+				st.add_vertex(Vector3(p.x, body_height(p.x, p.z), p.z))
+		for j in nv:
+			for i in nu:
+				var a := base + j * (nu + 1) + i
+				var c := a + nu + 1
+				st.add_index(a)
+				st.add_index(a + 1)
+				st.add_index(c)
+				st.add_index(a + 1)
+				st.add_index(c + 1)
+				st.add_index(c)
+		base += (nu + 1) * (nv + 1)
+	st.generate_normals()
+	var m := st.commit()
+	m.custom_aabb = AABB(center - Vector3(0.2, 0.15, 0.2), Vector3(0.4, 0.3, 0.4))
+	return m
 
 
 func _build_wound() -> void:
 	var walls := MeshInstance3D.new()
 	walls.name = "ParoiPlaie"
-	walls.mesh = wall_mesh
-	var wm := ShaderMaterial.new()
-	wm.shader = preload("res://shaders/wound_wall.gdshader")
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var nu := 56
+	var levels := 8
+	var base := 0
+	for side in [-1.0, 1.0]:
+		for j in levels + 1:
+			for i in nu + 1:
+				var u := -half_len - 0.004 + (2.0 * half_len + 0.008) * i / nu
+				st.set_uv(Vector2(u, float(j) / levels))
+				st.set_uv2(Vector2(side, 0.0))
+				st.add_vertex(center)
+		for j in levels:
+			for i in nu:
+				var a := base + j * (nu + 1) + i
+				var c := a + nu + 1
+				st.add_index(a)
+				st.add_index(a + 1)
+				st.add_index(c)
+				st.add_index(a + 1)
+				st.add_index(c + 1)
+				st.add_index(c)
+		base += (nu + 1) * (levels + 1)
+	var wm := st.commit()
+	wm.custom_aabb = AABB(center - Vector3(0.2, 0.15, 0.2), Vector3(0.4, 0.3, 0.4))
+	walls.mesh = wm
+	wall_mat = ShaderMaterial.new()
+	wall_mat.shader = preload("res://shaders/wound_wall.gdshader")
 	for t in ["fat_albedo", "fat_normal", "muscle", "muscle_normal"]:
-		wm.set_shader_parameter(t, Tex.get_tex(t))
-	wm.set_shader_parameter("blood_tex", Tex.get_tex("blood"))
-	wm.set_shader_parameter("depth_m", WOUND_DEPTH)
-	walls.material_override = wm
+		wall_mat.set_shader_parameter(t, Tex.get_tex(t))
+	wall_mat.set_shader_parameter("blood_tex", Tex.get_tex("blood"))
+	wall_mat.set_shader_parameter("depth_m", WOUND_DEPTH)
+	_common_params(wall_mat)
+	walls.material_override = wall_mat
+	walls.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(walls)
 
 	# Lumière d'appoint dans la plaie (le scialytique éclaire le fond en vrai)
@@ -387,19 +529,26 @@ func _build_wound() -> void:
 	wound_light.position = center + Vector3.UP * 0.12
 	add_child(wound_light)
 
-	# Fond de la cavité péritonéale : coque retournée, rose sombre humide
+	# Fond de la cavité : coque retournée, rose sombre humide
 	var bowl := MeshInstance3D.new()
 	bowl.name = "Cavite"
 	var sp := SphereMesh.new()
 	sp.radius = 1.0
 	sp.height = 2.0
+	sp.radial_segments = 32
+	sp.rings = 16
 	sp.flip_faces = true
 	bowl.mesh = sp
 	bowl.material_override = _tissue(bowl_color, 0.15, 0.9)
 	bowl.material_override.set_shader_parameter("clip_y", center.y - 0.012)
 	bowl.basis = Basis(dir3 * bowl_radii.x, Vector3.UP * bowl_radii.y, perp3 * bowl_radii.z)
 	bowl.position = center - Vector3.UP * bowl_radii.y
+	bowl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(bowl)
+
+
+func _tissue(base: Color, inflamed := 0.0, vessels := 0.6, fibrin := 0.0, scale := 14.0) -> ShaderMaterial:
+	return Tex.tissue(base, inflamed, vessels, fibrin, scale)
 
 
 func _build_appendix_anatomy() -> void:
@@ -424,6 +573,7 @@ func _build_appendix_anatomy() -> void:
 	}
 	for mi in _meshes_in(anat):
 		var key := String(mi.name)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if key.begins_with("Vermiform"):
 			_init_appendix(mi)
 			mi.visible = false
@@ -444,19 +594,20 @@ func _meshes_in(n: Node) -> Array[MeshInstance3D]:
 	return out
 
 
-# ---------------------------------------------------------------- Appendice (maillage réel déformable)
+# ---------------------------------------------------------------- Appendice (maillage réel, squelette)
 
+## L'appendice est déformé par un petit squelette le long de sa ligne médiane : la carte graphique
+## déforme les 5000 sommets, le processeur ne pose que 16 os par image.
 func _init_appendix(src: MeshInstance3D) -> void:
 	var arr := src.mesh.surface_get_arrays(0)
 	var xf := src.global_transform
 	var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 	var norms: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
-	_app_index = arr[Mesh.ARRAY_INDEX]
+	var index: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
 	appendix_rest_tip = _anat_xf * ANAT_TIP
 	appendix_tip = appendix_rest_tip
 	var axis := appendix_rest_tip - appendix_base
 	var alen := axis.length()
-	# Ligne médiane au repos : centroïdes par tranches le long de l'axe base -> pointe
 	var bins := 14
 	var sums: Array[Vector3] = []
 	var counts: Array[int] = []
@@ -466,13 +617,18 @@ func _init_appendix(src: MeshInstance3D) -> void:
 		sums[i] = Vector3.ZERO
 		counts[i] = 0
 	var world := PackedVector3Array()
+	var wnorm := PackedVector3Array()
+	var svals := PackedFloat32Array()
 	world.resize(verts.size())
-	_app_s.resize(verts.size())
+	wnorm.resize(verts.size())
+	svals.resize(verts.size())
+	var nb := xf.basis.inverse().transposed()
 	for i in verts.size():
 		var w := xf * verts[i]
 		world[i] = w
+		wnorm[i] = (nb * norms[i]).normalized()
 		var s := clampf((w - appendix_base).dot(axis) / (alen * alen), 0.0, 1.0)
-		_app_s[i] = s
+		svals[i] = s
 		var b := mini(int(s * bins), bins - 1)
 		sums[b] += w
 		counts[b] += 1
@@ -482,34 +638,95 @@ func _init_appendix(src: MeshInstance3D) -> void:
 			_rest_line.append(sums[i] / counts[i])
 	_rest_line.append(appendix_rest_tip)
 	_rest_frames = _frames(_rest_line)
-	# Coordonnées locales de chaque sommet dans le repère de la ligne médiane
-	_app_local.resize(verts.size())
-	_app_nlocal.resize(verts.size())
-	var nb := xf.basis.inverse().transposed()
+	var nbones := _rest_line.size()
+	appendix_skel = Skeleton3D.new()
+	appendix_skel.name = "SqueletteAppendice"
+	add_child(appendix_skel)
+	_app_skin = Skin.new()
+	for i in nbones:
+		var rx := Transform3D(_rest_frames[i], _rest_line[i])
+		appendix_skel.add_bone("b%d" % i)
+		appendix_skel.set_bone_rest(i, rx)
+		appendix_skel.set_bone_pose(i, rx)
+		_app_skin.add_bind(i, rx.affine_inverse())
+	# Poids : chaque sommet suit les deux os qui l'encadrent le long de l'appendice
+	var bones := PackedInt32Array()
+	var weights := PackedFloat32Array()
+	bones.resize(verts.size() * 4)
+	weights.resize(verts.size() * 4)
 	for i in verts.size():
-		var f := _frame_at(_rest_line, _rest_frames, _app_s[i])
-		var c: Vector3 = f[0]
-		var bas: Basis = f[1]
-		_app_local[i] = bas.transposed() * (world[i] - c)
-		_app_nlocal[i] = bas.transposed() * (nb * norms[i]).normalized()
+		# Paramètre le long de la ligne au repos (les os sont aux points de la ligne)
+		var f := _line_param(svals[i]) * (nbones - 1)
+		var i0 := clampi(int(f), 0, nbones - 2)
+		var k := clampf(f - i0, 0.0, 1.0)
+		bones[i * 4] = i0
+		bones[i * 4 + 1] = i0 + 1
+		weights[i * 4] = 1.0 - k
+		weights[i * 4 + 1] = k
+	# Trois parties : moignon, tranche de section, partie retirée
+	var parts := [PackedInt32Array(), PackedInt32Array(), PackedInt32Array()]
+	for t in range(0, index.size(), 3):
+		var a := index[t]
+		var b := index[t + 1]
+		var c := index[t + 2]
+		var smax := maxf(svals[a], maxf(svals[b], svals[c]))
+		var smin := minf(svals[a], minf(svals[b], svals[c]))
+		var which := 0 if smax <= 0.30 else (2 if smin >= 0.33 else 1)
+		parts[which].append_array([a, b, c])
+	var full := ArrayMesh.new()
+	_app_mesh_stump = ArrayMesh.new()
+	_app_mesh_piece = ArrayMesh.new()
+	for p in 3:
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = world
+		arrays[Mesh.ARRAY_NORMAL] = wnorm
+		arrays[Mesh.ARRAY_BONES] = bones
+		arrays[Mesh.ARRAY_WEIGHTS] = weights
+		arrays[Mesh.ARRAY_INDEX] = parts[p]
+		if (parts[p] as PackedInt32Array).is_empty():
+			continue
+		full.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		if p == 0:
+			_app_mesh_stump.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		elif p == 2:
+			_app_mesh_piece.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	var mi := MeshInstance3D.new()
 	mi.name = "Appendice"
-	mi.mesh = appendix_mesh
-	mi.material_override = _tissue(Color(0.78, 0.36, 0.3), 1.0, 1.0, 0.55, 22.0)
-	mi.material_override.set_shader_parameter("clip_y", center.y - 0.008)
-	add_child(mi)
+	mi.mesh = full
+	mi.skin = _app_skin
+	appendix_mat = _tissue(Color(0.78, 0.36, 0.3), 1.0, 1.0, 0.55, 22.0)
+	appendix_mat.set_shader_parameter("clip_y", center.y - 0.008)
+	mi.material_override = appendix_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	appendix_skel.add_child(mi)
 	appendix_node = mi
 	_update_appendix()
+
+
+## Paramètre (0..1) le long des points de la ligne médiane pour une abscisse s le long de l'axe.
+func _line_param(s: float) -> float:
+	# Les points de la ligne sont la base, les centres des tranches (non vides) puis la pointe
+	var n := _rest_line.size()
+	var axis := appendix_rest_tip - appendix_base
+	var alen2 := axis.length_squared()
+	var prev := 0.0
+	for i in range(1, n):
+		var si := clampf((_rest_line[i] - appendix_base).dot(axis) / alen2, 0.0, 1.0)
+		if s <= si:
+			var k := (s - prev) / maxf(si - prev, 1e-5)
+			return (i - 1 + clampf(k, 0.0, 1.0)) / float(n - 1)
+		prev = si
+	return 1.0
 
 
 ## Repères (tangente, normale, binormale) par transport parallèle le long d'une polyligne.
 static func _frames(line: PackedVector3Array) -> Array[Basis]:
 	var out: Array[Basis] = []
 	var n := line.size()
-	var t0 := (line[1] - line[0]).normalized()
-	var nrm := t0.cross(Vector3.UP)
+	var nrm := (line[1] - line[0]).normalized().cross(Vector3.UP)
 	if nrm.length() < 0.01:
-		nrm = t0.cross(Vector3.RIGHT)
+		nrm = (line[1] - line[0]).normalized().cross(Vector3.RIGHT)
 	nrm = nrm.normalized()
 	for i in n:
 		var t: Vector3
@@ -524,14 +741,11 @@ static func _frames(line: PackedVector3Array) -> Array[Basis]:
 	return out
 
 
-## Point et repère interpolés au paramètre s (0..1) le long de la polyligne.
-static func _frame_at(line: PackedVector3Array, frames: Array[Basis], s: float) -> Array:
-	var f := s * (line.size() - 1)
+## Point interpolé au paramètre s (0..1) le long de la polyligne.
+static func _point_at(line: PackedVector3Array, s: float) -> Vector3:
+	var f := clampf(s, 0.0, 1.0) * (line.size() - 1)
 	var i := clampi(int(f), 0, line.size() - 2)
-	var k := f - i
-	var c := line[i].lerp(line[i + 1], k)
-	var q := Quaternion(frames[i].orthonormalized()).slerp(Quaternion(frames[i + 1].orthonormalized()), k)
-	return [c, Basis(q)]
+	return line[i].lerp(line[i + 1], f - i)
 
 
 func _current_line() -> PackedVector3Array:
@@ -547,8 +761,9 @@ func _current_line() -> PackedVector3Array:
 
 
 func appendix_point(t: float) -> Vector3:
-	var line := _current_line()
-	return _frame_at(line, _frames(line), t)[0]
+	if _rest_line.is_empty():
+		return center
+	return _point_at(_current_line(), _line_param(t))
 
 
 func set_appendix_tip(p: Vector3) -> void:
@@ -559,70 +774,58 @@ func set_appendix_tip(p: Vector3) -> void:
 	_update_appendix()
 
 
-func _deformed(s_min: float, s_max: float, origin := Vector3.ZERO) -> ArrayMesh:
+func _update_appendix() -> void:
+	if appendix_skel == null:
+		return
 	var line := _current_line()
 	var frames := _frames(line)
-	var v := PackedVector3Array()
-	var n := PackedVector3Array()
-	v.resize(_app_local.size())
-	n.resize(_app_local.size())
-	for i in _app_local.size():
-		var f := _frame_at(line, frames, _app_s[i])
-		var bas: Basis = f[1]
-		v[i] = f[0] + bas * _app_local[i] - origin
-		n[i] = bas * _app_nlocal[i]
-	var idx := PackedInt32Array()
-	for k in range(0, _app_index.size(), 3):
-		var a := _app_index[k]
-		var b := _app_index[k + 1]
-		var c := _app_index[k + 2]
-		var smax := maxf(_app_s[a], maxf(_app_s[b], _app_s[c]))
-		var smin := minf(_app_s[a], minf(_app_s[b], _app_s[c]))
-		if smin >= s_min and smax <= s_max:
-			idx.append_array([a, b, c])
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = v
-	arrays[Mesh.ARRAY_NORMAL] = n
-	arrays[Mesh.ARRAY_INDEX] = idx
-	var m := ArrayMesh.new()
-	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return m
-
-
-func _update_appendix() -> void:
-	if _app_local.is_empty():
-		return
-	var m := _deformed(0.0, 0.3 if appendix_cut else 1.0)
-	appendix_mesh.clear_surfaces()
-	appendix_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, m.surface_get_arrays(0))
+	var lig := _line_param(0.18) * (line.size() - 1)
+	for i in line.size():
+		var b := frames[i]
+		# La ligature étrangle la base
+		var sq := appendix_squeeze * exp(-pow((i - lig) / 0.8, 2.0)) * 0.5
+		if sq > 0.001:
+			b = Basis(b.x * (1.0 - sq), b.y * (1.0 - sq), b.z)
+		appendix_skel.set_bone_pose(i, Transform3D(b, line[i]))
 	# Le méso suit la base, on l'efface quand l'appendice est extériorisé
 	var moved := appendix_tip.distance_to(appendix_rest_tip) > 0.01
 	if meso:
 		meso.visible = not moved
-	if appendix_node:
-		appendix_node.material_override.set_shader_parameter("clip_y", 100.0 if moved else center.y - 0.008)
+	if appendix_mat:
+		appendix_mat.set_shader_parameter("clip_y", 100.0 if moved else center.y - 0.008)
 
 
-## Pose le fil de ligature à la base de l'appendice.
-func ligate() -> void:
-	if ligature:
-		return
-	ligature = MeshInstance3D.new()
-	var tm := TorusMesh.new()
-	tm.inner_radius = 0.0036
-	tm.outer_radius = 0.0054
-	tm.rings = 24
-	tm.ring_segments = 8
-	ligature.mesh = tm
-	ligature.material_override = MeshUtil.mat(Color(0.92, 0.9, 0.82), 0.6)
-	add_child(ligature)
+## Fil de ligature : boucle autour de la base, plus ou moins serrée (0 = lâche, 1 = nœud serré).
+func set_ligature(tight: float) -> void:
+	if ligature == null:
+		ligature = MeshInstance3D.new()
+		ligature.name = "Ligature"
+		var tm := TorusMesh.new()
+		tm.rings = 24
+		tm.ring_segments = 8
+		ligature.mesh = tm
+		ligature.material_override = MeshUtil.mat(Color(0.92, 0.9, 0.82), 0.6)
+		add_child(ligature)
+	var tm2 := ligature.mesh as TorusMesh
+	var r := lerpf(0.011, 0.0042, clampf(tight, 0.0, 1.0))
+	tm2.inner_radius = r
+	tm2.outer_radius = r + 0.0016
+	appendix_squeeze = clampf((tight - 0.6) / 0.4, 0.0, 1.0)
+	_update_appendix()
 	var p := appendix_point(0.18)
 	var tan := (appendix_point(0.22) - appendix_point(0.14)).normalized()
 	var side := tan.cross(Vector3.UP).normalized()
 	if side.length() < 0.1:
 		side = tan.cross(Vector3.RIGHT).normalized()
 	ligature.global_transform = Transform3D(Basis(side, tan, side.cross(tan)), p)
+
+
+## Nœud définitif : boucle serrée et deux brins coupés.
+func ligate() -> void:
+	set_ligature(1.0)
+	var p := appendix_point(0.18)
+	var tan := (appendix_point(0.22) - appendix_point(0.14)).normalized()
+	var side := tan.cross(Vector3.UP).normalized()
 	for s in [-1.0, 1.0]:
 		var end := MeshInstance3D.new()
 		var cm := CylinderMesh.new()
@@ -643,10 +846,20 @@ func cut() -> Node3D:
 	add_child(piece)
 	var origin := appendix_point(0.65)
 	piece.global_position = origin
+	# Copie figée du squelette pour la partie retirée
+	var sk := Skeleton3D.new()
+	piece.add_child(sk)
+	sk.position = -origin
+	for i in appendix_skel.get_bone_count():
+		sk.add_bone("b%d" % i)
+		sk.set_bone_rest(i, appendix_skel.get_bone_rest(i))
+		sk.set_bone_pose(i, appendix_skel.get_bone_pose(i))
 	var mi := MeshInstance3D.new()
-	mi.mesh = _deformed(0.33, 1.0, origin)
-	mi.material_override = appendix_node.material_override
-	piece.add_child(mi)
+	mi.mesh = _app_mesh_piece
+	mi.skin = _app_skin
+	mi.material_override = appendix_mat
+	sk.add_child(mi)
+	appendix_node.mesh = _app_mesh_stump
 	# Tranches de section rouge sombre
 	var raw := _tissue(Color(0.5, 0.06, 0.06), 0.5, 0.0)
 	for t in [0.3, 0.33]:
@@ -664,14 +877,13 @@ func cut() -> Node3D:
 			piece.add_child(cap)
 		cap.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, tan)), at)
 	appendix_cut = true
-	_update_appendix()
 	return piece
 
 
 # ---------------------------------------------------------------- Peau : badigeon, incision, plaie
 
 ## Peint l'antiseptique autour d'un point. Renvoie la couverture de la zone à préparer (0..1).
-func paint_iodine(p: Vector3, radius := 0.022) -> float:
+func paint_iodine(p: Vector3, radius := 0.02, strength := 1.0) -> float:
 	var cx := (p.x - PATCH_MIN.x) / PATCH_SIZE.x * MASK_RES
 	var cz := (p.z - PATCH_MIN.y) / PATCH_SIZE.y * MASK_RES
 	var r := radius / PATCH_SIZE.x * MASK_RES
@@ -682,27 +894,17 @@ func paint_iodine(p: Vector3, radius := 0.022) -> float:
 			var d := Vector2(i + 0.5 - cx, j + 0.5 - cz).length() / r
 			if d < 1.0:
 				var v := iodine_img.get_pixel(i, j).r
-				iodine_img.set_pixel(i, j, Color.from_hsv(0, 0, minf(1.0, v + (1.0 - d) * 0.55 + 0.25)))
-	iodine_tex.update(iodine_img)
+				var nv := minf(1.0, v + ((1.0 - d) * 0.35 + 0.12) * strength)
+				iodine_img.set_pixel(i, j, Color(nv, nv, nv))
+				if v <= 0.45 and nv > 0.45 and _iod_target[j * MASK_RES + i] == 1:
+					_iod_done += 1
+	_iod_dirty = true
 	_iodine_wet = 1.0
 	return iodine_coverage()
 
 
 func iodine_coverage() -> float:
-	var total := 0
-	var done := 0
-	for j in MASK_RES:
-		for i in MASK_RES:
-			var x := PATCH_MIN.x + (i + 0.5) / MASK_RES * PATCH_SIZE.x
-			var z := PATCH_MIN.y + (j + 0.5) / MASK_RES * PATCH_SIZE.y
-			# Zone à préparer : ellipse centrée sur l'incision
-			var q := Vector2(x - center.x, z - center.z)
-			if (q.x * q.x) / (paint_r.x * paint_r.x) + (q.y * q.y) / (paint_r.y * paint_r.y) > 1.0:
-				continue
-			total += 1
-			if iodine_img.get_pixel(i, j).r > 0.45:
-				done += 1
-	return float(done) / maxf(1.0, total)
+	return float(_iod_done) / maxf(1.0, _iod_total)
 
 
 func fill_iodine() -> void:
@@ -710,8 +912,10 @@ func fill_iodine() -> void:
 	for j in MASK_RES:
 		for i in MASK_RES:
 			var v := iodine_img.get_pixel(i, j).r
-			iodine_img.set_pixel(i, j, Color.from_hsv(0, 0, maxf(v, 0.62)))
-	iodine_tex.update(iodine_img)
+			var nv := maxf(v, 0.62)
+			iodine_img.set_pixel(i, j, Color(nv, nv, nv))
+	_iod_done = _iod_total
+	_iod_dirty = true
 
 
 func incision_point(t: float) -> Vector3:
@@ -728,20 +932,96 @@ func incision_project(p: Vector3) -> Vector2:
 	return Vector2(t, (a + ab * t).distance_to(q))
 
 
+## Coordonnées (u le long de l'incision depuis le milieu, v en travers) d'un point.
+func uv_of(p: Vector3) -> Vector2:
+	var q := Vector3(p.x - center.x, 0.0, p.z - center.z)
+	return Vector2(q.dot(dir3), q.dot(perp3))
+
+
+func has_cut() -> bool:
+	return cut0 <= cut1
+
+
+## Prolonge l'incision jusqu'au paramètre t.
+func extend_cut(t: float) -> void:
+	if cut0 > cut1:
+		cut0 = t
+		cut1 = t
+	cut0 = minf(cut0, t)
+	cut1 = maxf(cut1, t)
+
+
 func set_incision_progress(v: float) -> void:
-	incision_progress = v
-	if skin_mat:
-		skin_mat.set_shader_parameter("incision_progress", v)
-		skin_mat.set_shader_parameter("show_guide", 1.0 if v < 0.999 else 0.0)
-		skin_mat.set_shader_parameter("bleed", clampf(v * 1.4, 0.0, 1.0))
+	cut0 = 0.0 if v > 0.0 else 1.0
+	cut1 = v if v > 0.0 else 0.0
+	if v >= 0.999:
+		bleed0 = 0.0
+		bleed1 = 1.0
 
 
+func get_incision_progress() -> float:
+	return maxf(0.0, cut1 - cut0)
+
+
+func gap_profile(u: float) -> float:
+	if cut1 <= cut0:
+		return 0.0
+	var u0 := (cut0 - 0.5) * 2.0 * half_len
+	var u1 := (cut1 - 0.5) * 2.0 * half_len
+	var hl := (u1 - u0) * 0.5 + 0.003
+	var k := (u - (u0 + u1) * 0.5) / hl
+	return sqrt(maxf(0.0, 1.0 - k * k))
+
+
+## Écart du bord `side` au point u (même formule que wound_common.gdshaderinc).
+func edge_open(u: float, side: float) -> float:
+	var o := open_l if side < 0.0 else open_r
+	var shape := 1.0 + 0.07 * sin(u * 90.0 + side * 1.3) + 0.04 * sin(u * 210.0 + 2.1)
+	return maxf(o, 0.0) * wound_w * gap_profile(u) * shape
+
+
+## Point du bord de la plaie (sur la peau) à l'abscisse u.
+func edge_point(u: float, side: float, outward := 0.0) -> Vector3:
+	var d := edge_open(u, side) + outward
+	var p := center + dir3 * u + perp3 * side * d
+	return Vector3(p.x, body_height(p.x, p.z), p.z)
+
+
+## Profondeur autorisée sous la peau en p si p est dans la plaie ouverte (0 sinon).
+func hole_depth(p: Vector3) -> float:
+	var q := uv_of(p)
+	var side := -1.0 if q.y < 0.0 else 1.0
+	var d := edge_open(q.x, side)
+	if d > 0.0015 and absf(q.y) < d * 0.92:
+		return minf(WOUND_DEPTH + 0.015, hole_limit)
+	return 0.0
+
+
+func in_window(x: float, z: float) -> bool:
+	return x > WINDOW_MIN.x and x < WINDOW_MAX.x and z > WINDOW_MIN.y and z < WINDOW_MAX.y
+
+
+## Ouverture des deux bords (lecture : la plus grande ; écriture : immédiate, sans ressort).
 func set_opening(v: float) -> void:
-	opening = v
-	if skin_mat == null:
-		return
-	skin_mat.set_shader_parameter("opening", v)
-	_rebuild_walls()
+	rest_open = v
+	open_l = v
+	open_r = v
+	_vel_l = 0.0
+	_vel_r = 0.0
+
+
+func get_opening() -> float:
+	return maxf(open_l, open_r)
+
+
+## Peau enfoncée par l'instrument de la main `slot` (profondeur 0 = rien).
+func set_press(slot: int, p: Vector3, depth: float, radius := 0.011) -> void:
+	_press[slot] = Vector4(p.x, p.z, radius, clampf(depth, 0.0, 0.006))
+	_press_set[slot] = true
+
+
+func set_bleb(p: Vector3, radius: float, height: float) -> void:
+	bleb = Vector4(p.x, p.z, radius, height)
 
 
 ## Amplitude de la respiration visible sur les champs (détresse = plus ample).
@@ -752,67 +1032,74 @@ func set_breathe(v: float) -> void:
 
 
 func set_stitched(v: float) -> void:
-	skin_mat.set_shader_parameter("stitched", v)
+	for m in [skin_mat, zone_mat]:
+		m.set_shader_parameter("stitched", v)
 
 
-## Contour irrégulier de la plaie (même formule que wound_shape dans skin_field.gdshader).
-static func wound_shape(a: float) -> float:
-	return 1.0 + 0.07 * sin(3.0 * a + 0.7) + 0.04 * sin(5.0 * a + 2.1) + 0.025 * sin(9.0 * a + 0.3)
-
-
-func _rebuild_walls() -> void:
-	wall_mesh.clear_surfaces()
-	if wound_light:
-		wound_light.light_energy = clampf(opening, 0.0, 1.0) * 0.02
-	if opening <= 0.01:
-		return
-	var half_len := INC_A.distance_to(INC_B) * 0.5 + 0.004
-	var half_w := opening * wound_w
-	var k := 64
-	var levels := 10
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for j in levels + 1:
-		var f := float(j) / levels
-		# Paroi légèrement bombée (tissus qui débordent) puis qui se resserre vers le fond
-		var shrink := 1.0 - 0.32 * pow(f, 1.3) - 0.06 * sin(PI * f) * (1.0 - opening * 0.5)
-		var arc := 0.0
-		var prev := Vector3.ZERO
-		for i in k + 1:
-			var a := TAU * i / k
-			var r := wound_shape(a)
-			var p := center + dir3 * cos(a) * half_len * r * shrink + perp3 * sin(a) * half_w * r * shrink
-			var top := body_height(p.x, p.z) + 0.0004
-			p.y = top - WOUND_DEPTH * f
-			if i > 0:
-				arc += Vector2(p.x - prev.x, p.z - prev.z).length()
-			prev = p
-			st.set_uv(Vector2(arc + j * 0.013, f))
-			st.add_vertex(p)
-	for j in levels:
-		for i in k:
-			var p0 := j * (k + 1) + i
-			st.add_index(p0)
-			st.add_index(p0 + 1)
-			st.add_index(p0 + k + 1)
-			st.add_index(p0 + 1)
-			st.add_index(p0 + k + 2)
-			st.add_index(p0 + k + 1)
-	st.generate_normals()
-	st.generate_tangents()
-	st.commit(wall_mesh)
+static func _spring(x: float, v: float, target: float, k: float, zeta: float, dt: float) -> Vector2:
+	var c := 2.0 * sqrt(k) * zeta
+	var h := dt * 0.5
+	for i in 2:
+		v += (k * (target - x) - c * v) * h
+		x += v * h
+	return Vector2(x, v)
 
 
 func _process(delta: float) -> void:
+	var dt := minf(delta, 0.05)
+	# Bords de la plaie : ressorts (suivent l'instrument qui tire, se détendent quand on lâche)
+	var tl := maxf(rest_open, maxf(held_l, drive_l))
+	var tr := maxf(rest_open, maxf(held_r, drive_r))
+	var sl := _spring(open_l, _vel_l, tl, 520.0 if drive_l >= 0.0 else 170.0, 0.85 if drive_l >= 0.0 else 0.32, dt)
+	var sr := _spring(open_r, _vel_r, tr, 520.0 if drive_r >= 0.0 else 170.0, 0.85 if drive_r >= 0.0 else 0.32, dt)
+	open_l = clampf(sl.x, 0.0, 1.35)
+	_vel_l = sl.y
+	open_r = clampf(sr.x, 0.0, 1.35)
+	_vel_r = sr.y
+	drive_l = -1.0
+	drive_r = -1.0
+	# Le sang perle derrière la lame avec un temps de retard
+	if cut1 > cut0:
+		if bleed1 < bleed0:
+			bleed0 = cut0
+			bleed1 = cut0
+		bleed0 = move_toward(bleed0, cut0, dt * 0.2)
+		bleed1 = move_toward(bleed1, cut1, dt * 0.2)
+	if _iod_dirty:
+		iodine_tex.update(iodine_img)
+		_iod_dirty = false
 	# La bétadine sèche doucement : elle devient plus mate
-	if _iodine_wet > 0.0 and skin_mat:
+	if _iodine_wet > 0.0:
 		_iodine_wet = maxf(0.0, _iodine_wet - delta / 60.0)
-		skin_mat.set_shader_parameter("iodine_wet", _iodine_wet)
+	if wound_light:
+		wound_light.light_energy = clampf(opening, 0.0, 1.0) * 0.02
+	for i in 2:
+		if not _press_set[i]:
+			_press[i] = Vector4.ZERO
+		_press_set[i] = false
+	for m in _all_mats():
+		m.set_shader_parameter("open_lr", Vector2(open_l, open_r))
+		m.set_shader_parameter("cut", Vector2(cut0, cut1))
+		m.set_shader_parameter("press_a", _press[0])
+		m.set_shader_parameter("press_b", _press[1])
+		m.set_shader_parameter("bleb", bleb)
+	for m in [skin_mat, zone_mat]:
+		m.set_shader_parameter("bleed", Vector2(bleed0, bleed1))
+		m.set_shader_parameter("iodine_wet", _iodine_wet)
+		m.set_shader_parameter("bleb_pale", bleb_pale)
+		m.set_shader_parameter("show_guide", 0.0 if cut0 <= 0.01 and cut1 >= 0.99 else 1.0)
 
 
 ## Repère d'un écarteur posé dans la plaie (side = -1 ou +1 de part et d'autre de l'incision).
 func retractor_slot(side: float) -> Vector3:
-	return center + perp3 * side * 0.02 + Vector3.UP * 0.002
+	var e := edge_point(0.0, side, -0.0025)
+	return e - Vector3.UP * 0.006
+
+
+## Points d'entrée et de sortie de l'aiguille pour un point de suture à l'abscisse t.
+func stitch_pair(t: float, bite := 0.005) -> Array:
+	var u := (t - 0.5) * 2.0 * half_len
+	return [edge_point(u, -1.0, bite), edge_point(u, 1.0, bite)]
 
 
 func add_stitch(t: float) -> void:
@@ -856,4 +1143,8 @@ func add_stitch_at(p0: Vector3, across: Vector3, length := 0.016) -> void:
 		e.position = acr * length * 0.56 + along * 0.0025 * sgn + Vector3.UP * 0.001
 		e.rotation = Vector3(0.4 * sgn, 0.3, 1.3)
 		knot.add_child(e)
+	# Le nœud se serre : petite animation d'apparition
+	knot.scale = Vector3(1.3, 1.3, 1.3)
+	var tw := knot.create_tween()
+	tw.tween_property(knot, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	stitches.append(knot)

@@ -188,7 +188,7 @@ func define_steps() -> void:
 			"title": "Désinfecte tout le ventre",
 			"text": "Frotte toute la peau du ventre avec la pince à badigeon (gâchette appuyée), du bas des côtes jusqu'au pubis, jusqu'à 100 %.",
 			"label": "Zone à désinfecter", "ring": 6.0, "done_msg": "Ventre désinfecté"},
-		{"id": "incision", "kind": "trace", "list": "Incision médiane", "inst": "bistouri",
+		{"id": "incision", "kind": "incise", "list": "Incision médiane", "inst": "bistouri",
 			"title": "Ouvre le ventre sur la ligne médiane",
 			"text": "Grande incision du bas du sternum jusque sous le nombril : pose la lame sur « DÉPART » et suis le pointillé, gâchette appuyée.",
 			"done": _incision_done, "done_msg": "Ventre ouvert"},
@@ -210,8 +210,8 @@ func define_steps() -> void:
 			"text": "Attrape avec la pince l'anse d'intestin qui saigne (gâchette maintenue) et sors-la du ventre pour la voir.",
 			"label": "Anse perforée", "radius": 0.03, "auto_lift": 0.08,
 			"target": func() -> Vector3: return apex,
-			"grab": _kill_anim, "move": set_apex, "goal": _lift_goal,
-			"release": func() -> void: _move_apex_to(apex_rest, 0.7, Tween.TRANS_ELASTIC),
+			"move": set_apex, "goal": _lift_goal,
+			"rest": func() -> Vector3: return apex_rest,
 			"done": _lift_done, "done_msg": "Perforation trouvée"},
 		{"id": "clamp", "kind": "place", "list": "Clamper", "inst": "kelly",
 			"title": "Clampe la perforation",
@@ -219,11 +219,11 @@ func define_steps() -> void:
 			"label": "Clamp ici", "radius": 0.025, "sound": "pose",
 			"target": func() -> Vector3: return apex + Vector3.UP * 0.011,
 			"done": _clamp_done, "done_msg": "Saignement arrêté"},
-		{"id": "reparation", "kind": "points", "list": "Réparer l'intestin", "inst": "porte_aiguille",
+		{"id": "reparation", "kind": "suture", "list": "Réparer l'intestin", "inst": "porte_aiguille",
 			"title": "Recouds la perforation",
 			"text": "Avec le porte-aiguille, fais les 3 points autour du trou de l'intestin (gâchette sur chaque repère).",
 			"label": "Point", "radius": 0.016,
-			"points": _repair_points, "point": _repair_point, "done": _repaired,
+			"pairs": func() -> Array: return _pairs_around(_repair_points(), patient.perp3 * 0.004), "point": _repair_point, "done": _repaired,
 			"done_msg": "Intestin réparé, remis dans le ventre"},
 		{"id": "lavage", "kind": "hold", "list": "Lavage", "inst": "aspirateur",
 			"title": "Lave le ventre",
@@ -231,16 +231,16 @@ func define_steps() -> void:
 			"label": "Aspire ici", "radius": 0.04, "duration": 2.0, "hold_sound": "aspiration", "progress_label": "Lavage…",
 			"target": func() -> Vector3: return c + Vector3(0.03, -0.035, -0.02),
 			"done": _washed, "done_msg": "Ventre propre, écarteur retiré"},
-		{"id": "aponevrose", "kind": "points", "list": "Fermer l'aponévrose", "inst": "porte_aiguille",
+		{"id": "aponevrose", "kind": "suture", "list": "Fermer l'aponévrose", "inst": "porte_aiguille",
 			"title": "Ferme le plan profond",
 			"text": "Referme l'aponévrose (le tissu solide sous la graisse) : 5 points, du haut vers le bas, sur les repères au fond de la plaie.",
 			"label": "Point", "radius": 0.02,
-			"points": _apo_points, "point": _apo_point, "done_msg": "Paroi solide refermée"},
-		{"id": "peau", "kind": "points", "list": "Fermer la peau", "inst": "porte_aiguille",
+			"pairs": func() -> Array: return _pairs_around(_apo_points(), patient.perp3 * 0.006), "point": _apo_point, "done_msg": "Paroi solide refermée"},
+		{"id": "peau", "kind": "suture", "list": "Fermer la peau", "inst": "porte_aiguille",
 			"title": "Ferme la peau",
 			"text": "Dernière étape : 7 points sur la peau, le long de la cicatrice.",
 			"label": "Point", "radius": 0.02,
-			"points": _skin_points, "point": _skin_point, "done": _closed,
+			"pairs": _skin_pairs, "point": _skin_point, "done": _closed,
 			"done_msg": "Ventre refermé !"},
 	]
 
@@ -386,6 +386,20 @@ func _apo_point(i: int, instant: bool) -> void:
 		patient.opening = left
 	else:
 		tween_opening(left, 0.3)
+
+
+func _pairs_around(pts: Array, half: Vector3) -> Array:
+	var out := []
+	for p in pts:
+		out.append([p - half, p + half])
+	return out
+
+
+func _skin_pairs() -> Array:
+	var out := []
+	for t in SKIN_T:
+		out.append(patient.stitch_pair(t))
+	return out
 
 
 func _skin_points() -> Array:

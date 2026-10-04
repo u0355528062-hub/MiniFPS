@@ -8,6 +8,7 @@ const RATE := 44100
 static var instance: Sfx
 
 var streams := {}
+var loops := {}  ## sons continus : nom -> [lecteur, niveau voulu, rafraîchi cette image]
 var _players: Array[AudioStreamPlayer3D] = []
 var _flat: Array[AudioStreamPlayer] = []
 var _next := 0
@@ -30,6 +31,16 @@ func _ready() -> void:
 	streams["souffle"] = _noise(1.3, 5000.0, 0.16)
 	streams["bulles"] = _bubbles()
 	streams["aspiration"] = _noise(0.45, 1600.0, 0.14)
+	streams["pique"] = _metal(5200.0, 0.06, 0.12)
+	streams["plop"] = _thud()
+	streams["ecarte"] = _squelch(0.35, 7)
+	# Sons continus (en boucle, volume réglé à chaque image par le geste)
+	streams["loop_badigeon"] = _loop_noise(900.0, 0.5, 11, 9.0)
+	streams["loop_incision"] = _loop_noise(2600.0, 0.35, 12, 23.0)
+	streams["loop_ecarte"] = _loop_noise(350.0, 0.6, 13, 5.0)
+	streams["loop_piston"] = _squeak()
+	streams["loop_fil"] = _loop_noise(4200.0, 0.18, 14, 17.0)
+	streams["loop_aspiration"] = _loop_noise(1600.0, 0.4, 15, 3.0)
 	for i in 10:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 1.5
@@ -66,6 +77,113 @@ func _play(sound: String, at: Vector3, volume_db: float, pitch: float) -> void:
 	p.volume_db = volume_db
 	p.pitch_scale = pitch
 	p.play()
+
+
+## Son continu : à appeler à chaque image avec le niveau voulu (0 = silence). S'arrête tout seul.
+static func loop(sound: String, at: Vector3, level: float) -> void:
+	if instance == null or not instance.streams.has("loop_" + sound):
+		return
+	instance._loop(sound, at, level)
+
+
+func _loop(sound: String, at: Vector3, level: float) -> void:
+	if not loops.has(sound):
+		var p := AudioStreamPlayer3D.new()
+		p.stream = streams["loop_" + sound]
+		p.unit_size = 1.5
+		p.volume_db = -60.0
+		add_child(p)
+		loops[sound] = [p, 0.0, false, 0.0]
+	var l: Array = loops[sound]
+	l[1] = maxf(l[1], level) if l[2] else level
+	l[2] = true
+	(l[0] as AudioStreamPlayer3D).global_position = at
+
+
+func _process(delta: float) -> void:
+	for k in loops:
+		var l: Array = loops[k]
+		var p: AudioStreamPlayer3D = l[0]
+		var want: float = l[1] if l[2] else 0.0
+		l[2] = false
+		var cur: float = move_toward(l[3], want, delta * (8.0 if want > l[3] else 4.0))
+		l[3] = cur
+		if cur > 0.01:
+			p.volume_db = linear_to_db(cur) - 6.0
+			if not p.playing:
+				p.play()
+		elif p.playing:
+			p.stop()
+
+
+func _loop_noise(cutoff: float, gain: float, seed_value: int, wobble: float) -> AudioStreamWAV:
+	var n := int(RATE * 1.5)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var a := 1.0 - exp(-TAU * cutoff / RATE)
+	var lp := 0.0
+	var lp2 := 0.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	for i in n:
+		lp += (rng.randf_range(-1, 1) - lp) * a
+		lp2 += (lp - lp2) * a
+		var t := float(i) / RATE
+		d[i] = (lp - lp2 * 0.5) * (0.7 + 0.3 * sin(TAU * wobble * t + sin(TAU * 1.3 * t) * 2.0))
+	return _make_loop(d, gain * 3.0)
+
+
+func _squeak() -> AudioStreamWAV:
+	var n := int(RATE * 1.0)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph += TAU * (640.0 + 60.0 * sin(TAU * 3.0 * t) + 25.0 * sin(TAU * 11.0 * t)) / RATE
+		d[i] = (sin(ph) + 0.35 * sin(ph * 2.0) + 0.15 * sin(ph * 3.0)) * (0.6 + 0.4 * sin(TAU * 6.0 * t))
+	return _make_loop(d, 0.05)
+
+
+func _make_loop(data: PackedFloat32Array, gain: float) -> AudioStreamWAV:
+	var n := data.size()
+	var fade := 2000
+	for i in fade:
+		var k := float(i) / fade
+		data[i] = data[i] * k + data[n - fade + i] * (1.0 - k)
+	var s := _to_wav(data.slice(0, n - fade), gain)
+	s.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	s.loop_begin = 0
+	s.loop_end = n - fade
+	return s
+
+
+func _thud() -> AudioStreamWAV:
+	var n := int(0.18 * RATE)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	for i in n:
+		var t := float(i) / RATE
+		d[i] = sin(TAU * (180.0 - 300.0 * t) * t) * exp(-t * 30.0) + rng.randf_range(-1, 1) * exp(-t * 90.0) * 0.3
+	return _to_wav(d, 0.5)
+
+
+## Bruit humide (tissus qui s'écartent).
+func _squelch(dur: float, seed_value: int) -> AudioStreamWAV:
+	var n := int(dur * RATE)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		lp += (rng.randf_range(-1, 1) - lp) * 0.06
+		var crackle := 1.0 if rng.randf() < 0.004 else 0.0
+		d[i] = (lp * 2.0 + crackle * rng.randf_range(-0.6, 0.6)) * _env(i, n, 0.02, dur * 0.7) * (0.6 + 0.4 * sin(TAU * 13.0 * t))
+	return _to_wav(d, 0.5)
 
 
 func _ambience() -> void:

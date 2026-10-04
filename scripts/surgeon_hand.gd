@@ -1,7 +1,8 @@
 class_name SurgeonHand
 extends Node3D
-## Main du chirurgien (VR ou souris). Tient au plus un instrument ; la procédure lit
-## la pointe de l'instrument et la gâchette.
+## Main du chirurgien (mains nues, manette ou souris). Tient au plus un instrument. La procédure lit
+## la pointe de l'instrument (et sa profondeur sous la peau) et le serrage des doigts (0..1) qui
+## ferme les mâchoires, pousse le piston...
 
 signal take_requested(hand: SurgeonHand, inst: Instrument)
 signal put_back_requested(hand: SurgeonHand)
@@ -11,14 +12,20 @@ var hovered: Instrument
 ## Aide au placement (souris) : la procédure indique la cible de l'étape en cours
 var assist_target := Vector3.INF
 var instruments: Array[Instrument] = []
+var slot := 0  ## 0 ou 1 : pour la peau enfoncée sous chaque main
 
 var _trigger_was := false
 var _trigger_edge := false
 var _release_edge := false
 
 
-func trigger_value() -> float:
+## Serrage des doigts (pouce contre index, gâchette, clic) : 0 = ouvert, 1 = serré.
+func squeeze_value() -> float:
 	return 0.0
+
+
+func trigger_value() -> float:
+	return squeeze_value()
 
 
 func trigger_down() -> bool:
@@ -45,6 +52,16 @@ func tip() -> Vector3:
 	return held.tip_global() if held else global_position
 
 
+## Pointe voulue par la main avant la correction des contacts (pour les robots de test).
+func raw_tip() -> Vector3:
+	return tip()
+
+
+## Bout de l'index (boutons à toucher), INF si la main n'en a pas.
+func fingertip() -> Vector3:
+	return Vector3.INF
+
+
 func pulse(_amplitude := 0.5, _duration := 0.05) -> void:
 	pass
 
@@ -67,10 +84,18 @@ func put_back() -> void:
 		pulse(0.2, 0.04)
 
 
-## L'instrument quitte la main sans retourner au plateau (écarteur posé dans la plaie).
+## L'instrument quitte la main sans retourner au plateau (écarteur tenu par l'aide, drain posé).
 func release_parked() -> void:
 	held = null
 
 
 func set_hover(inst: Instrument) -> void:
 	hovered = inst
+
+
+## Instrument tenu : met à jour ses mâchoires et la peau enfoncée sous la pointe.
+func _after_place(patient: Patient) -> void:
+	if held == null:
+		return
+	if patient and held.tip_depth > 0.0 and held.tip_depth < 0.012 and patient.hole_depth(held.tip_global()) <= 0.0:
+		patient.set_press(slot, held.tip_global(), minf(held.tip_depth, Contact.SOFT) * 1.3)

@@ -1,11 +1,8 @@
 class_name Operation
 extends RefCounted
 ## Une opération = un réglage du patient + une liste d'instruments + une liste d'étapes.
-## Chaque étape est d'un type de geste générique (la procédure et les robots savent tous les jouer) :
-##   paint  : badigeonner une zone            trace  : suivre le tracé d'incision
-##   place  : amener la pointe + gâchette      hold   : maintenir la gâchette sur un point
-##   push   : enfoncer la pointe en profondeur lift   : saisir et soulever
-##   carry  : saisir un objet et le déposer    points : toucher une série de points (sutures)
+## Chaque étape est d'un type de geste générique et physique (voir Procedure) : paint, incise,
+## inject, retract, spread, lift, ligate, cut, carry, suture, insert, hold, place.
 
 ## Opérations proposées dans le menu (la laparotomie y entrera quand elle sera terminée)
 const ALL := ["appendicectomie", "drain"]
@@ -77,9 +74,14 @@ func instrument(inst_id: String) -> Instrument:
 	return tray.instruments[inst_id]
 
 
-func tween_opening(v: float, dur: float) -> void:
-	var tw := proc.create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(patient, "opening", v, dur)
+## Ouverture de repos de la plaie : les bords y vont d'eux-mêmes (ressort), sans à-coup.
+func tween_opening(v: float, _dur := 0.0) -> void:
+	patient.rest_open = v
+
+
+## L'anesthésie locale vient d'être injectée (elle fera effet dans `wait` secondes).
+func anesthesia_started(_wait: float) -> void:
+	pass
 
 
 ## Pose un instrument hors de la main (écarteur, drain...) à une position fixe.
@@ -93,8 +95,10 @@ func park(inst: Instrument, xf: Transform3D, instant: bool) -> void:
 		inst.park(xf)
 
 
-## Rend tous les instruments posés à la table.
+## Rend tous les instruments posés à la table (les bords tenus par l'aide se détendent).
 func unpark_all(instant: bool) -> void:
+	patient.held_l = -1.0
+	patient.held_r = -1.0
 	for inst in proc.parked:
 		if instant:
 			inst.parked = false

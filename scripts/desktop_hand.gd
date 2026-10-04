@@ -1,21 +1,32 @@
 class_name DesktopHand
 extends SurgeonHand
 ## Main pilotée à la souris : la pointe de l'instrument suit le point visé sur le patient.
+## Clic maintenu = appuyer (l'instrument s'enfonce là où c'est possible) et serrer (mâchoires, piston).
 
 var camera: Camera3D
+var patient: Patient
 var mouse_left := false
 var swallow_click := false  ## le clic qui a pris l'instrument ne déclenche pas d'action
 var lift := 0.0
 var auto_lift := 0.0  ## levée automatique demandée par la procédure (appendice tenu)
+## Effet du clic sur la profondeur : "press" (enfonce tant qu'on appuie), "hold" (la profondeur
+## atteinte reste quand on relâche), "none" (le clic ne fait que serrer)
+var press_mode := "press"
+var press_max := 0.006
+var depth := 0.0
 var _tip := Vector3.ZERO
 var sim_mouse := Vector2(-1, -1)  ## test robot : position de souris imposée
 
 
-func trigger_value() -> float:
+func squeeze_value() -> float:
 	return 1.0 if mouse_left and not swallow_click and held != null else 0.0
 
 
 func tip() -> Vector3:
+	return held.tip_global() if held else global_position
+
+
+func raw_tip() -> Vector3:
 	return _tip if held else global_position
 
 
@@ -63,7 +74,6 @@ func _process(delta: float) -> void:
 			var sp := camera.unproject_position(inst.global_position)
 			var spt := camera.unproject_position(inst.tip_global())
 			var d := minf(sp.distance_to(mouse), spt.distance_to(mouse))
-			# Distance au segment centre-pointe à l'écran
 			var seg := spt - sp
 			if seg.length() > 1.0:
 				var k := clampf((mouse - sp).dot(seg) / seg.length_squared(), -1.0, 1.0)
@@ -74,20 +84,29 @@ func _process(delta: float) -> void:
 	set_hover(best)
 
 	if held:
-		var target := _aim_point(mouse) + Vector3.UP * (lift + auto_lift)
+		var pressing := mouse_left and not swallow_click
+		if pressing and press_mode != "none":
+			depth = move_toward(depth, press_max, 0.045 * delta)
+		elif press_mode != "hold":
+			depth = move_toward(depth, 0.0, 0.1 * delta)
+		var target := _aim_point(mouse) + Vector3.UP * (lift + auto_lift - depth)
 		# Aide : attire la pointe vers la cible de l'étape quand on en est proche
 		if assist_target != Vector3.INF:
 			var flat := Vector2(target.x - assist_target.x, target.z - assist_target.z).length()
 			if flat < 0.035:
 				var w := 1.0 - smoothstep(0.012, 0.035, flat)
-				var snapped := assist_target + Vector3.UP * (lift + auto_lift)
+				var snapped := assist_target + Vector3.UP * (lift + auto_lift - depth)
 				target = target.lerp(snapped, w)
 		_tip = target if _tip == Vector3.ZERO else _tip.lerp(target, 1.0 - exp(-delta * 22.0))
 		var fwd := -camera.global_basis.z
 		fwd.y = 0
 		fwd = fwd.normalized()
 		var axis := (fwd * 0.5 + Vector3.DOWN * 0.86).normalized()
-		held.pose_tip(_tip, axis, -fwd)
+		var up := Vector3.DOWN if held.up_mode == "down" else -fwd
+		held.pose_tip(_tip, axis, up)
+		held.set_squeeze(squeeze_value() if held.has_jaws or held.is_syringe else 0.0)
+		_after_place(patient)
 	else:
 		_tip = Vector3.ZERO
 		lift = 0.0
+		depth = 0.0

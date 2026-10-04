@@ -19,7 +19,7 @@ func take(inst_id: String) -> void:
 
 
 func put_back_all() -> void:
-	bot.bot_trigger = false
+	bot.bot_squeeze = 0.0
 	if bot.held:
 		bot.put_back_requested.emit(bot)
 	await _frames(2)
@@ -32,9 +32,19 @@ func tip_to(p: Vector3, frames_n := 12) -> void:
 		await _frames(1)
 
 
-func trigger(down: bool) -> void:
-	bot.bot_trigger = down
+func squeeze(v: float) -> void:
+	bot.bot_squeeze = v
 
 
 func held_id() -> String:
 	return bot.held.id if bot.held else ""
+
+
+func debug_state() -> String:
+	var t := bot.tip()
+	return "tenu=%s tip=%s brut=%s prof=%.4f corr=%.4f cut=[%.2f %.2f] st=%s" % [held_id(), t, bot.bot_tip, bot.held.tip_depth if bot.held else 0.0, bot.held.correction if bot.held else 0.0, patient.cut0, patient.cut1, proc.st]
+
+
+func lift_clear() -> void:
+	bot.bot_tip = Vector3(bot.bot_tip.x, maxf(bot.bot_tip.y, Patient.TABLE_TOP + 0.35), bot.bot_tip.z)
+	await _frames(2)

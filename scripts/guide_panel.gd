@@ -10,7 +10,7 @@ func build() -> void:
 	_vp = SubViewport.new()
 	_vp.size = Vector2i(int(GuideUI.W), int(GuideUI.H))
 	_vp.transparent_bg = true
-	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	add_child(_vp)
 	ui = GuideUI.new()
 	_vp.add_child(ui)
@@ -26,3 +26,9 @@ func build() -> void:
 	quad.material_override = m
 	quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(quad)
+
+
+func _process(delta: float) -> void:
+	# Redessiné seulement quand le texte change ou qu'un message s'anime
+	if ui and ui.needs_redraw(delta):
+		_vp.render_target_update_mode = SubViewport.UPDATE_ONCE

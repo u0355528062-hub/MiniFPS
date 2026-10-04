@@ -21,7 +21,6 @@ var _title: Label
 var _text: Label
 var _inst_name: Label
 var _inst_card: PanelContainer
-var _bar_fill: Panel
 var _bar_label: Label
 var _hint: Label
 var _timer: Label
@@ -34,8 +33,9 @@ var _end_title: Label
 var _end_stats: Label
 var _end_stars: Label
 var _toast_tween: Tween
-var _shown_progress := 0.0
-var _target_progress := 0.0
+## L'image du panneau n'est redessinée que si quelque chose a changé
+var dirty := true
+var _animating := 0.0
 
 
 func _init() -> void:
@@ -130,18 +130,10 @@ func _build() -> void:
 	_label("INSTRUMENT À PRENDRE  (il brille sur la table)", 20, ACCENT, null, vb)
 	_inst_name = _label("", 38, TEXT, bold, vb)
 
-	var bar := Panel.new()
-	bar.position = Vector2(460, 600)
-	bar.size = Vector2(900, 22)
-	bar.add_theme_stylebox_override("panel", _box(Color(1, 1, 1, 0.08), 11))
-	add_child(bar)
-	_bar_fill = Panel.new()
-	_bar_fill.position = Vector2(0, 0)
-	_bar_fill.size = Vector2(0, 22)
-	_bar_fill.add_theme_stylebox_override("panel", _box(ACCENT, 11))
-	bar.add_child(_bar_fill)
-	_bar_label = _label("", 22, DIM)
-	_bar_label.position = Vector2(460, 630)
+	# Suivi du geste : une phrase (pas de barre à remplir, l'action se voit sur le patient)
+	_bar_label = _label("", 30, ACCENT, bold)
+	_bar_label.position = Vector2(460, 596)
+	_bar_label.size = Vector2(900, 50)
 
 	_hint = _label("", 24, DIM)
 	_hint.position = Vector2(460, H - 120)
@@ -199,6 +191,7 @@ func set_steps(titles: Array) -> void:
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_step_icons.append(icon)
 		_step_rows.append(row)
+	dirty = true
 
 
 func show_step(index: int, total: int, title: String, text: String, inst_label: String, hint: String) -> void:
@@ -217,18 +210,23 @@ func show_step(index: int, total: int, title: String, text: String, inst_label: 
 	_inst_name.text = inst_label
 	_hint.text = hint
 	set_progress(0.0, "")
-	_shown_progress = 0.0
+	dirty = true
 
 
-func set_progress(v: float, caption: String) -> void:
-	_target_progress = clampf(v, 0.0, 1.0)
-	_bar_label.text = caption
+func set_progress(_v: float, caption: String) -> void:
+	if _bar_label.text != caption:
+		_bar_label.text = caption
+		dirty = true
 
 
 func set_status(seconds: float, errors: int) -> void:
-	_timer.text = "%02d:%02d" % [int(seconds) / 60, int(seconds) % 60]
-	_errors.text = "Erreurs : %d" % errors
-	_errors.label_settings.font_color = BAD if errors > 0 else DIM
+	var t := "%02d:%02d" % [int(seconds) / 60, int(seconds) % 60]
+	var e := "Erreurs : %d" % errors
+	if t != _timer.text or e != _errors.text:
+		_timer.text = t
+		_errors.text = e
+		_errors.label_settings.font_color = BAD if errors > 0 else DIM
+		dirty = true
 
 
 func toast(text: String, ok := true) -> void:
@@ -242,6 +240,8 @@ func toast(text: String, ok := true) -> void:
 	_toast_tween = create_tween()
 	_toast_tween.tween_interval(2.2)
 	_toast_tween.tween_property(_toast, "modulate:a", 0.0, 0.5)
+	_animating = 2.8
+	dirty = true
 
 
 func show_end(seconds: float, errors: int, stars: int, restart_hint: String) -> void:
@@ -249,9 +249,12 @@ func show_end(seconds: float, errors: int, stars: int, restart_hint: String) -> 
 	_end.visible = true
 	_end_stars.text = "★".repeat(stars) + "☆".repeat(3 - stars)
 	_end_stats.text = "Durée : %02d:%02d     Erreurs : %d\n\n%s" % [int(seconds) / 60, int(seconds) % 60, errors, restart_hint]
+	dirty = true
 
 
-func _process(delta: float) -> void:
-	_shown_progress = lerpf(_shown_progress, _target_progress, 1.0 - exp(-delta * 10.0))
-	_bar_fill.size.x = 900.0 * _shown_progress
-	_bar_fill.visible = _shown_progress > 0.01
+## Vrai tant que l'image doit être redessinée (changement ou animation en cours).
+func needs_redraw(delta: float) -> bool:
+	_animating = maxf(0.0, _animating - delta)
+	var r := dirty or _animating > 0.0
+	dirty = false
+	return r

@@ -91,11 +91,7 @@ func _ready() -> void:
 	var use_vr := xr != null and xr.is_initialized() and not args.has("desktop") and not args.has("autotest")
 	if use_vr:
 		get_viewport().use_xr = true
-		# Air Link + RTX 3050 : on allège ce qui coûte cher en stéréo
-		env.environment.ssao_enabled = false
-		RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
-		RenderingServer.positional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
-		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		_vr_performance(xr)
 		vr_rig = VRRig.new()
 		vr_rig.name = "JoueurVR"
 		vr_rig.surgeon_spot = spot
@@ -107,6 +103,7 @@ func _ready() -> void:
 		vr_rig.continue_pressed.connect(procedure.on_continue)
 		vr_rig.menu_moved.connect(procedure.menu_move)
 		vr_rig.hand_pinch.connect(procedure.on_hand_pinch)
+		_touch_menu(spot)
 	elif args.has("vrmock") or args.has("vrtest") or args.has("handtest") or args.get("chaos", "") == "vr":
 		# Capture de contrôle du rendu VR sans casque : manettes placées à la main
 		vr_rig = VRRig.new()
@@ -126,9 +123,11 @@ func _ready() -> void:
 		var off := spot - Vector3(0.12, 0, 0.6)
 		vr_rig.right.global_transform = Transform3D(Basis.looking_at(Vector3(-0.15, -0.55, -0.6).normalized(), Vector3.UP), Vector3(0.24, 1.3, 0.38) + off)
 		vr_rig.left.global_transform = Transform3D(Basis.looking_at(Vector3(0.2, -0.3, -0.7).normalized(), Vector3.UP), Vector3(-0.08, 1.25, 0.42) + off)
+		_touch_menu(spot)
 	elif args.has("autotest"):
 		var bot := AutoBot.new()
 		bot.name = "Robot"
+		bot.patient = patient
 		add_child(bot)
 		procedure.hands.append(bot)
 	else:
@@ -136,6 +135,7 @@ func _ready() -> void:
 		desk_rig.name = "JoueurEcran"
 		add_child(desk_rig)
 		desk_rig.build(spot + Vector3(0, 1.6, 0))
+		desk_rig.hand.patient = patient
 		procedure.hands.append_array(desk_rig.hands)
 		var hud := DesktopHUD.new()
 		hud.name = "HUD"
@@ -148,6 +148,10 @@ func _ready() -> void:
 		desk_rig.menu_moved.connect(procedure.menu_move)
 		desk_rig.menu_number.connect(procedure.menu_select)
 	procedure.setup()
+	if args.has("perf"):
+		var pp := PerfProbe.new()
+		pp.proc = procedure
+		add_child(pp)
 
 	if args.has("step"):
 		procedure.skip_to(int(args["step"]))
@@ -246,6 +250,47 @@ func _ready() -> void:
 		return
 	if args.has("shot"):
 		_take_shot()
+
+
+## Menu à toucher du doigt (VR) : choix de l'opération, commencer, recommencer, recentrer.
+func _touch_menu(spot: Vector3) -> void:
+	for h in vr_rig.hands:
+		(h as VRHand).patient = patient
+		(h as VRHand).camera = vr_rig.camera
+	var tm := TouchMenu.new()
+	tm.name = "MenuTactile"
+	add_child(tm)
+	tm.build(spot)
+	tm.hands.append_array(vr_rig.hands)
+	tm.pressed.connect(func(action: String) -> void:
+		if action == "recenter":
+			vr_rig.recenter()
+		else:
+			procedure.on_touch_button(action))
+	procedure.touch_menu = tm
+
+
+## Réglages pour le casque (Air Link, carte graphique moyenne) : tenir la fréquence d'images
+## avant tout. Une image en retard fait trembler toute la vue dans le casque.
+func _vr_performance(xr: XRInterface) -> void:
+	env.environment.ssao_enabled = false
+	env.environment.adjustment_enabled = false
+	RenderingServer.sub_surface_scattering_set_quality(RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_DISABLED)
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW)
+	RenderingServer.positional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW)
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	var vp := get_viewport()
+	vp.positional_shadow_atlas_size = 2048
+	# Rendu fovéal : moins de détails sur les bords de l'image (cartes graphiques qui le gèrent)
+	vp.vrs_mode = Viewport.VRS_XR
+	if xr is OpenXRInterface:
+		(xr as OpenXRInterface).vrs_strength = 1.0
+		(xr as OpenXRInterface).vrs_min_radius = 25.0
+	# Résolution ajustée en continu pour garder la cadence du casque
+	var gov := FrameGovernor.new()
+	gov.name = "Regulateur"
+	gov.xr = xr
+	add_child(gov)
 
 
 func _build_environment() -> void:

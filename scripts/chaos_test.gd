@@ -46,7 +46,7 @@ func _physics_process(_delta: float) -> void:
 		_violation("étape revenue de %d à %d" % [_last_step, proc.step])
 	_last_step = proc.step
 	# 4. Patient cohérent
-	if not is_finite(patient.opening) or patient.opening < -0.01 or patient.opening > 1.1:
+	if not is_finite(patient.opening) or patient.opening < -0.01 or patient.opening > 1.4:
 		_violation("ouverture de plaie absurde %f" % patient.opening)
 	if proc.op.id == "appendicectomie":
 		if not _finite(patient.appendix_tip) or patient.appendix_tip.distance_to(patient.appendix_base) > 0.1:
@@ -60,6 +60,15 @@ func _physics_process(_delta: float) -> void:
 		var t: Vector3 = cur["target"].call()
 		if not _finite(t) or t.distance_to(patient.center) > 0.4:
 			_violation("objet soulevé hors de portée %s" % t)
+	# 5. Aucun instrument tenu ne traverse la peau hors des zones permises
+	for h in proc.hands:
+		if h.held and not h.held.samples.is_empty():
+			var tp := h.held.tip_global()
+			var allowed := Contact.allowance(tp, h.held.samples[0][1])
+			if h.held.tip_depth > allowed + 0.004:
+				_violation("%s enfoncé de %.0f mm (permis %.0f)" % [h.held.id, h.held.tip_depth * 1000.0, allowed * 1000.0])
+	if patient.open_l > 1.4 or patient.open_r > 1.4 or not is_finite(patient.open_l + patient.open_r):
+		_violation("plaie déchirée %.2f / %.2f" % [patient.open_l, patient.open_r])
 	if proc.errors < 0 or proc.elapsed < 0.0:
 		_violation("compteurs invalides")
 
@@ -86,15 +95,15 @@ func chaos_vr(frames: int) -> void:
 			if rng.randf() < 0.12:
 				var basis := Basis.from_euler(Vector3(rng.randf_range(-1.2, 0.3), rng.randf_range(-PI, PI), rng.randf_range(-0.8, 0.8)))
 				h.controller.global_transform = Transform3D(basis, _random_point())
-			if rng.randf() < 0.05 and h.held:
+			if rng.randf() < 0.05 and h.held and proc.marker.visible:
 				# Vise une cible de l'étape (fait parfois avancer l'opération par hasard)
-				var t := proc._target()
-				if t != Vector3.INF:
-					h.controller.global_position += t - h.held.tip_global()
+				h.controller.global_position += proc.marker.global_position - h.held.tip_global()
 			if rng.randf() < 0.04:
 				h.sim_grip = 1.0 - h.sim_grip
 			if rng.randf() < 0.1:
-				h.sim_trigger = 1.0 if rng.randf() < 0.5 else 0.0
+				h.sim_trigger = rng.randf() if rng.randf() < 0.5 else float(rng.randi_range(0, 1))
+			if vb.hand_mode and rng.randf() < 0.01:
+				vb._open[h] = not vb._open.get(h, false)
 		if rng.randf() < 0.01 and proc.step == Procedure.INTRO:
 			proc.on_continue()
 		await get_tree().process_frame
@@ -140,6 +149,10 @@ func run(mode: String, seed_value: int) -> void:
 			print("CHAOS BLOQUÉ à l'étape ", proc.steps[s]["id"])
 			break
 	var ok := proc.step >= proc.steps.size() and violations == 0 and bot.ok
+	for vb in [bot]:
+		if vb is VRBot:
+			for h in (vb as VRBot)._open:
+				(vb as VRBot)._open[h] = false
 	await bot.cleanup()
 	await get_tree().create_timer(0.8).timeout
 	for inst in tray.ordered:

@@ -13,13 +13,16 @@ var dia := 76
 var screen: MonitorScreen
 var _beat_t := 0.0
 var _viewport: SubViewport
+var _draw_t := 0.0
+var _react_t := 0.0
 
 
 func build() -> void:
 	_viewport = SubViewport.new()
 	_viewport.size = Vector2i(800, 500)
 	_viewport.transparent_bg = false
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# L'écran est redessiné 30 fois par seconde seulement (économise la carte graphique)
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	add_child(_viewport)
 	screen = MonitorScreen.new()
 	screen.monitor = self
@@ -51,7 +54,16 @@ func build() -> void:
 
 
 func _process(delta: float) -> void:
-	heart_rate = lerpf(heart_rate, target_rate, delta * 0.3)
+	_draw_t += delta
+	if _draw_t >= 1.0 / 30.0:
+		_draw_t = 0.0
+		screen.queue_redraw()
+		_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if _react_t > 0.0:
+		_react_t -= delta
+		if _react_t <= 0.0:
+			target_rate = maxf(target_rate - 30.0, 70.0)
+	heart_rate = lerpf(heart_rate, target_rate, delta * (1.5 if _react_t > 0.0 else 0.3))
 	if target_spo2 >= 0.0:
 		spo2 = move_toward(spo2, target_spo2, delta * 1.2)
 	# Alarme de désaturation
@@ -71,6 +83,13 @@ func _process(delta: float) -> void:
 ## Petite tachycardie quand on incise, retour au calme ensuite.
 func stress(amount: float) -> void:
 	target_rate = clampf(84.0 + amount, 70.0, 125.0)
+
+
+## Le patient a mal (anesthésie pas encore efficace) : le cœur s'emballe quelques secondes.
+func react() -> void:
+	target_rate = clampf(heart_rate + 30.0, 70.0, 150.0)
+	_react_t = 4.0
+	Sfx.play("bip_alarme", global_position, -6.0, 1.2)
 
 
 class MonitorScreen:
@@ -108,7 +127,6 @@ class MonitorScreen:
 			var pt := t - 0.22
 			pleth[head] = (0.85 * exp(-pow((pt - 0.12) / 0.09, 2.0)) + 0.3 * exp(-pow((pt - 0.36) / 0.08, 2.0))) if pt > 0.0 else 0.0
 			head = (head + 1) % ecg.size()
-		queue_redraw()
 
 	func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.01, 0.02, 0.03))

@@ -46,10 +46,11 @@ func build(op: Operation) -> void:
 		_decorate(inst)
 		var x := MAYO_POS.x - 0.2 + 0.4 * i / maxi(n - 1, 1)
 		# À plat, pointe vers la table d'opération (-Z), légèrement en éventail
-		var b := Basis(Vector3.UP, PI + deg_to_rad((i - n * 0.5) * 1.5))
+		var b := Basis(Vector3.UP, PI + deg_to_rad((i - n * 0.5) * 1.5)) * Basis(Vector3(0, 0, 1), inst.tray_roll)
 		var half := inst.length * 0.5
 		inst.tray_transform = Transform3D(b, Vector3(x, TRAY_Y + 0.006, MAYO_POS.z + 0.01 - (0.2 - half) * 0.15))
 		inst.global_transform = inst.tray_transform
+		inst.build_samples()
 		instruments[inst.id] = inst
 		ordered.append(inst)
 
@@ -89,7 +90,7 @@ func _decorate(inst: Instrument) -> void:
 
 
 func _blade() -> MeshInstance3D:
-	# Lame n°15 : contour dans le plan XZ, ventre arrondi côté -X, très fine
+	# Lame n°15 : contour dans le plan YZ, ventre tranchant vers le bas (-Y), très fine
 	var outline := PackedVector2Array()
 	for i in 13:
 		var t := float(i) / 12.0
@@ -107,8 +108,8 @@ func _blade() -> MeshInstance3D:
 			var ids := [tris[k], tris[k + 1], tris[k + 2]] if side > 0 else [tris[k], tris[k + 2], tris[k + 1]]
 			for id in ids:
 				var p: Vector2 = outline[id]
-				st.set_normal(Vector3(0, side, 0))
-				st.add_vertex(Vector3(p.x, side * 0.0002, p.y))
+				st.set_normal(Vector3(side, 0, 0))
+				st.add_vertex(Vector3(side * 0.0002, p.x, p.y))
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	var m := MeshUtil.mat(Color(0.92, 0.93, 0.95), 0.12, 1.0)

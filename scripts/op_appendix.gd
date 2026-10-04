@@ -5,19 +5,18 @@ extends Operation
 const STITCH_T := [0.15, 0.38, 0.62, 0.85]
 
 var piece: Node3D
-var _anim: Tween
 
 
 func _init() -> void:
 	id = "appendicectomie"
 	name = "Appendicectomie"
 	tagline = "Appendicite aiguë : incision de McBurney, ligature et ablation de l'appendice."
-	intro_text = "Lucas, 24 ans : appendicite aiguë confirmée au scanner. Il est endormi et installé. Tu vas faire l'appendicectomie, étape par étape. Suis les consignes et les repères lumineux."
+	intro_text = "Lucas, 24 ans : appendicite aiguë confirmée au scanner. Il est endormi et installé. Tu vas faire l'appendicectomie, étape par étape. Tout se fait avec de vrais gestes : la lame coupe quand elle touche la peau, la pince serre quand tu serres les doigts."
 	with_dish = true
 	summary = "Appendice retiré, ligature en place, peau suturée."
 	catalog = [
 		["mikulicz", "Pince à badigeon", "pince_mikulicz", 0.0, 0.0],
-		["bistouri", "Bistouri lame 15", "manche_bistouri", 0.0, 0.0],
+		["bistouri", "Bistouri lame 15", "manche_bistouri", 90.0, 0.0],
 		["langenbeck", "Écarteur de Langenbeck", "ecarteur_langenbeck", 0.0, 0.0],
 		["roux", "Écarteur de Roux", "ecarteur_roux", 0.0, 0.0],
 		["debakey", "Pince De Bakey", "pince_debakey", 90.0, 0.0],
@@ -35,57 +34,53 @@ func define_steps() -> void:
 	steps = [
 		{"id": "badigeon", "kind": "paint", "list": "Désinfection", "inst": "mikulicz",
 			"title": "Désinfecte la peau",
-			"text": "Prends la pince à badigeon et frotte toute la zone de peau en gardant la gâchette appuyée, jusqu'à 100 %.",
+			"text": "Prends la pince à badigeon et frotte la compresse sur toute la zone de peau, comme avec une éponge, jusqu'à ce qu'elle soit toute brune.",
 			"label": "Zone à désinfecter", "ring": 3.5, "done_msg": "Peau désinfectée !"},
-		{"id": "incision", "kind": "trace", "list": "Incision", "inst": "bistouri",
+		{"id": "incision", "kind": "incise", "list": "Incision", "inst": "bistouri",
 			"title": "Incise la peau",
-			"text": "Pose la lame sur le point « DÉPART » et suis le pointillé violet, gâchette appuyée, d'un seul geste.",
+			"text": "Pose la lame sur « DÉPART » et appuie un peu : elle entre dans la peau. Glisse-la le long du pointillé jusqu'à « ARRIVÉE », d'un geste continu.",
 			"done": _incision_done, "done_msg": "Belle incision !"},
-		{"id": "ecarteur1", "kind": "place", "list": "Écarteur 1", "inst": "langenbeck",
-			"title": "Écarte le premier bord",
-			"text": "Amène l'écarteur de Langenbeck sur le repère, au bord de la plaie, puis appuie sur la gâchette pour le poser.",
-			"label": "Écarteur ici", "radius": 0.035, "sound": "pose",
-			"target": func() -> Vector3: return patient.retractor_slot(-1.0),
-			"done": _retractor1_done, "done_msg": "Écarteur en place"},
-		{"id": "ecarteur2", "kind": "place", "list": "Écarteur 2", "inst": "roux",
+		{"id": "ecarteur1", "kind": "retract", "list": "Écarteur 1", "inst": "langenbeck",
+			"title": "Écarte un bord",
+			"text": "Glisse le bout recourbé de l'écarteur de Langenbeck dans la plaie, contre un bord, puis tire ce bord vers l'extérieur. Si tu lâches, il se referme. Tiens-le bien ouvert : l'aide prendra l'écarteur.",
+			"label": "Accroche le bord", "done": _retractor_done, "done_msg": "L'aide tient l'écarteur"},
+		{"id": "ecarteur2", "kind": "retract", "list": "Écarteur 2", "inst": "roux",
 			"title": "Écarte l'autre bord",
-			"text": "Pose l'écarteur de Roux sur le repère de l'autre bord. La plaie s'ouvre : on voit le cæcum et l'appendice.",
-			"label": "Écarteur ici", "radius": 0.035, "sound": "pose",
-			"target": func() -> Vector3: return patient.retractor_slot(1.0),
-			"done": _retractor2_done, "done_msg": "Écarteur en place"},
+			"text": "Même geste avec l'écarteur de Roux sur l'autre bord. La plaie s'ouvre : on voit le cæcum et l'appendice rouge et gonflé.",
+			"label": "Accroche ce bord", "done": _retractor_done, "done_msg": "La plaie est ouverte"},
 		{"id": "saisie", "kind": "lift", "list": "Sortir l'appendice", "inst": "debakey",
 			"title": "Sors l'appendice",
-			"text": "Avec la pince De Bakey, attrape la pointe de l'appendice (gâchette) et soulève-la hors de la plaie sans lâcher.",
-			"label": "Pointe de l'appendice", "radius": 0.03,
+			"text": "Mets les mors de la pince De Bakey autour de la pointe de l'appendice et serre les doigts pour la saisir. Garde serré et soulève-la hors de la plaie.",
+			"label": "Pointe de l'appendice", "radius": 0.018,
 			"target": func() -> Vector3: return patient.appendix_tip,
-			"grab": _kill_anim, "move": patient.set_appendix_tip, "goal": _lift_goal,
-			"release": _appendix_fall, "done": _lift_done,
-			"done_msg": "Appendice extériorisé — l'aide le maintient"},
-		{"id": "ligature", "kind": "place", "list": "Ligature", "inst": "overholt",
+			"move": patient.set_appendix_tip, "goal": _lift_goal,
+			"rest": func() -> Vector3: return patient.appendix_rest_tip,
+			"done": _lift_done, "done_msg": "Appendice extériorisé — l'aide le maintient"},
+		{"id": "ligature", "kind": "ligate", "list": "Ligature", "inst": "overholt",
 			"title": "Ligature la base",
-			"text": "Amène le fil sur le repère à la base de l'appendice et appuie sur la gâchette pour serrer le nœud.",
-			"label": "Ligature ici", "radius": 0.03, "sound": "fil",
+			"text": "Amène les mors de l'Overholt contre la base de l'appendice et serre : le fil passe autour. Garde serré et tire doucement vers toi pour serrer le nœud.",
+			"label": "Base de l'appendice", "radius": 0.016,
 			"target": func() -> Vector3: return patient.appendix_point(0.18),
 			"done": func(_hand: SurgeonHand, _instant: bool) -> void: patient.ligate(),
 			"done_msg": "Nœud serré"},
-		{"id": "section", "kind": "place", "list": "Section", "inst": "ciseaux",
+		{"id": "section", "kind": "cut", "list": "Section", "inst": "ciseaux",
 			"title": "Coupe l'appendice",
-			"text": "Place les ciseaux sur le repère, juste au-dessus de la ligature, et appuie sur la gâchette.",
-			"label": "Couper ici", "radius": 0.03, "sound": "ciseaux", "near_miss": 0.08,
+			"text": "Ouvre les ciseaux (écarte le pouce), place les lames de part et d'autre de l'appendice, juste au-dessus du nœud, puis referme-les d'un coup.",
+			"label": "Couper ici", "radius": 0.01,
 			"target": func() -> Vector3: return patient.appendix_point(0.32),
 			"done": _cut_done, "done_msg": "Appendice sectionné"},
 		{"id": "retrait", "kind": "carry", "list": "Retrait", "inst": "debakey",
 			"title": "Dépose l'appendice",
-			"text": "Attrape l'appendice coupé avec la pince (gâchette maintenue) et lâche-le dans le haricot, sur le guéridon à ta gauche.",
+			"text": "Saisis l'appendice coupé avec la pince (serre), emmène-le au-dessus du haricot sur le guéridon à ta gauche, et desserre : il tombe dedans.",
 			"label": "Attrape l'appendice", "dest_label": "Lâche ici",
 			"object": func() -> Node3D: return piece,
 			"dest": func() -> Vector3: return tray.dish_center,
 			"done": _carry_done, "done_msg": "Appendice dans le haricot"},
-		{"id": "suture", "kind": "points", "list": "Suture", "inst": "porte_aiguille",
+		{"id": "suture", "kind": "suture", "list": "Suture", "inst": "porte_aiguille",
 			"title": "Referme la peau",
-			"text": "Les écarteurs sont retirés. Avec le porte-aiguille, touche les 4 points de suture un par un (gâchette).",
-			"label": "Point", "radius": 0.022,
-			"points": _stitch_points, "point": _stitch, "done": _closed,
+			"text": "Les écarteurs sont retirés, la plaie se détend. Pour chaque point : pique l'aiguille à l'entrée (repère), fais-la ressortir sur l'autre bord. Le nœud se fait tout seul. 4 points.",
+			"label": "Point", "radius": 0.008,
+			"pairs": _stitch_pairs, "point": _stitch, "done": _closed,
 			"done_msg": "Peau refermée !"},
 	]
 
@@ -100,53 +95,38 @@ func _incision_done(instant: bool) -> void:
 	if instant:
 		patient.opening = 0.25
 	else:
-		tween_opening(0.25, 0.6)
+		tween_opening(0.25)
 
 
+## Pose de l'écarteur tenu par l'aide (sauts d'étape) : crochet dans la plaie, manche vers l'extérieur.
 func _retractor_pose(inst: Instrument, side: float) -> Transform3D:
-	# Manche relevé vers l'extérieur, lame recourbée (+Y du modèle) plongée dans la plaie
-	var edge := patient.center + patient.perp3 * side * 0.02
-	var tip := Vector3(edge.x, Patient.body_height(edge.x, edge.z) + 0.004, edge.z)
-	var axis := (-patient.perp3 * side + Vector3.UP * 0.6).normalized()
-	return inst.tip_transform(tip, axis, Vector3.DOWN)
+	var edge := patient.edge_point(0.0, side)
+	var tip := edge - Vector3.UP * 0.008
+	var axis := (-patient.perp3 * side * 0.6 + Vector3.DOWN).normalized()
+	return inst.tip_transform(tip, axis, patient.perp3 * side)
 
 
-func _place_retractor(inst_id: String, side: float, hand: SurgeonHand, instant: bool, open_to: float) -> void:
-	var inst := instrument(inst_id)
-	if hand:
-		hand.release_parked()
-	park(inst, _retractor_pose(inst, side), instant)
+func _retractor_done(hand: SurgeonHand, instant: bool, side: float) -> void:
+	var inst := instrument(proc.current()["inst"]) if proc.current().size() > 0 else null
 	if instant:
-		patient.opening = open_to
-	else:
-		tween_opening(open_to, 0.8)
-
-
-func _retractor1_done(hand: SurgeonHand, instant: bool) -> void:
-	_place_retractor("langenbeck", -1.0, hand, instant, 0.6)
-
-
-func _retractor2_done(hand: SurgeonHand, instant: bool) -> void:
-	_place_retractor("roux", 1.0, hand, instant, 1.0)
-
-
-func _kill_anim() -> void:
-	if _anim and _anim.is_valid():
-		_anim.kill()
-	_anim = null
+		# Saut d'étape : l'écarteur est posé, le bord tenu
+		var id2: String = "langenbeck" if patient.held_l < 0.0 and patient.held_r < 0.0 else "roux"
+		inst = instrument(id2)
+		if side < 0.0:
+			patient.held_l = 1.0
+			patient.open_l = 1.0
+		else:
+			patient.held_r = 1.0
+			patient.open_r = 1.0
+		park(inst, _retractor_pose(inst, side), true)
+	elif hand:
+		hand.release_parked()
 
 
 func _lift_goal() -> float:
 	var goal := patient.center.y + 0.012
 	var rest := patient.appendix_rest_tip.y
 	return clampf((patient.appendix_tip.y - rest) / (goal - rest), 0.0, 1.0)
-
-
-func _appendix_fall() -> void:
-	var from := patient.appendix_tip
-	_kill_anim()
-	_anim = proc.create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-	_anim.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(patient.appendix_rest_tip, k)), 0.0, 1.0, 0.7)
 
 
 func _lifted_tip() -> Vector3:
@@ -157,10 +137,10 @@ func _lift_done(instant: bool) -> void:
 	if instant:
 		patient.set_appendix_tip(_lifted_tip())
 		return
+	# L'aide le maintient là où on l'a sorti (un peu recentré)
 	var from := patient.appendix_tip
-	_kill_anim()
-	_anim = proc.create_tween().set_trans(Tween.TRANS_SINE)
-	_anim.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(_lifted_tip(), k)), 0.0, 1.0, 0.5)
+	var tw := proc.create_tween().set_trans(Tween.TRANS_SINE)
+	tw.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(_lifted_tip(), k * 0.6)), 0.0, 1.0, 0.6)
 
 
 func _cut_done(_hand: SurgeonHand, _instant: bool) -> void:
@@ -174,13 +154,13 @@ func _carry_done(instant: bool) -> void:
 	if instant:
 		patient.opening = 0.3
 	else:
-		tween_opening(0.3, 0.8)
+		tween_opening(0.3)
 
 
-func _stitch_points() -> Array:
+func _stitch_pairs() -> Array:
 	var out := []
 	for t in STITCH_T:
-		out.append(patient.incision_point(t) + Vector3.UP * 0.001)
+		out.append(patient.stitch_pair(t))
 	return out
 
 
@@ -190,7 +170,7 @@ func _stitch(i: int, instant: bool) -> void:
 	if instant:
 		patient.opening = left
 	else:
-		tween_opening(left, 0.4)
+		tween_opening(left)
 
 
 func _closed(_instant: bool) -> void:

@@ -84,16 +84,24 @@ func put_back_all() -> void:
 	rig.position = home
 
 
+## Vise la surface sous p ; la hauteur (au-dessus ou sous la peau) passe par la molette.
 func tip_to(p: Vector3, frames_n := 12) -> void:
 	aim(p)
+	var on_patient := p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.3
+	var surf := Patient.body_height(p.x, p.z) if on_patient else p.y
+	# Près de la cible de l'étape, l'aide au placement prend sa hauteur : la molette est relative à elle
+	var at := hand.assist_target
+	if at != Vector3.INF and Vector2(p.x - at.x, p.z - at.z).length() < 0.012:
+		surf = at.y
+	hand.lift = clampf(p.y - surf, -0.12, 0.25)
 	if frames_n > 4:
 		await _settle()
 	else:
 		await _frames(frames_n)
 
 
-func trigger(down: bool) -> void:
-	mouse_button(MOUSE_BUTTON_LEFT, down)
+func squeeze(v: float) -> void:
+	mouse_button(MOUSE_BUTTON_LEFT, v > 0.5)
 
 
 func held_id() -> String:
@@ -102,4 +110,4 @@ func held_id() -> String:
 
 func debug_state() -> String:
 	var tip := hand.tip()
-	return "tenu=%s tip=%s peau=%.3f lift=%.3f auto=%.3f trace=%.2f proj=%s souris=%s" % [held_id(), tip, Patient.body_height(tip.x, tip.z), hand.lift, hand.auto_lift, proc._trace, patient.incision_project(tip), hand.sim_mouse]
+	return "tenu=%s tip=%s peau=%.3f prof=%.4f lift=%.3f auto=%.3f appui=%.3f cut=[%.2f %.2f] souris=%s st=%s" % [held_id(), tip, Patient.body_height(tip.x, tip.z), hand.held.tip_depth if hand.held else 0.0, hand.lift, hand.auto_lift, hand.depth, patient.cut0, patient.cut1, hand.sim_mouse, proc.st.keys()]

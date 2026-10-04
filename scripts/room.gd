@@ -151,11 +151,8 @@ func _lights() -> void:
 	lam.spot_range = 4.0
 	lam.light_energy = 0.8
 	lam.light_color = Color(0.95, 0.98, 1.0)
-	lam.shadow_enabled = true
-	lam.light_size = 0.6
-	lam.shadow_blur = 1.5
-	lam.shadow_bias = 0.08
-	lam.shadow_normal_bias = 2.5
+	# Une seule lumière à ombres (le scialytique) : les ombres coûtent cher en stéréo
+	lam.shadow_enabled = false
 	add_child(lam)
 
 	# Éclairage général de la salle
