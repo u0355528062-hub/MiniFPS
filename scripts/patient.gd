@@ -10,8 +10,8 @@ const INC_A := Vector2(0.1389, 0.0705)
 const INC_B := Vector2(0.1011, 0.1295)
 const PATCH_MIN := Vector2(-0.03, -0.05)
 const PATCH_SIZE := Vector2(0.31, 0.30)
-const WINDOW_MIN := Vector2(0.0, -0.02)
-const WINDOW_MAX := Vector2(0.25, 0.22)
+const WINDOW_MIN := Vector2(0.025, -0.005)
+const WINDOW_MAX := Vector2(0.215, 0.2)
 const MASK_RES := 64
 const WOUND_DEPTH := 0.05
 ## Pointe de l'appendice dans le fichier anatomie_appendice.glb (origine = base)
@@ -32,6 +32,8 @@ var appendix_mesh := ArrayMesh.new()
 var appendix_node: MeshInstance3D
 var meso: MeshInstance3D
 var _anat_xf := Transform3D.IDENTITY
+var wound_light: OmniLight3D
+var _iodine_wet := 1.0
 var _app_index := PackedInt32Array()
 var _app_s := PackedFloat32Array()
 var _app_local := PackedVector3Array()
@@ -45,7 +47,6 @@ var appendix_cut := false
 var ligature: MeshInstance3D
 var stitches: Array[Node3D] = []
 
-var _tissue_shader: Shader = preload("res://shaders/tissue.gdshader")
 
 
 # ---------------------------------------------------------------- Forme du corps
@@ -115,22 +116,34 @@ func build() -> void:
 
 
 func _build_drapes() -> void:
-	var drape_shader: Shader = preload("res://shaders/drape.gdshader")
-	var m := ShaderMaterial.new()
-	m.shader = drape_shader
-	m.set_shader_parameter("window_min", WINDOW_MIN)
-	m.set_shader_parameter("window_max", WINDOW_MAX)
-	m.set_shader_parameter("has_window", 1.0)
+	var m := Tex.drape(Color(0.1, 0.29, 0.41), WINDOW_MIN, WINDOW_MAX, 0.006)
 	var mi := MeshInstance3D.new()
 	mi.name = "Champs"
 	mi.mesh = MeshUtil.height_grid(-0.64, -0.66, 1.84, 1.32, 150, 110, _drape_height)
 	mi.material_override = m
 	add_child(mi)
 
+	# Bord roulé du champ autour de la fenêtre (épaisseur du tissu replié)
+	var lip := PackedVector3Array()
+	var lr := PackedFloat32Array()
+	var corners := [Vector2(WINDOW_MIN.x, WINDOW_MIN.y), Vector2(WINDOW_MAX.x, WINDOW_MIN.y), Vector2(WINDOW_MAX.x, WINDOW_MAX.y), Vector2(WINDOW_MIN.x, WINDOW_MAX.y)]
+	for k in 4:
+		var a2: Vector2 = corners[k]
+		var b2: Vector2 = corners[(k + 1) % 4]
+		for i in 24:
+			var q := a2.lerp(b2, i / 24.0)
+			lip.append(Vector3(q.x, _drape_height(q.x, q.y) + 0.002, q.y))
+			lr.append(0.0045 + 0.0015 * sin(q.x * 90.0 + q.y * 70.0))
+	lip.append(lip[0])
+	lr.append(lr[0])
+	var lip_mi := MeshInstance3D.new()
+	lip_mi.name = "BordChamp"
+	lip_mi.mesh = MeshUtil.tube(lip, lr, 8, false, false)
+	lip_mi.material_override = Tex.drape(Color(0.09, 0.27, 0.39))
+	add_child(lip_mi)
+
 	# Arceau d'anesthésie : sépare le champ stérile de la tête du patient
-	var screen_mat := ShaderMaterial.new()
-	screen_mat.shader = drape_shader
-	screen_mat.set_shader_parameter("fabric", Color(0.16, 0.38, 0.47))
+	var screen_mat := Tex.drape(Color(0.1, 0.3, 0.42))
 	var screen := MeshInstance3D.new()
 	screen.name = "Arceau"
 	# Voile vertical légèrement tombant
@@ -155,6 +168,7 @@ func _build_drapes() -> void:
 			sm.add_index(p0 + nz + 1)
 			sm.add_index(p0 + nz + 2)
 	sm.generate_normals()
+	sm.generate_tangents()
 	screen.mesh = sm.commit()
 	screen.material_override = screen_mat
 	add_child(screen)
@@ -207,6 +221,12 @@ func _build_skin() -> void:
 	skin_mat.set_shader_parameter("patch_size", PATCH_SIZE)
 	skin_mat.set_shader_parameter("inc_a", INC_A)
 	skin_mat.set_shader_parameter("inc_b", INC_B)
+	skin_mat.set_shader_parameter("win_min", WINDOW_MIN)
+	skin_mat.set_shader_parameter("win_max", WINDOW_MAX)
+	skin_mat.set_shader_parameter("skin_albedo", Tex.get_tex("skin_albedo"))
+	skin_mat.set_shader_parameter("skin_normal", Tex.get_tex("skin_normal"))
+	skin_mat.set_shader_parameter("skin_rough", Tex.get_tex("skin_rough"))
+	skin_mat.set_shader_parameter("blood_tex", Tex.get_tex("blood"))
 	var mi := MeshInstance3D.new()
 	mi.name = "Peau"
 	mi.mesh = MeshUtil.height_grid(PATCH_MIN.x, PATCH_MIN.y, PATCH_SIZE.x, PATCH_SIZE.y, 110, 110, body_height)
@@ -214,13 +234,8 @@ func _build_skin() -> void:
 	add_child(mi)
 
 
-func _tissue(base: Color, inflamed := 0.0, vessels := 0.6) -> ShaderMaterial:
-	var m := ShaderMaterial.new()
-	m.shader = _tissue_shader
-	m.set_shader_parameter("base_color", base)
-	m.set_shader_parameter("inflamed", inflamed)
-	m.set_shader_parameter("vessel_amount", vessels)
-	return m
+func _tissue(base: Color, inflamed := 0.0, vessels := 0.6, fibrin := 0.0, scale := 14.0) -> ShaderMaterial:
+	return Tex.tissue(base, inflamed, vessels, fibrin, scale)
 
 
 func _build_cavity() -> void:
@@ -229,8 +244,23 @@ func _build_cavity() -> void:
 	walls.mesh = wall_mesh
 	var wm := ShaderMaterial.new()
 	wm.shader = preload("res://shaders/wound_wall.gdshader")
+	for t in ["fat_albedo", "fat_normal", "muscle", "muscle_normal"]:
+		wm.set_shader_parameter(t, Tex.get_tex(t))
+	wm.set_shader_parameter("blood_tex", Tex.get_tex("blood"))
+	wm.set_shader_parameter("depth_m", WOUND_DEPTH)
 	walls.material_override = wm
 	add_child(walls)
+
+	# Lumière d'appoint dans la plaie (le scialytique éclaire le fond en vrai)
+	wound_light = OmniLight3D.new()
+	wound_light.name = "LumierePlaie"
+	wound_light.light_color = Color(1.0, 0.93, 0.86)
+	wound_light.light_energy = 0.0
+	wound_light.omni_range = 0.25
+	wound_light.omni_attenuation = 1.2
+	wound_light.light_specular = 0.4
+	wound_light.position = center + Vector3.UP * 0.12
+	add_child(wound_light)
 
 	# Fond de la cavité péritonéale : coque retournée, rose sombre humide
 	var bowl := MeshInstance3D.new()
@@ -258,10 +288,10 @@ func _build_cavity() -> void:
 	anat.global_transform = Transform3D(Basis(q), appendix_base)
 	_anat_xf = anat.global_transform
 	var looks := {
-		"Ascending_colon": _tissue(Color(0.84, 0.58, 0.5), 0.12, 0.65),
-		"Free_taenia": _tissue(Color(0.92, 0.84, 0.74), 0.0, 0.2),
-		"Jejunum": _tissue(Color(0.88, 0.54, 0.48), 0.0, 0.7),
-		"Meso-appendix": _tissue(Color(0.95, 0.78, 0.42), 0.25, 0.8),
+		"Ascending_colon": _tissue(Color(0.86, 0.6, 0.52), 0.15, 0.75, 0.0, 12.0),
+		"Free_taenia": _tissue(Color(0.94, 0.86, 0.76), 0.0, 0.15, 0.0, 20.0),
+		"Jejunum": _tissue(Color(0.9, 0.56, 0.5), 0.0, 0.8, 0.0, 16.0),
+		"Meso-appendix": _tissue(Color(0.97, 0.8, 0.42), 0.3, 0.9, 0.0, 18.0),
 		"Ileal_branch_of_ileocolic_artery": _tissue(Color(0.62, 0.06, 0.07), 0.0, 0.0),
 		"Colic_branch_of_ileocolic_artery": _tissue(Color(0.62, 0.06, 0.07), 0.0, 0.0),
 	}
@@ -338,7 +368,7 @@ func _init_appendix(src: MeshInstance3D) -> void:
 	var mi := MeshInstance3D.new()
 	mi.name = "Appendice"
 	mi.mesh = appendix_mesh
-	mi.material_override = _tissue(Color(0.78, 0.38, 0.32), 1.0, 0.9)
+	mi.material_override = _tissue(Color(0.78, 0.36, 0.3), 1.0, 1.0, 0.55, 22.0)
 	mi.material_override.set_shader_parameter("clip_y", center.y - 0.008)
 	add_child(mi)
 	appendix_node = mi
@@ -527,6 +557,7 @@ func paint_iodine(p: Vector3, radius := 0.022) -> float:
 				var v := iodine_img.get_pixel(i, j).r
 				iodine_img.set_pixel(i, j, Color.from_hsv(0, 0, minf(1.0, v + (1.0 - d) * 0.55 + 0.25)))
 	iodine_tex.update(iodine_img)
+	_iodine_wet = 1.0
 	return iodine_coverage()
 
 
@@ -548,7 +579,11 @@ func iodine_coverage() -> float:
 
 
 func fill_iodine() -> void:
-	iodine_img.fill(Color.WHITE)
+	# Complète la zone (garde les traînées déjà peintes, plus foncées)
+	for j in MASK_RES:
+		for i in MASK_RES:
+			var v := iodine_img.get_pixel(i, j).r
+			iodine_img.set_pixel(i, j, Color.from_hsv(0, 0, maxf(v, 0.62)))
 	iodine_tex.update(iodine_img)
 
 
@@ -571,6 +606,7 @@ func set_incision_progress(v: float) -> void:
 	if skin_mat:
 		skin_mat.set_shader_parameter("incision_progress", v)
 		skin_mat.set_shader_parameter("show_guide", 1.0 if v < 0.999 else 0.0)
+		skin_mat.set_shader_parameter("bleed", clampf(v * 1.4, 0.0, 1.0))
 
 
 func set_opening(v: float) -> void:
@@ -585,26 +621,39 @@ func set_stitched(v: float) -> void:
 	skin_mat.set_shader_parameter("stitched", v)
 
 
+## Contour irrégulier de la plaie (même formule que wound_shape dans skin_field.gdshader).
+static func wound_shape(a: float) -> float:
+	return 1.0 + 0.07 * sin(3.0 * a + 0.7) + 0.04 * sin(5.0 * a + 2.1) + 0.025 * sin(9.0 * a + 0.3)
+
+
 func _rebuild_walls() -> void:
 	wall_mesh.clear_surfaces()
+	if wound_light:
+		wound_light.light_energy = clampf(opening, 0.0, 1.0) * 0.02
 	if opening <= 0.01:
 		return
 	var half_len := INC_A.distance_to(INC_B) * 0.5 + 0.004
-	var half_w := opening * 0.018
-	var k := 48
-	var levels := 6
+	var half_w := opening * 0.022
+	var k := 64
+	var levels := 10
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for j in levels + 1:
 		var f := float(j) / levels
-		var shrink := 1.0 - 0.3 * pow(f, 1.4)
+		# Paroi légèrement bombée (tissus qui débordent) puis qui se resserre vers le fond
+		var shrink := 1.0 - 0.32 * pow(f, 1.3) - 0.06 * sin(PI * f) * (1.0 - opening * 0.5)
+		var arc := 0.0
+		var prev := Vector3.ZERO
 		for i in k + 1:
 			var a := TAU * i / k
-			var p := center + dir3 * cos(a) * half_len * shrink + perp3 * sin(a) * half_w * shrink
-			# Le haut suit la peau, puis on descend
+			var r := wound_shape(a)
+			var p := center + dir3 * cos(a) * half_len * r * shrink + perp3 * sin(a) * half_w * r * shrink
 			var top := body_height(p.x, p.z) + 0.0004
 			p.y = top - WOUND_DEPTH * f
-			st.set_uv(Vector2(float(i) / k, f))
+			if i > 0:
+				arc += Vector2(p.x - prev.x, p.z - prev.z).length()
+			prev = p
+			st.set_uv(Vector2(arc + j * 0.013, f))
 			st.add_vertex(p)
 	for j in levels:
 		for i in k:
@@ -616,12 +665,20 @@ func _rebuild_walls() -> void:
 			st.add_index(p0 + k + 2)
 			st.add_index(p0 + k + 1)
 	st.generate_normals()
+	st.generate_tangents()
 	st.commit(wall_mesh)
+
+
+func _process(delta: float) -> void:
+	# La bétadine sèche doucement : elle devient plus mate
+	if _iodine_wet > 0.0 and skin_mat:
+		_iodine_wet = maxf(0.0, _iodine_wet - delta / 60.0)
+		skin_mat.set_shader_parameter("iodine_wet", _iodine_wet)
 
 
 ## Repère d'un écarteur posé dans la plaie (side = -1 ou +1 de part et d'autre de l'incision).
 func retractor_slot(side: float) -> Vector3:
-	return center + perp3 * side * 0.016 + Vector3.UP * 0.002
+	return center + perp3 * side * 0.02 + Vector3.UP * 0.002
 
 
 func add_stitch(t: float) -> void:

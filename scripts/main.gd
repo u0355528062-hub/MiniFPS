@@ -116,6 +116,8 @@ func _ready() -> void:
 
 	if args.has("step"):
 		procedure.skip_to(int(args["step"]))
+	if args.has("nolabels"):
+		procedure.show_markers = false
 	if args.has("vrmock") and args.has("hold"):
 		var h: SurgeonHand = vr_rig.hands[1]
 		h.take(tray.instruments[args["hold"]])
@@ -153,19 +155,20 @@ func _build_environment() -> void:
 	e.ambient_light_color = Color(0.58, 0.64, 0.66)
 	e.ambient_light_energy = 0.35
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_BG
-	e.tonemap_mode = Environment.TONE_MAPPER_AGX
-	e.tonemap_exposure = 1.0
+	e.tonemap_mode = Environment.TONE_MAPPER_ACES
+	e.tonemap_exposure = 0.85
+	e.tonemap_white = 6.0
 	e.ssao_enabled = true
 	e.ssao_radius = 0.5
 	e.ssao_intensity = 1.6
 	e.ssao_detail = 0.6
-	e.glow_enabled = true
+	e.glow_enabled = false
 	e.glow_intensity = 0.2
 	e.glow_bloom = 0.0
 	e.glow_hdr_threshold = 2.5
 	e.adjustment_enabled = true
 	e.adjustment_contrast = 1.06
-	e.adjustment_saturation = 1.04
+	e.adjustment_saturation = 1.0
 	env.environment = e
 	add_child(env)
 

@@ -32,10 +32,10 @@ func _init() -> void:
 	label.font = load("res://assets/fonts/Inter.ttf")
 	label.font_size = 40
 	label.outline_size = 10
-	label.pixel_size = 0.0005
+	label.pixel_size = 0.0004
 	label.modulate = color
 	label.outline_modulate = Color(0, 0, 0, 0.8)
-	label.position = Vector3(0, 0.035, 0)
+	label.position = Vector3(0, 0.03, 0)
 	add_child(label)
 	visible = false
 

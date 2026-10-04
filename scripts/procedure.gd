@@ -48,6 +48,7 @@ var step := -1  # -1 = accueil, STEPS.size() = terminé
 var elapsed := 0.0
 var errors := 0
 var running := false
+var show_markers := true  ## faux pour les captures « propres »
 
 var marker: TargetMarker
 var marker2: TargetMarker
@@ -226,6 +227,15 @@ func _process(delta: float) -> void:
 		return
 
 	var target := _target()
+	# L'étiquette s'efface quand la pointe arrive sur le repère (elle gênerait la vue)
+	var closest := 1.0
+	for h in hands:
+		if h.held:
+			closest = minf(closest, h.tip().distance_to(marker.global_position))
+	marker.label.visible = closest > 0.07
+	if not show_markers:
+		marker.visible = false
+		marker2.visible = false
 	for h in hands:
 		var ok := h.held != null and h.held.id == req
 		h.assist_target = target if ok else Vector3.INF
@@ -361,11 +371,12 @@ func _tween_opening(v: float, dur: float) -> void:
 
 
 func _retractor_pose(inst: Instrument, side: float) -> Transform3D:
-	var slot := patient.retractor_slot(side)
-	# Lame crochetée sous le bord de la plaie, manche couché vers l'extérieur
-	var tip := slot - Vector3.UP * 0.022 - patient.perp3 * side * 0.004
-	var axis := (-patient.perp3 * side * 0.93 - Vector3.UP * 0.36).normalized()
-	return inst.tip_transform(tip, axis, Vector3.UP)
+	# Manche presque à plat sur la peau vers l'extérieur, lame recourbée (+Y du modèle)
+	# plongée dans la plaie et tirant le bord vers l'extérieur.
+	var edge := patient.center + patient.perp3 * side * 0.02
+	var tip := Vector3(edge.x, Patient.body_height(edge.x, edge.z) + 0.004, edge.z)
+	var axis := (-patient.perp3 * side + Vector3.UP * 0.12).normalized()
+	return inst.tip_transform(tip, axis, Vector3.DOWN)
 
 
 func _tick_retractor(side: float) -> void:

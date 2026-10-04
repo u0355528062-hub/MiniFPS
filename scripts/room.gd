@@ -172,10 +172,10 @@ func _lights() -> void:
 	scialytique_light.name = "Scialytique"
 	add_child(scialytique_light)
 	scialytique_light.look_at_from_position(Vector3(0.05, 1.95, 0.3), Vector3(0.12, 1.1, 0.1))
-	scialytique_light.spot_angle = 20
+	scialytique_light.spot_angle = 24
 	scialytique_light.spot_angle_attenuation = 0.6
 	scialytique_light.spot_range = 3.0
-	scialytique_light.light_energy = 2.2
+	scialytique_light.light_energy = 1.1
 	scialytique_light.light_color = Color(1.0, 0.97, 0.93)
 	scialytique_light.shadow_enabled = true
 	scialytique_light.light_size = 0.25

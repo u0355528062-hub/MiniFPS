@@ -9,7 +9,7 @@ const TRAY_Y := 1.004
 const CATALOG := [
 	["mikulicz", "Pince à badigeon", "pince_mikulicz", 0.0, 0.0],
 	["bistouri", "Bistouri lame 15", "manche_bistouri", 0.0, 0.0],
-	["langenbeck", "Écarteur de Langenbeck", "ecarteur_langenbeck", 90.0, 0.0],
+	["langenbeck", "Écarteur de Langenbeck", "ecarteur_langenbeck", 0.0, 0.0],
 	["roux", "Écarteur de Roux", "ecarteur_roux", 0.0, 0.0],
 	["debakey", "Pince De Bakey", "pince_debakey", 90.0, 0.0],
 	["overholt", "Overholt + fil de ligature", "clamp_overholt", 0.0, 0.0],
@@ -32,9 +32,7 @@ func build() -> void:
 	add_child(m)
 
 	# Champ stérile bleu-vert sur le plateau
-	var drape := ShaderMaterial.new()
-	drape.shader = preload("res://shaders/drape.gdshader")
-	drape.set_shader_parameter("fabric", Color(0.2, 0.45, 0.52))
+	var drape := Tex.drape(Color(0.1, 0.3, 0.42))
 	var cloth := MeshInstance3D.new()
 	cloth.mesh = MeshUtil.height_grid(MAYO_POS.x - 0.26, MAYO_POS.z - 0.22, 0.52, 0.44, 30, 26, func(x: float, z: float) -> float:
 		var ex := maxf(absf(x - MAYO_POS.x) - 0.235, 0.0)
@@ -76,12 +74,9 @@ func _decorate(inst: Instrument) -> void:
 			s.radius = 0.011
 			s.height = 0.02
 			ball.mesh = s
-			var gauze := ShaderMaterial.new()
-			gauze.shader = preload("res://shaders/tissue.gdshader")
-			gauze.set_shader_parameter("base_color", Color(0.55, 0.24, 0.07))
-			gauze.set_shader_parameter("vessel_amount", 0.0)
-			gauze.set_shader_parameter("wetness", 0.7)
-			gauze.set_shader_parameter("bump_freq", 600.0)
+			var gauze := Tex.tissue(Color(0.5, 0.2, 0.06), 0.0, 0.0, 0.0, 120.0)
+			gauze.set_shader_parameter("wetness", 0.6)
+			gauze.set_shader_parameter("normal_strength", 1.4)
 			ball.material_override = gauze
 			var holder := Node3D.new()
 			holder.add_child(ball)
