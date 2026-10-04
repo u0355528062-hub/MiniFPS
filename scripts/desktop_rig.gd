@@ -6,6 +6,8 @@ extends Node3D
 ## 1 à 8 : prendre un instrument. Espace / Entrée : continuer.
 
 signal continue_pressed
+signal menu_moved(delta: int)
+signal menu_number(index: int)
 
 var camera: Camera3D
 var hand: DesktopHand
@@ -16,12 +18,12 @@ var _right_down := false
 var _right_moved := 0.0
 
 
-func build() -> void:
+func build(start := Vector3(0.12, 1.6, 0.6)) -> void:
 	camera = Camera3D.new()
 	camera.fov = 62
 	camera.near = 0.02
 	add_child(camera)
-	position = Vector3(0.12, 1.6, 0.6)
+	position = start
 	hand = DesktopHand.new()
 	hand.name = "MainSouris"
 	hand.camera = camera
@@ -70,8 +72,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				hand.put_back_requested.emit(hand)
 			KEY_SPACE, KEY_ENTER, KEY_KP_ENTER:
 				continue_pressed.emit()
+			KEY_UP:
+				menu_moved.emit(-1)
+			KEY_DOWN:
+				menu_moved.emit(1)
 			_:
 				var n := k.physical_keycode - KEY_1
+				if n >= 0 and n < 9:
+					menu_number.emit(n)
 				if n >= 0 and n < hand.instruments.size():
 					hand.take_requested.emit(hand, hand.instruments[n])
 

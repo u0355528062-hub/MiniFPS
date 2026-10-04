@@ -1,14 +1,11 @@
 class_name DesktopBot
-extends Node
-## Test robot du mode écran : simule de vrais événements souris / clavier (Input.parse_input_event)
-## et une position de souris, puis termine l'étape en cours depuis n'importe quel état.
+extends BotDriver
+## Robot de test du mode écran : simule de vrais événements souris / clavier
+## (Input.parse_input_event) et une position de souris.
 
 var rig: DesktopRig
 var hand: DesktopHand
-var proc: Procedure
-var patient: Patient
-var tray: InstrumentTray
-var ok := true
+var home := Vector3(0.12, 1.6, 0.6)
 
 
 func setup(p_rig: DesktopRig, p_proc: Procedure, p_patient: Patient, p_tray: InstrumentTray) -> void:
@@ -17,21 +14,9 @@ func setup(p_rig: DesktopRig, p_proc: Procedure, p_patient: Patient, p_tray: Ins
 	proc = p_proc
 	patient = p_patient
 	tray = p_tray
+	prefix = "DESKTEST"
+	home = rig.position
 	hand.sim_mouse = Vector2(640, 360)
-
-
-func fail(msg: String) -> void:
-	print("DESKTEST ÉCHEC : ", msg)
-	ok = false
-
-
-func _frames(n := 1) -> void:
-	for i in n:
-		await get_tree().process_frame
-
-
-func _wait(sec: float) -> void:
-	await get_tree().create_timer(sec).timeout
 
 
 func mouse_button(button: MouseButton, pressed: bool) -> void:
@@ -81,109 +66,40 @@ func _settle() -> void:
 		last = now
 
 
-func _take(id: String) -> void:
-	if hand.held and hand.held.id == id:
+func take(inst_id: String) -> void:
+	if hand.held and hand.held.id == inst_id:
 		return
-	var idx := tray.ordered.find(tray.instruments[id])
+	var idx := tray.ordered.find(tray.instruments[inst_id])
 	key(KEY_1 + idx)
 	await _frames(3)
-	if hand.held == null or hand.held.id != id:
-		fail("touche %d ne donne pas %s" % [idx + 1, id])
 
 
-func _click() -> void:
-	mouse_button(MOUSE_BUTTON_LEFT, true)
-	await _frames(3)
-	mouse_button(MOUSE_BUTTON_LEFT, false)
-	await _frames(3)
-
-
-func cleanup() -> void:
+func put_back_all() -> void:
 	mouse_button(MOUSE_BUTTON_LEFT, false)
 	mouse_button(MOUSE_BUTTON_RIGHT, false)
 	await _frames(2)
 	if hand.held:
 		key(KEY_R)
 	hand.lift = 0.0
-	rig.position = Vector3(0.12, 1.6, 0.6)
-	await _wait(0.8)
+	rig.position = home
 
 
-func do_step() -> void:
-	var s := proc.step
-	if s < 0 or s >= Procedure.STEPS.size():
-		return
-	await cleanup()
-	var id: String = Procedure.STEPS[s]["id"]
-	await _take(Procedure.STEPS[s]["inst"])
-	match id:
-		"badigeon":
-			var c := patient.center
-			aim(c)
-			await _frames(2)
-			mouse_button(MOUSE_BUTTON_LEFT, true)
-			for row in 13:
-				for k in 16:
-					var x := c.x - 0.08 + (k if row % 2 == 0 else 15 - k) * 0.0107
-					var z := c.z - 0.09 + row * 0.015
-					aim(Vector3(x, 0, z))
-					await _frames(2)
-					if proc.step != s:
-						break
-				if proc.step != s:
-					break
-			mouse_button(MOUSE_BUTTON_LEFT, false)
-		"incision":
-			var t0 := maxf(proc._incision, 0.0)
-			aim(patient.incision_point(t0))
-			await _settle()
-			mouse_button(MOUSE_BUTTON_LEFT, true)
-			for i in 61:
-				aim(patient.incision_point(lerpf(t0, 1.0, i / 60.0)))
-				await _frames(2)
-				if proc.step != s:
-					break
-			mouse_button(MOUSE_BUTTON_LEFT, false)
-		"ecarteur1", "ecarteur2":
-			aim(patient.retractor_slot(-1.0 if id == "ecarteur1" else 1.0))
-			await _settle()
-			await _click()
-		"saisie":
-			aim(patient.appendix_tip)
-			await _settle()
-			mouse_button(MOUSE_BUTTON_LEFT, true)
-			for i in 120:
-				await _frames(1)
-				if proc.step != s:
-					break
-			mouse_button(MOUSE_BUTTON_LEFT, false)
-		"ligature":
-			aim(patient.appendix_point(0.18))
-			await _settle()
-			await _click()
-		"section":
-			aim(patient.appendix_point(0.32))
-			await _settle()
-			await _click()
-		"retrait":
-			await _wait(0.6)
-			aim(proc._piece.global_position)
-			await _settle()
-			mouse_button(MOUSE_BUTTON_LEFT, true)
-			await _frames(4)
-			for i in 30:
-				aim(proc._piece.global_position.lerp(tray.dish_center, (i + 1) / 30.0))
-				await _frames(1)
-			aim(tray.dish_center)
-			await _frames(10)
-			mouse_button(MOUSE_BUTTON_LEFT, false)
-		"suture":
-			for k in range(proc._stitch_i, Procedure.STITCH_T.size()):
-				aim(patient.incision_point(Procedure.STITCH_T[k]))
-				await _settle()
-				await _click()
-	await _frames(6)
-	if proc.step == s:
-		var tip := hand.tip()
-		var proj := patient.incision_project(tip)
-		fail("étape %s non terminée — tenu=%s tip=%s peau=%.3f lift=%.3f auto=%.3f swallow=%s gauche=%s incision=%.2f proj=%s yaw=%.2f pitch=%.2f pos=%s" % [id, hand.held.id if hand.held else "rien", tip, Patient.body_height(tip.x, tip.z), hand.lift, hand.auto_lift, hand.swallow_click, hand.mouse_left, proc._incision, proj, rig.yaw, rig.pitch, rig.position])
+func tip_to(p: Vector3, frames_n := 12) -> void:
+	aim(p)
+	if frames_n > 4:
+		await _settle()
+	else:
+		await _frames(frames_n)
+
+
+func trigger(down: bool) -> void:
+	mouse_button(MOUSE_BUTTON_LEFT, down)
+
+
+func held_id() -> String:
+	return hand.held.id if hand.held else ""
+
+
+func debug_state() -> String:
+	var tip := hand.tip()
+	return "tenu=%s tip=%s peau=%.3f lift=%.3f auto=%.3f trace=%.2f proj=%s souris=%s" % [held_id(), tip, Patient.body_height(tip.x, tip.z), hand.lift, hand.auto_lift, proc._trace, patient.incision_project(tip), hand.sim_mouse]

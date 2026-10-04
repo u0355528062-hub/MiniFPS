@@ -6,14 +6,20 @@ extends Node3D
 
 const TABLE_TOP := 0.95
 ## Incision de McBurney (coordonnées monde x, z)
-const INC_A := Vector2(0.1389, 0.0705)
-const INC_B := Vector2(0.1011, 0.1295)
-const PATCH_MIN := Vector2(-0.03, -0.05)
-const PATCH_SIZE := Vector2(0.31, 0.30)
-const WINDOW_MIN := Vector2(0.025, -0.005)
-const WINDOW_MAX := Vector2(0.215, 0.2)
 const MASK_RES := 64
-const WOUND_DEPTH := 0.05
+
+# Réglages du champ opératoire (fixés par l'opération avant build())
+var INC_A := Vector2(0.1389, 0.0705)  ## début de l'incision (x, z)
+var INC_B := Vector2(0.1011, 0.1295)  ## fin de l'incision
+var PATCH_MIN := Vector2(-0.03, -0.05)  ## zone de peau détaillée
+var PATCH_SIZE := Vector2(0.31, 0.30)
+var WINDOW_MIN := Vector2(0.025, -0.005)  ## fenêtre du champ
+var WINDOW_MAX := Vector2(0.215, 0.2)
+var WOUND_DEPTH := 0.05
+var wound_w := 0.022  ## demi-largeur de la plaie à ouverture 1
+var paint_r := Vector2(0.075, 0.085)  ## demi-axes (x, z) de la zone à désinfecter
+var bowl_radii := Vector3(0.1, 0.075, 0.08)  ## cavité : le long, en profondeur, en travers
+var op := "appendicectomie"
 ## Pointe de l'appendice dans le fichier anatomie_appendice.glb (origine = base)
 const ANAT_TIP := Vector3(0.0089, -0.0287, -0.0467)
 
@@ -111,7 +117,9 @@ func build() -> void:
 	_build_drapes()
 	_build_head()
 	_build_skin()
-	_build_cavity()
+	_build_wound()
+	if op == "appendicectomie":
+		_build_appendix_anatomy()
 	set_opening(0.0)
 
 
@@ -333,6 +341,7 @@ func _build_skin() -> void:
 	skin_mat.set_shader_parameter("patch_size", PATCH_SIZE)
 	skin_mat.set_shader_parameter("inc_a", INC_A)
 	skin_mat.set_shader_parameter("inc_b", INC_B)
+	skin_mat.set_shader_parameter("wound_w", wound_w)
 	skin_mat.set_shader_parameter("win_min", WINDOW_MIN)
 	skin_mat.set_shader_parameter("win_max", WINDOW_MAX)
 	skin_mat.set_shader_parameter("skin_albedo", Tex.get_tex("skin_albedo"))
@@ -350,7 +359,7 @@ func _tissue(base: Color, inflamed := 0.0, vessels := 0.6, fibrin := 0.0, scale 
 	return Tex.tissue(base, inflamed, vessels, fibrin, scale)
 
 
-func _build_cavity() -> void:
+func _build_wound() -> void:
 	var walls := MeshInstance3D.new()
 	walls.name = "ParoiPlaie"
 	walls.mesh = wall_mesh
@@ -384,10 +393,12 @@ func _build_cavity() -> void:
 	bowl.mesh = sp
 	bowl.material_override = _tissue(Color(0.55, 0.2, 0.17), 0.15, 0.9)
 	bowl.material_override.set_shader_parameter("clip_y", center.y - 0.012)
-	bowl.basis = Basis(dir3 * 0.1, Vector3.UP * 0.075, perp3 * 0.08)
-	bowl.position = center - Vector3.UP * 0.075
+	bowl.basis = Basis(dir3 * bowl_radii.x, Vector3.UP * bowl_radii.y, perp3 * bowl_radii.z)
+	bowl.position = center - Vector3.UP * bowl_radii.y
 	add_child(bowl)
 
+
+func _build_appendix_anatomy() -> void:
 	# Organes réels (Z-Anatomy) : origine du fichier = base de l'appendice
 	appendix_base = center + dir3 * 0.022 - Vector3.UP * 0.046 + perp3 * 0.002
 	var scene: PackedScene = load("res://assets/models/anatomie_appendice.glb")
@@ -682,7 +693,7 @@ func iodine_coverage() -> float:
 			var z := PATCH_MIN.y + (j + 0.5) / MASK_RES * PATCH_SIZE.y
 			# Zone à préparer : ellipse centrée sur l'incision
 			var q := Vector2(x - center.x, z - center.z)
-			if (q.x * q.x) / (0.075 * 0.075) + (q.y * q.y) / (0.085 * 0.085) > 1.0:
+			if (q.x * q.x) / (paint_r.x * paint_r.x) + (q.y * q.y) / (paint_r.y * paint_r.y) > 1.0:
 				continue
 			total += 1
 			if iodine_img.get_pixel(i, j).r > 0.45:
@@ -745,7 +756,7 @@ func _rebuild_walls() -> void:
 	if opening <= 0.01:
 		return
 	var half_len := INC_A.distance_to(INC_B) * 0.5 + 0.004
-	var half_w := opening * 0.022
+	var half_w := opening * wound_w
 	var k := 64
 	var levels := 10
 	var st := SurfaceTool.new()
@@ -794,7 +805,14 @@ func retractor_slot(side: float) -> Vector3:
 
 
 func add_stitch(t: float) -> void:
-	var p := incision_point(t) + Vector3.UP * 0.0012
+	add_stitch_at(incision_point(t), perp3)
+
+
+## Point séparé : fil bleu en travers de `across`, nœud sur le côté.
+func add_stitch_at(p0: Vector3, across: Vector3, length := 0.016) -> void:
+	var p := p0 + Vector3.UP * 0.0012
+	var acr := across.normalized()
+	var along := acr.cross(Vector3.UP).normalized()
 	var knot := Node3D.new()
 	add_child(knot)
 	knot.global_position = p
@@ -803,28 +821,28 @@ func add_stitch(t: float) -> void:
 	var cm := CylinderMesh.new()
 	cm.top_radius = 0.0007
 	cm.bottom_radius = 0.0007
-	cm.height = 0.016
+	cm.height = length
 	bar.mesh = cm
 	bar.material_override = thread
 	knot.add_child(bar)
-	bar.global_basis = Basis.looking_at(perp3, Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5)
+	bar.global_basis = Basis.looking_at(acr, Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5)
 	var ball := MeshInstance3D.new()
 	var bs := SphereMesh.new()
 	bs.radius = 0.0018
 	bs.height = 0.0036
 	ball.mesh = bs
 	ball.material_override = thread
-	ball.position = perp3 * 0.006 + Vector3.UP * 0.0008
+	ball.position = acr * length * 0.38 + Vector3.UP * 0.0008
 	knot.add_child(ball)
-	for s in [-1.0, 1.0]:
-		var end := MeshInstance3D.new()
+	for sgn in [-1.0, 1.0]:
+		var e := MeshInstance3D.new()
 		var em := CylinderMesh.new()
 		em.top_radius = 0.0004
 		em.bottom_radius = 0.0004
 		em.height = 0.007
-		end.mesh = em
-		end.material_override = thread
-		end.position = perp3 * 0.009 + dir3 * 0.0025 * s + Vector3.UP * 0.001
-		end.rotation = Vector3(0.4 * s, 0.3, 1.3)
-		knot.add_child(end)
+		e.mesh = em
+		e.material_override = thread
+		e.position = acr * length * 0.56 + along * 0.0025 * sgn + Vector3.UP * 0.001
+		e.rotation = Vector3(0.4 * sgn, 0.3, 1.3)
+		knot.add_child(e)
 	stitches.append(knot)

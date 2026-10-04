@@ -1,41 +1,20 @@
 class_name Procedure
 extends Node
-## Déroulé guidé de l'appendicectomie : une étape à la fois, instrument en surbrillance,
-## repère lumineux, progression, messages, chrono et erreurs.
+## Moteur de l'opération guidée : menu de choix, une étape à la fois, instrument en surbrillance,
+## repère lumineux, progression, messages, chrono et erreurs. Les étapes viennent de l'Operation
+## et sont jouées selon leur type de geste (paint, trace, place, hold, push, lift, carry, points).
 
 signal finished(seconds: float, errors: int)
 
-const STEPS := [
-	{"id": "badigeon", "list": "Désinfection", "inst": "mikulicz",
-		"title": "Désinfecte la peau",
-		"text": "Prends la pince à badigeon et frotte toute la zone de peau en gardant la gâchette appuyée, jusqu'à 100 %."},
-	{"id": "incision", "list": "Incision", "inst": "bistouri",
-		"title": "Incise la peau",
-		"text": "Pose la lame sur le point « DÉPART » et suis le pointillé violet, gâchette appuyée, d'un seul geste."},
-	{"id": "ecarteur1", "list": "Écarteur 1", "inst": "langenbeck",
-		"title": "Écarte le premier bord",
-		"text": "Amène l'écarteur de Langenbeck sur le repère, au bord de la plaie, puis appuie sur la gâchette pour le poser."},
-	{"id": "ecarteur2", "list": "Écarteur 2", "inst": "roux",
-		"title": "Écarte l'autre bord",
-		"text": "Pose l'écarteur de Roux sur le repère de l'autre bord. La plaie s'ouvre : on voit le cæcum et l'appendice."},
-	{"id": "saisie", "list": "Sortir l'appendice", "inst": "debakey",
-		"title": "Sors l'appendice",
-		"text": "Avec la pince De Bakey, attrape la pointe de l'appendice (gâchette) et soulève-la hors de la plaie sans lâcher."},
-	{"id": "ligature", "list": "Ligature", "inst": "overholt",
-		"title": "Ligature la base",
-		"text": "Amène le fil sur le repère à la base de l'appendice et appuie sur la gâchette pour serrer le nœud."},
-	{"id": "section", "list": "Section", "inst": "ciseaux",
-		"title": "Coupe l'appendice",
-		"text": "Place les ciseaux sur le repère, juste au-dessus de la ligature, et appuie sur la gâchette."},
-	{"id": "retrait", "list": "Retrait", "inst": "debakey",
-		"title": "Dépose l'appendice",
-		"text": "Attrape l'appendice coupé avec la pince (gâchette maintenue) et lâche-le dans le haricot, sur le guéridon à ta gauche."},
-	{"id": "suture", "list": "Suture", "inst": "porte_aiguille",
-		"title": "Referme la peau",
-		"text": "Les écarteurs sont retirés. Avec le porte-aiguille, touche les 4 points de suture un par un (gâchette)."},
-]
-const STITCH_T := [0.15, 0.38, 0.62, 0.85]
+const MENU := -2
+const INTRO := -1
 
+## Opération choisie (garde sa valeur quand la scène est rechargée)
+static var op_id := "appendicectomie"
+static var start_at_intro := false
+static var restarts := 0
+
+var op: Operation
 var patient: Patient
 var tray: InstrumentTray
 var monitor: VitalMonitor
@@ -44,26 +23,34 @@ var uis: Array[GuideUI] = []
 var hud: DesktopHUD
 var is_vr := false
 
-var step := -1  # -1 = accueil, STEPS.size() = terminé
+var step := MENU
 var elapsed := 0.0
 var errors := 0
 var running := false
-static var restarts := 0
 var show_markers := true  ## faux pour les captures « propres »
+var menu_index := 0
+var parked: Array[Instrument] = []  ## instruments posés hors de la main (écarteurs, drain...)
 
 var marker: TargetMarker
 var marker2: TargetMarker
 var _wrong_counted := false
 var _sound_cd := 0.0
 var _hint_cd := 0.0
-var _incision := 0.0
+# État de l'étape en cours
+var _trace := 0.0
+var _hold_t := 0.0
+var _point_i := 0
+var _push := 0.0
+var _push_hand: SurgeonHand
 var _grab_hand: SurgeonHand
-var _piece: Node3D
-var _piece_home: Vector3
-var _piece_offset := Vector3.ZERO
-var _stitch_i := 0
-var _parked: Array[Instrument] = []
-var _anim: Tween  ## animation de l'appendice en cours (annulée si on le reprend)
+var _carry_home := Vector3.ZERO
+var _carry_offset := Vector3.ZERO
+var _anim: Tween
+
+
+var steps: Array:
+	get:
+		return op.steps
 
 
 func setup() -> void:
@@ -71,16 +58,16 @@ func setup() -> void:
 	marker2 = TargetMarker.new()
 	add_child(marker)
 	add_child(marker2)
-	var titles := []
-	for s in STEPS:
-		titles.append(s["list"])
-	for ui in uis:
-		ui.set_steps(titles)
 	for h in hands:
 		h.instruments = tray.ordered
 		h.take_requested.connect(_on_take)
 		h.put_back_requested.connect(_on_put_back)
-	_show_intro()
+	menu_index = Operation.ALL.find(op.id)
+	if start_at_intro:
+		start_at_intro = false
+		_show_intro()
+	else:
+		_show_menu()
 
 
 func _hint() -> String:
@@ -91,7 +78,7 @@ func _hint() -> String:
 
 func _ui_step(title: String, text: String, inst_label: String) -> void:
 	for ui in uis:
-		ui.show_step(step, STEPS.size(), title, text, inst_label, _hint())
+		ui.show_step(step, steps.size(), title, text, inst_label, _hint())
 
 
 func _ui_progress(v: float, caption: String) -> void:
@@ -104,52 +91,111 @@ func _toast(text: String, ok := true) -> void:
 		ui.toast(text, ok)
 
 
+# ---------------------------------------------------------------- Menu, accueil, fin
+
+func _show_menu() -> void:
+	step = MENU
+	running = false
+	var entries := Operation.menu_entries()
+	var lines := ""
+	for i in entries.size():
+		lines += ("▶  " if i == menu_index else "     ") + "%d.  %s\n" % [i + 1, entries[i][0]]
+	lines += "\n" + entries[menu_index][1] + "\n\n"
+	lines += "Stick haut / bas pour choisir, A pour valider." if is_vr else "Flèches haut / bas (ou 1-%d) pour choisir, ESPACE pour valider." % entries.size()
+	for ui in uis:
+		ui.set_steps([])
+		ui.show_step(-2, 0, "Choisis ton opération", lines, "", _hint())
+
+
+## Stick / flèches dans le menu.
+func menu_move(delta_i: int) -> void:
+	if step != MENU:
+		return
+	menu_index = wrapi(menu_index + delta_i, 0, Operation.ALL.size())
+	Sfx.play("pose", Vector3.INF, -12.0, 1.4)
+	_show_menu()
+
+
+func menu_select(i: int) -> void:
+	if step != MENU or i < 0 or i >= Operation.ALL.size():
+		return
+	menu_index = i
+	_show_menu()
+
+
 func _show_intro() -> void:
-	step = -1
+	step = INTRO
+	var titles := []
+	for s in steps:
+		titles.append(s["list"])
+	for ui in uis:
+		ui.set_steps(titles)
 	var go := "Appuie sur A (manette droite) pour commencer." if is_vr else "Appuie sur ESPACE pour commencer."
-	_ui_step("Bienvenue au bloc",
-		"Lucas, 24 ans : appendicite aiguë confirmée au scanner. Il est endormi et installé. Tu vas faire l'appendicectomie, étape par étape. Suis les consignes et les repères lumineux.\n" + go, "")
+	_ui_step(op.name, op.intro_text + "\n" + go, "")
 
 
 ## Bouton A / Espace
 func on_continue() -> void:
-	if step == -1:
-		running = true
-		_enter_step(0)
-	elif step >= STEPS.size():
-		restarts += 1
-		get_tree().reload_current_scene()
+	match step:
+		MENU:
+			var chosen: String = Operation.ALL[menu_index]
+			if chosen != op.id:
+				op_id = chosen
+				start_at_intro = true
+				get_tree().reload_current_scene()
+			else:
+				_show_intro()
+		INTRO:
+			running = true
+			op.on_start()
+			_enter_step(0)
+		_:
+			if step >= steps.size():
+				restarts += 1
+				get_tree().reload_current_scene()
 
 
 func required_id() -> String:
-	return STEPS[step]["inst"] if step >= 0 and step < STEPS.size() else ""
+	return steps[step]["inst"] if step >= 0 and step < steps.size() else ""
+
+
+func current() -> Dictionary:
+	return steps[step] if step >= 0 and step < steps.size() else {}
 
 
 func _enter_step(i: int) -> void:
 	step = i
 	_wrong_counted = false
-	if step >= STEPS.size():
+	_trace = 0.0
+	_hold_t = 0.0
+	_point_i = 0
+	_push = 0.0
+	_push_hand = null
+	_grab_hand = null
+	_carry_home = Vector3.ZERO
+	if step >= steps.size():
 		_finish()
 		return
-	var s: Dictionary = STEPS[step]
+	var s: Dictionary = steps[step]
 	var inst: Instrument = tray.instruments[s["inst"]]
 	_ui_step(s["title"], s["text"], inst.label)
 	if hud:
 		hud.mark_required(s["inst"])
-	match s["id"]:
-		"badigeon":
+	match s["kind"]:
+		"paint":
 			_ui_progress(0.0, "Zone désinfectée : 0 %")
-		"incision":
+		"trace":
 			_ui_progress(0.0, "Incision : 0 %")
-		"suture":
-			_stitch_i = 0
-			_ui_progress(0.0, "Points : 0 / 4")
+		"points":
+			_ui_progress(0.0, "Points : 0 / %d" % s["points"].call().size())
 		_:
 			_ui_progress(0.0, "")
+	if s.has("enter"):
+		s["enter"].call()
 
 
-func _complete_step(msg: String) -> void:
-	_toast(msg, true)
+func _complete_step() -> void:
+	_toast(current().get("done_msg", "Bien joué !"), true)
 	Sfx.play("etape", Vector3.INF, -4.0)
 	for h in hands:
 		h.pulse(0.6, 0.12)
@@ -166,23 +212,25 @@ func _finish() -> void:
 	if elapsed > 480.0:
 		stars = maxi(1, stars - 1)
 	Sfx.play("fin", Vector3.INF, -2.0)
-	var again := "Appuie sur A pour recommencer." if is_vr else "Appuie sur ESPACE pour recommencer."
+	var again := "Appuie sur A pour revenir au menu." if is_vr else "Appuie sur ESPACE pour revenir au menu."
 	for ui in uis:
-		ui.show_end(elapsed, errors, stars, again)
+		ui.show_end(elapsed, errors, stars, op.name + " réussie.\n" + again)
 	finished.emit(elapsed, errors)
 
 
 # ---------------------------------------------------------------- Prendre / reposer
 
 func _on_take(hand: SurgeonHand, inst: Instrument) -> void:
+	if step == MENU:
+		return
 	# Passer un instrument d'une main à l'autre
 	for h in hands:
 		if h != hand and h.held == inst:
 			if _grab_hand == h:
-				_release_grab(true)
+				_release_grab()
 			h.release_parked()
-	if inst in _parked:
-		_toast("Cet écarteur tient la plaie ouverte : laisse-le en place.", false)
+	if inst in parked:
+		_toast("Cet instrument est en place : laisse-le.", false)
 		return
 	hand.take(inst)
 	Sfx.play("prise", inst.global_position, -6.0)
@@ -200,7 +248,7 @@ func _on_put_back(hand: SurgeonHand) -> void:
 	if hand.held == null:
 		return
 	if _grab_hand == hand:
-		_release_grab(true)
+		_release_grab()
 	Sfx.play("pose", hand.held.global_position, -8.0)
 	hand.put_back()
 
@@ -229,7 +277,7 @@ func _process(delta: float) -> void:
 			mode = 1
 		inst.set_highlight(0 if is_held else mode)
 
-	if not running or step < 0 or step >= STEPS.size():
+	if not running or step < 0 or step >= steps.size():
 		marker.visible = false
 		marker2.visible = false
 		return
@@ -249,61 +297,53 @@ func _process(delta: float) -> void:
 		h.assist_target = target if ok else Vector3.INF
 		if h is DesktopHand:
 			(h as DesktopHand).auto_lift = 0.0
-	match STEPS[step]["id"]:
-		"badigeon": _tick_badigeon(delta)
-		"incision": _tick_incision(delta)
-		"ecarteur1": _tick_retractor(-1.0)
-		"ecarteur2": _tick_retractor(1.0)
-		"saisie": _tick_saisie(delta)
-		"ligature": _tick_ligature()
-		"section": _tick_section()
-		"retrait": _tick_retrait(delta)
-		"suture": _tick_suture()
+	match current()["kind"]:
+		"paint": _tick_paint()
+		"trace": _tick_trace()
+		"place": _tick_place()
+		"hold": _tick_hold(delta)
+		"push": _tick_push()
+		"lift": _tick_lift(delta)
+		"carry": _tick_carry(delta)
+		"points": _tick_points()
 
 
-## Cible de l'étape en cours (pour le repère et l'aide au placement).
+## Cible de l'étape en cours (repère lumineux + aide au placement à la souris).
 func _target() -> Vector3:
 	marker2.visible = false
-	match STEPS[step]["id"]:
-		"badigeon":
-			marker.show_at(patient.center + Vector3.UP * 0.003, "Zone à désinfecter", 3.5)
+	var s := current()
+	match s["kind"]:
+		"paint":
+			var c: Vector3 = s["area"].call() if s.has("area") else patient.center
+			marker.show_at(c + Vector3.UP * 0.003, s.get("label", "Zone à désinfecter"), s.get("ring", 3.5))
 			return Vector3.INF
-		"incision":
-			var p := patient.incision_point(maxf(_incision, 0.0))
-			marker.show_at(p + Vector3.UP * 0.002, "DÉPART" if _incision < 0.02 else "", 0.8)
+		"trace":
+			var p := patient.incision_point(maxf(_trace, 0.0))
+			marker.show_at(p + Vector3.UP * 0.002, "DÉPART" if _trace < 0.02 else "", 0.8)
 			marker2.show_at(patient.incision_point(1.0) + Vector3.UP * 0.002, "ARRIVÉE", 0.6)
 			return Vector3.INF
-		"ecarteur1":
-			var p := patient.retractor_slot(-1.0)
-			marker.show_at(p, "Écarteur ici")
+		"place", "hold", "push":
+			var p: Vector3 = s["target"].call()
+			marker.show_at(p, s.get("label", ""), s.get("ring", 1.0))
 			return p
-		"ecarteur2":
-			var p := patient.retractor_slot(1.0)
-			marker.show_at(p, "Écarteur ici")
+		"lift":
+			var p: Vector3 = s["target"].call()
+			marker.show_at(p, s.get("label", "") if _grab_hand == null else "Soulève !", 0.9)
 			return p
-		"saisie":
-			var p := patient.appendix_tip
-			marker.show_at(p, "Pointe de l'appendice" if _grab_hand == null else "Soulève !", 0.9)
-			return p
-		"ligature":
-			var p := patient.appendix_point(0.18)
-			marker.show_at(p, "Ligature ici", 0.8)
-			return p
-		"section":
-			var p := patient.appendix_point(0.32)
-			marker.show_at(p, "Couper ici", 0.8)
-			return p
-		"retrait":
+		"carry":
 			if _grab_hand:
-				marker.show_at(tray.dish_center, "Lâche ici", 2.5)
-				return tray.dish_center
-			var p := _piece.global_position if _piece else patient.center
-			marker.show_at(p, "Attrape l'appendice", 0.9)
+				var d: Vector3 = s["dest"].call()
+				marker.show_at(d, s.get("dest_label", "Lâche ici"), 2.5)
+				return d
+			var obj: Node3D = s["object"].call()
+			var p := obj.global_position if obj else patient.center
+			marker.show_at(p, s.get("label", ""), 0.9)
 			return p
-		"suture":
-			if _stitch_i < STITCH_T.size():
-				var p := patient.incision_point(STITCH_T[_stitch_i]) + Vector3.UP * 0.001
-				marker.show_at(p, "Point %d" % (_stitch_i + 1), 0.6)
+		"points":
+			var pts: Array = s["points"].call()
+			if _point_i < pts.size():
+				var p: Vector3 = pts[_point_i]
+				marker.show_at(p, "%s %d" % [s.get("label", "Point"), _point_i + 1], s.get("ring", 0.6))
 				return p
 	marker.visible = false
 	return Vector3.INF
@@ -327,9 +367,20 @@ func _skin_contact(p: Vector3, above := 0.018) -> bool:
 	return p.y < skin + above and p.y > skin - 0.03
 
 
-# ---------------------------------------------------------------- Étapes
+func _done(hand: SurgeonHand, instant: bool) -> void:
+	var s := current()
+	if not s.has("done"):
+		return
+	var cb: Callable = s["done"]
+	if cb.get_argument_count() >= 2:
+		cb.call(hand, instant)
+	else:
+		cb.call(instant)
 
-func _tick_badigeon(_delta: float) -> void:
+
+# ---------------------------------------------------------------- Types de gestes
+
+func _tick_paint() -> void:
 	for h in _active_hands():
 		var p := h.tip()
 		if h.trigger_down() and _skin_contact(p, 0.022):
@@ -341,125 +392,179 @@ func _tick_badigeon(_delta: float) -> void:
 				h.pulse(0.15, 0.03)
 			if cov >= 0.85:
 				patient.fill_iodine()
-				_complete_step("Peau désinfectée !")
+				_done(h, false)
+				_complete_step()
 				return
 
 
-func _tick_incision(_delta: float) -> void:
+func _tick_trace() -> void:
 	for h in _active_hands():
 		var p := h.tip()
 		var proj := patient.incision_project(p)
 		var t := proj.x
 		var on_line := proj.y < (0.012 if is_vr else 0.009)
-		if h.trigger_down() and on_line and _skin_contact(p, 0.014) and t <= _incision + 0.12 and t > _incision:
-			_incision = t
-			patient.incision_progress = _incision
+		var dt := 0.12 * clampf(0.07 / maxf(patient.INC_A.distance_to(patient.INC_B), 0.01), 0.15, 1.0)
+		if h.trigger_down() and on_line and _skin_contact(p, 0.014) and t <= _trace + maxf(dt, 0.03) and t > _trace:
+			_trace = t
+			patient.incision_progress = _trace
 			monitor.stress(14.0)
-			_ui_progress(_incision, "Incision : %d %%" % int(_incision * 100))
+			_ui_progress(_trace, "Incision : %d %%" % int(_trace * 100))
 			if _sound_cd <= 0.0:
 				Sfx.play("incision", p, -6.0, randf_range(0.9, 1.15))
 				_sound_cd = 0.12
 			h.pulse(0.25, 0.02)
-			if _incision >= 0.96:
-				_finish_incision()
-				_complete_step("Belle incision !")
+			if _trace >= 0.96:
+				_trace = 1.0
+				patient.incision_progress = 1.0
+				monitor.stress(4.0)
+				_done(h, false)
+				_complete_step()
 				return
-		elif h.trigger_down() and on_line and _skin_contact(p, 0.014) and _incision < 0.03 and t > 0.25 and _hint_cd <= 0.0:
+		elif h.trigger_down() and on_line and _skin_contact(p, 0.014) and _trace < 0.03 and t > 0.25 and _hint_cd <= 0.0:
 			_toast("Commence au point « DÉPART », puis va vers « ARRIVÉE ».", false)
 			_hint_cd = 3.0
 
 
-func _finish_incision() -> void:
-	# Un peu de sang sur la lame
-	var blade_mat: StandardMaterial3D = tray.instruments["bistouri"].get_meta("blade_mat", null)
-	if blade_mat:
-		blade_mat.albedo_color = Color(0.62, 0.22, 0.2)
-		blade_mat.metallic = 0.6
-	_incision = 1.0
-	patient.incision_progress = 1.0
-	monitor.stress(4.0)
-	_tween_opening(0.25, 0.6)
-
-
-func _tween_opening(v: float, dur: float) -> void:
-	var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(patient, "opening", v, dur)
-
-
-func _retractor_pose(inst: Instrument, side: float) -> Transform3D:
-	# Manche presque à plat sur la peau vers l'extérieur, lame recourbée (+Y du modèle)
-	# plongée dans la plaie et tirant le bord vers l'extérieur.
-	var edge := patient.center + patient.perp3 * side * 0.02
-	var tip := Vector3(edge.x, Patient.body_height(edge.x, edge.z) + 0.004, edge.z)
-	var axis := (-patient.perp3 * side + Vector3.UP * 0.6).normalized()
-	return inst.tip_transform(tip, axis, Vector3.DOWN)
-
-
-func _tick_retractor(side: float) -> void:
+func _tick_place() -> void:
+	var s := current()
 	for h in _active_hands():
-		if h.trigger_just_pressed() and _near(h, patient.retractor_slot(side), 0.035):
-			_place_retractor(h.held, side)
-			h.release_parked()
-			Sfx.play("pose", patient.center, -4.0)
-			_complete_step("Écarteur en place")
+		if not h.trigger_just_pressed():
+			continue
+		var p: Vector3 = s["target"].call()
+		if _near(h, p, s.get("radius", 0.03)):
+			Sfx.play(s.get("sound", "pose"), p, -4.0)
+			_done(h, false)
+			_complete_step()
+			return
+		elif s.has("near_miss") and _near(h, p, s["near_miss"]):
+			_toast("Vise bien le repère lumineux.", false)
+			Sfx.play("erreur", Vector3.INF, -8.0)
+
+
+func _tick_hold(delta: float) -> void:
+	var s := current()
+	var p: Vector3 = s["target"].call()
+	for h in _active_hands():
+		if h.trigger_down() and _near(h, p, s.get("radius", 0.025)):
+			_hold_t += delta
+			var v := clampf(_hold_t / s.get("duration", 1.5), 0.0, 1.0)
+			_ui_progress(v, s.get("progress_label", "Maintiens…"))
+			if s.has("progress"):
+				s["progress"].call(v)
+			if _sound_cd <= 0.0 and s.has("hold_sound"):
+				Sfx.play(s["hold_sound"], p, -10.0)
+				_sound_cd = 0.3
+			h.pulse(0.08, 0.02)
+			if v >= 1.0:
+				_done(h, false)
+				_complete_step()
 			return
 
 
-func _place_retractor(inst: Instrument, side: float, instant := false) -> void:
-	_parked.append(inst)
-	var xf := _retractor_pose(inst, side)
-	if instant:
-		inst.held = false
-		inst.parked = true
-		inst.global_transform = xf
-	else:
-		inst.park(xf)
-	if instant:
-		patient.opening = 0.6 if side < 0 else 1.0
-	else:
-		_tween_opening(0.6 if side < 0 else 1.0, 0.8)
+func _tick_push() -> void:
+	var s := current()
+	var entry: Vector3 = s["target"].call()
+	var axis: Vector3 = s["axis"]
+	var depth: float = s["depth"]
+	for h in _active_hands():
+		var tip := h.tip()
+		var d := tip - entry
+		var along := d.dot(axis)
+		var off := (d - axis * along).length()
+		var inside: bool = off < s.get("radius", 0.015) * (1.4 if is_vr else 1.0) and along > -0.02
+		if h.trigger_down() and inside:
+			_push_hand = h
+			if h is DesktopHand:
+				# À la souris, la gâchette maintenue enfonce l'instrument tout seul
+				(h as DesktopHand).auto_lift = -(depth + 0.01) / maxf(-axis.y, 0.3)
+			var v := clampf(along / depth, 0.0, 1.0)
+			if v > _push:
+				_push = v
+				if s.has("progress"):
+					s["progress"].call(v)
+				h.pulse(0.12, 0.02)
+			_ui_progress(_push, s.get("progress_label", "Enfonce…"))
+			if _push >= 1.0:
+				_done(h, false)
+				_complete_step()
+			return
 
 
-func lifted_tip() -> Vector3:
-	return patient.center + Vector3.UP * 0.035 - patient.dir3 * 0.012 + patient.perp3 * 0.004
-
-
-func _tick_saisie(delta: float) -> void:
+func _tick_lift(delta: float) -> void:
+	var s := current()
 	if _grab_hand:
 		var h := _grab_hand
 		if h.held == null or not h.trigger_down():
-			_release_grab(true)
-			_toast("L'appendice a glissé : garde la gâchette appuyée.", false)
+			_release_grab()
+			_toast("Ça a glissé : garde la gâchette appuyée.", false)
 			return
 		if h is DesktopHand:
-			(h as DesktopHand).auto_lift = 0.07
-		patient.set_appendix_tip(patient.appendix_tip.lerp(h.tip(), 1.0 - exp(-delta * 18.0)))
-		var goal := patient.center.y + 0.012
-		var rest := patient.appendix_rest_tip.y
-		var v := clampf((patient.appendix_tip.y - rest) / (goal - rest), 0.0, 1.0)
+			(h as DesktopHand).auto_lift = s.get("auto_lift", 0.07)
+		var cur: Vector3 = s["target"].call()
+		s["move"].call(cur.lerp(h.tip(), 1.0 - exp(-delta * 18.0)))
+		var v: float = s["goal"].call()
 		_ui_progress(v, "Soulève encore…" if v < 1.0 else "")
 		h.pulse(0.1, 0.02)
 		if v >= 1.0:
 			_grab_hand = null
-			_finish_saisie(false)
-			_complete_step("Appendice extériorisé — l'aide le maintient")
+			_done(h, false)
+			_complete_step()
 		return
 	for h in _active_hands():
-		if h.trigger_just_pressed() and _near(h, patient.appendix_tip, 0.03):
-			_kill_anim()
+		if h.trigger_just_pressed() and _near(h, s["target"].call(), s.get("radius", 0.03)):
+			if s.has("grab"):
+				s["grab"].call()
 			_grab_hand = h
-			Sfx.play("prise", patient.appendix_tip, -12.0, 0.6)
+			Sfx.play("prise", h.tip(), -12.0, 0.6)
 			h.pulse(0.4, 0.05)
 			return
 
 
-func _finish_saisie(instant: bool) -> void:
-	if instant:
-		patient.set_appendix_tip(lifted_tip())
-	else:
-		var from := patient.appendix_tip
-		var tw := create_tween().set_trans(Tween.TRANS_SINE)
-		tw.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(lifted_tip(), k)), 0.0, 1.0, 0.5)
+func _tick_carry(delta: float) -> void:
+	var s := current()
+	var obj: Node3D = s["object"].call()
+	if obj == null:
+		return
+	if _grab_hand:
+		var h := _grab_hand
+		if h.held == null or not h.trigger_down():
+			_release_grab()
+			return
+		if h is DesktopHand:
+			(h as DesktopHand).auto_lift = 0.05
+		obj.global_position = obj.global_position.lerp(h.tip() + _carry_offset, 1.0 - exp(-delta * 20.0))
+		var dest: Vector3 = s["dest"].call()
+		var flat := Vector2(obj.global_position.x - dest.x, obj.global_position.z - dest.z).length()
+		_ui_progress(1.0 - clampf(flat / 0.5, 0.0, 1.0), "Direction : " + String(s.get("dest_label", "la cible")).to_lower())
+		return
+	for h in _active_hands():
+		if h.trigger_just_pressed() and _near(h, obj.global_position, 0.04):
+			_kill_anim()
+			_grab_hand = h
+			if _carry_home == Vector3.ZERO:
+				_carry_home = obj.global_position
+			_carry_offset = (obj.global_position - h.tip()).limit_length(0.02)
+			Sfx.play("prise", obj.global_position, -12.0, 0.6)
+			h.pulse(0.4, 0.05)
+			return
+
+
+func _tick_points() -> void:
+	var s := current()
+	var pts: Array = s["points"].call()
+	for h in _active_hands():
+		if _point_i >= pts.size():
+			return
+		if h.trigger_just_pressed() and _near(h, pts[_point_i], s.get("radius", 0.022)):
+			s["point"].call(_point_i, false)
+			Sfx.play(s.get("sound", "fil"), pts[_point_i], -6.0)
+			_point_i += 1
+			h.pulse(0.3, 0.05)
+			_ui_progress(float(_point_i) / pts.size(), "Points : %d / %d" % [_point_i, pts.size()])
+			if _point_i >= pts.size():
+				_done(h, false)
+				_complete_step()
+			return
 
 
 func _kill_anim() -> void:
@@ -468,158 +573,58 @@ func _kill_anim() -> void:
 	_anim = null
 
 
-func _release_grab(spring_back: bool) -> void:
+## Lâcher : l'objet soulevé retombe ; l'objet transporté est jugé là où la pince le lâche.
+func _release_grab() -> void:
 	var h := _grab_hand
 	_grab_hand = null
 	if h is DesktopHand:
 		(h as DesktopHand).auto_lift = 0.0
-	if spring_back and step >= 0 and STEPS[step]["id"] == "saisie":
-		var from := patient.appendix_tip
-		_kill_anim()
-		_anim = create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-		_anim.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(patient.appendix_rest_tip, k)), 0.0, 1.0, 0.7)
-	if step >= 0 and step < STEPS.size() and STEPS[step]["id"] == "retrait" and _piece:
-		# On juge l'endroit où la pince lâche (l'appendice la suit avec un léger retard)
+	var s := current()
+	if s.is_empty():
+		return
+	if s["kind"] == "lift" and s.has("release"):
+		s["release"].call()
+	elif s["kind"] == "carry":
+		var obj: Node3D = s["object"].call()
+		if obj == null:
+			return
 		if h and h.held:
-			_piece.global_position = h.tip() + _piece_offset
-		_drop_piece()
-
-
-func _tick_ligature() -> void:
-	for h in _active_hands():
-		if h.trigger_just_pressed() and _near(h, patient.appendix_point(0.18), 0.03):
-			patient.ligate()
-			Sfx.play("fil", patient.center, -4.0)
-			_complete_step("Nœud serré")
-			return
-
-
-func _tick_section() -> void:
-	for h in _active_hands():
-		if h.trigger_just_pressed():
-			if _near(h, patient.appendix_point(0.32), 0.03):
-				_do_cut()
-				Sfx.play("ciseaux", patient.center, -2.0)
-				_complete_step("Appendice sectionné")
-				return
-			elif _near(h, patient.center, 0.08):
-				_toast("Coupe sur le repère, au-dessus de la ligature.", false)
-				Sfx.play("erreur", Vector3.INF, -8.0)
-
-
-func _do_cut() -> void:
-	_piece = patient.cut()
-	_piece_home = _piece.global_position
-
-
-func _tick_retrait(delta: float) -> void:
-	if _piece == null:
-		return
-	if _grab_hand:
-		var h := _grab_hand
-		if h.held == null or not h.trigger_down():
-			_release_grab(false)
-			return
-		if h is DesktopHand:
-			(h as DesktopHand).auto_lift = 0.05
-		_piece.global_position = _piece.global_position.lerp(h.tip() + _piece_offset, 1.0 - exp(-delta * 20.0))
-		var flat := Vector2(_piece.global_position.x - tray.dish_center.x, _piece.global_position.z - tray.dish_center.z).length()
-		_ui_progress(1.0 - clampf(flat / 0.5, 0.0, 1.0), "Direction : le haricot")
-		return
-	for h in _active_hands():
-		if h.trigger_just_pressed() and _near(h, _piece.global_position, 0.04):
-			_kill_anim()
-			_grab_hand = h
-			_piece_offset = (_piece.global_position - h.tip()).limit_length(0.02)
-			Sfx.play("prise", _piece.global_position, -12.0, 0.6)
-			h.pulse(0.4, 0.05)
-			return
-
-
-func _drop_piece() -> void:
-	var flat := Vector2(_piece.global_position.x - tray.dish_center.x, _piece.global_position.z - tray.dish_center.z).length()
-	_kill_anim()
-	var tw := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	_anim = tw
-	if flat < (0.11 if is_vr else 0.09):
-		tw.tween_property(_piece, "global_position", tray.dish_center + Vector3.UP * 0.008, 0.35)
-		tw.tween_callback(func() -> void: Sfx.play("pose", tray.dish_center, -6.0, 0.7))
-		_finish_retrait(false)
-		_complete_step("Appendice dans le haricot")
-	else:
-		tw.tween_property(_piece, "global_position", _piece_home, 0.4)
-		_toast("Lâche-le au-dessus du haricot.", false)
-
-
-func _finish_retrait(instant: bool) -> void:
-	if instant and _piece:
-		_piece.global_position = tray.dish_center + Vector3.UP * 0.008
-	# Les écarteurs retournent sur la table, la plaie se referme à moitié
-	for inst in _parked:
-		if instant:
-			inst.parked = false
-			inst.global_transform = inst.tray_transform
+			obj.global_position = h.tip() + _carry_offset
+		var dest: Vector3 = s["dest"].call()
+		var flat := Vector2(obj.global_position.x - dest.x, obj.global_position.z - dest.z).length()
+		_kill_anim()
+		_anim = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		if flat < (0.11 if is_vr else 0.09):
+			_anim.tween_property(obj, "global_position", dest + Vector3.UP * 0.008, 0.35)
+			_anim.tween_callback(func() -> void: Sfx.play("pose", dest, -6.0, 0.7))
+			_done(h, false)
+			_complete_step()
 		else:
-			inst.return_to_tray()
-	_parked.clear()
-	if instant:
-		patient.opening = 0.3
-	else:
-		_tween_opening(0.3, 0.8)
-
-
-func _tick_suture() -> void:
-	for h in _active_hands():
-		if _stitch_i >= STITCH_T.size():
-			return
-		var p := patient.incision_point(STITCH_T[_stitch_i])
-		if h.trigger_just_pressed() and _near(h, p, 0.022):
-			_stitch(false)
-			h.pulse(0.3, 0.05)
-			if _stitch_i >= STITCH_T.size():
-				_complete_step("Peau refermée !")
-			return
-
-
-func _stitch(instant: bool) -> void:
-	patient.add_stitch(STITCH_T[_stitch_i])
-	_stitch_i += 1
-	var left := 0.3 * (1.0 - float(_stitch_i) / STITCH_T.size())
-	if instant:
-		patient.opening = left
-	else:
-		Sfx.play("fil", patient.center, -6.0)
-		_tween_opening(left, 0.4)
-	_ui_progress(float(_stitch_i) / STITCH_T.size(), "Points : %d / 4" % _stitch_i)
-	if _stitch_i >= STITCH_T.size():
-		patient.set_stitched(1.0)
+			_anim.tween_property(obj, "global_position", _carry_home, 0.4)
+			_toast("Lâche-le au-dessus de la cible.", false)
 
 
 ## Saute directement à l'étape n (tests, captures) en appliquant les étapes précédentes.
 func skip_to(n: int) -> void:
 	running = true
-	for i in mini(n, STEPS.size()):
-		match STEPS[i]["id"]:
-			"badigeon":
+	var titles := []
+	for s in steps:
+		titles.append(s["list"])
+	for ui in uis:
+		ui.set_steps(titles)
+	op.on_start()
+	for i in mini(n, steps.size()):
+		step = i
+		var s: Dictionary = steps[i]
+		match s["kind"]:
+			"paint":
 				patient.fill_iodine()
-			"incision":
-				_incision = 1.0
+			"trace":
+				_trace = 1.0
 				patient.incision_progress = 1.0
-				patient.opening = 0.25
-			"ecarteur1":
-				_place_retractor(tray.instruments["langenbeck"], -1.0, true)
-			"ecarteur2":
-				_place_retractor(tray.instruments["roux"], 1.0, true)
-			"saisie":
-				_finish_saisie(true)
-			"ligature":
-				patient.ligate()
-			"section":
-				_do_cut()
-			"retrait":
-				_finish_retrait(true)
-			"suture":
-				_stitch_i = 0
-				for k in STITCH_T.size():
-					_stitch(true)
+			"points":
+				var pts: Array = s["points"].call()
+				for k in pts.size():
+					s["point"].call(k, true)
+		_done(null, true)
 	_enter_step(n)

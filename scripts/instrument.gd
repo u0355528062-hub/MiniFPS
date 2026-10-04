@@ -20,14 +20,19 @@ var _tween: Tween
 var _mode := 0  # 0 = rien, 1 = à utiliser, 2 = survolé
 
 
-static func create(p_id: String, p_label: String, file: String, roll_deg := 0.0, scale_to := 0.0) -> Instrument:
+static func create(p_id: String, p_label: String, file: String, roll_deg := 0.0, scale_to := 0.0, rot := Vector3.ZERO) -> Instrument:
+	var scene: PackedScene = load("res://assets/models/" + file + ".glb")
+	return create_from_node(p_id, p_label, scene.instantiate(), roll_deg, scale_to, rot)
+
+
+## Instrument à partir d'un modèle déjà construit (procédural). Pointe vers +Z.
+static func create_from_node(p_id: String, p_label: String, node: Node3D, roll_deg := 0.0, scale_to := 0.0, rot := Vector3.ZERO) -> Instrument:
 	var inst := Instrument.new()
 	inst.id = p_id
 	inst.label = p_label
 	inst.name = p_id
-	var scene: PackedScene = load("res://assets/models/" + file + ".glb")
-	inst.model = scene.instantiate()
-	inst.model.rotation_degrees.z = roll_deg
+	inst.model = node
+	inst.model.rotation_degrees = rot + Vector3(0, 0, roll_deg)
 	inst.add_child(inst.model)
 	inst._setup(scale_to)
 	return inst

@@ -17,6 +17,7 @@ uniform vec2 inc_b = vec2(0.0, 0.06);
 uniform float incision_progress = 0.0;
 uniform float show_guide = 1.0;
 uniform float opening = 0.0;
+uniform float wound_w = 0.022;
 uniform float stitched = 0.0;
 uniform float iodine_wet = 1.0;
 uniform float bleed = 0.0; // 0..1 : sang qui perle le long de l'incision
@@ -49,7 +50,7 @@ void fragment() {
 
 	// Plaie ouverte : ellipse au contour irrégulier
 	float half_len = len * 0.5 + 0.004;
-	float half_w = max(opening, 0.0001) * 0.022;
+	float half_w = max(opening, 0.0001) * wound_w;
 	float ang = atan(v / half_w, u / half_len);
 	float rs = wound_shape(ang);
 	float ell = ((u * u) / (half_len * half_len) + (v * v) / (half_w * half_w)) / (rs * rs);

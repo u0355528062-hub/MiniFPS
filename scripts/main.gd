@@ -36,37 +36,56 @@ func _ready() -> void:
 	room.name = "Bloc"
 	add_child(room)
 	room.build()
+	# Opération choisie (menu, ou --op=drain / laparotomie / appendicectomie pour les tests)
+	if args.has("op"):
+		Procedure.op_id = args["op"]
+	var op := Operation.create(Procedure.op_id)
+	var spot := op.surgeon_spot
 	patient = Patient.new()
 	patient.name = "Patient"
+	op.configure_patient(patient)
 	add_child(patient)
 	patient.build()
 	tray = InstrumentTray.new()
 	tray.name = "Instruments"
 	add_child(tray)
-	tray.build()
+	tray.build(op)
 
 	monitor = VitalMonitor.new()
 	monitor.name = "Moniteur"
 	add_child(monitor)
 	monitor.build()
+	monitor.heart_rate = op.vitals["hr"]
+	monitor.target_rate = op.vitals["hr"]
+	monitor.spo2 = op.vitals["spo2"]
+	monitor.sys = op.vitals["sys"]
+	monitor.dia = op.vitals["dia"]
 	monitor.position = Vector3(-0.72, 1.8, -0.45)
-	monitor.look_at(Vector3(0.12, 1.55, 0.65), Vector3.UP, true)
+	monitor.look_at(spot + Vector3(0, 1.55, 0.05), Vector3.UP, true)
 
 	panel = GuidePanel.new()
 	panel.name = "PanneauGuide"
 	add_child(panel)
 	panel.build()
-	panel.position = Vector3(0.1, 1.44, -0.52)
+	panel.position = Vector3(spot.x - 0.02, 1.44, spot.z - 1.12)
 	panel.scale = Vector3.ONE * 0.85
-	panel.look_at(Vector3(0.12, 1.62, 0.62), Vector3.UP, true)
+	panel.look_at(spot + Vector3(0, 1.62, 0.02), Vector3.UP, true)
 
 	procedure = Procedure.new()
 	procedure.name = "Procedure"
+	procedure.op = op
 	procedure.patient = patient
 	procedure.tray = tray
 	procedure.monitor = monitor
 	procedure.uis.append(panel.ui)
 	add_child(procedure)
+	op.proc = procedure
+	op.patient = patient
+	op.tray = tray
+	op.monitor = monitor
+	op.root = self
+	op.build_extras()
+	op.define_steps()
 
 	var xr := XRServer.find_interface("OpenXR")
 	var use_vr := xr != null and xr.is_initialized() and not args.has("desktop") and not args.has("autotest")
@@ -79,17 +98,21 @@ func _ready() -> void:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 		vr_rig = VRRig.new()
 		vr_rig.name = "JoueurVR"
+		vr_rig.surgeon_spot = spot
 		add_child(vr_rig)
 		vr_rig.build()
 		procedure.is_vr = true
 		procedure.hands.append_array(vr_rig.hands)
-		vr_rig.position = VRRig.SURGEON_SPOT
+		vr_rig.position = spot
 		vr_rig.continue_pressed.connect(procedure.on_continue)
+		vr_rig.menu_moved.connect(procedure.menu_move)
 	elif args.has("vrmock") or args.has("vrtest") or args.get("chaos", "") == "vr":
 		# Capture de contrôle du rendu VR sans casque : manettes placées à la main
 		vr_rig = VRRig.new()
 		vr_rig.sim = true
+		vr_rig.surgeon_spot = spot
 		add_child(vr_rig)
+		vr_rig.position = spot
 		vr_rig.build()
 		for h in vr_rig.hands:
 			(h as VRHand).sim = true
@@ -98,8 +121,9 @@ func _ready() -> void:
 		for c in [vr_rig.left, vr_rig.right]:
 			c.show_when_tracked = false
 			c.visible = true
-		vr_rig.right.global_transform = Transform3D(Basis.looking_at(Vector3(-0.15, -0.55, -0.6).normalized(), Vector3.UP), Vector3(0.24, 1.3, 0.38))
-		vr_rig.left.global_transform = Transform3D(Basis.looking_at(Vector3(0.2, -0.3, -0.7).normalized(), Vector3.UP), Vector3(-0.08, 1.25, 0.42))
+		var off := spot - Vector3(0.12, 0, 0.6)
+		vr_rig.right.global_transform = Transform3D(Basis.looking_at(Vector3(-0.15, -0.55, -0.6).normalized(), Vector3.UP), Vector3(0.24, 1.3, 0.38) + off)
+		vr_rig.left.global_transform = Transform3D(Basis.looking_at(Vector3(0.2, -0.3, -0.7).normalized(), Vector3.UP), Vector3(-0.08, 1.25, 0.42) + off)
 	elif args.has("autotest"):
 		var bot := AutoBot.new()
 		bot.name = "Robot"
@@ -109,7 +133,7 @@ func _ready() -> void:
 		desk_rig = DesktopRig.new()
 		desk_rig.name = "JoueurEcran"
 		add_child(desk_rig)
-		desk_rig.build()
+		desk_rig.build(spot + Vector3(0, 1.6, 0))
 		procedure.hands.append_array(desk_rig.hands)
 		var hud := DesktopHUD.new()
 		hud.name = "HUD"
@@ -119,6 +143,8 @@ func _ready() -> void:
 		panel.visible = false  # en mode écran, la consigne est en surimpression
 		procedure.hud = hud
 		desk_rig.continue_pressed.connect(procedure.on_continue)
+		desk_rig.menu_moved.connect(procedure.menu_move)
+		desk_rig.menu_number.connect(procedure.menu_select)
 	procedure.setup()
 
 	if args.has("step"):
@@ -134,19 +160,13 @@ func _ready() -> void:
 	if args.has("vrmock") and args.has("hold"):
 		var h: SurgeonHand = vr_rig.hands[1]
 		h.take(tray.instruments[args["hold"]])
-	if args.has("dbg"):
-		await get_tree().create_timer(1.0).timeout
-		for id in ["langenbeck", "roux"]:
-			var inst: Instrument = tray.instruments[id]
-			print(id, " len=", inst.length, " tipL=", inst.tip_local, " tip=", inst.tip_global(), " grip=", inst.grip_global(), " pos=", inst.global_position, " slot=", patient.center)
-		get_tree().quit()
 	if args.has("vrtest"):
 		var vb := VRBot.new()
 		add_child(vb)
 		vb.setup(vr_rig, procedure, patient, tray)
 		await vb.run()
-		if not args.has("shot"):
-			get_tree().quit()
+		get_tree().quit()
+		return
 	if args.has("chaos"):
 		var ct := ChaosTest.new()
 		ct.proc = procedure
@@ -154,46 +174,45 @@ func _ready() -> void:
 		ct.tray = tray
 		add_child(ct)
 		if args["chaos"] == "vr":
-			ct.vr_bot = VRBot.new()
-			add_child(ct.vr_bot)
-			ct.vr_bot.setup(vr_rig, procedure, patient, tray)
+			var vb := VRBot.new()
+			add_child(vb)
+			vb.setup(vr_rig, procedure, patient, tray)
+			ct.bot = vb
 		else:
-			ct.desk_bot = DesktopBot.new()
-			add_child(ct.desk_bot)
-			ct.desk_bot.setup(desk_rig, procedure, patient, tray)
+			var db := DesktopBot.new()
+			add_child(db)
+			db.setup(desk_rig, procedure, patient, tray)
+			ct.bot = db
 		await ct.run(args["chaos"], int(args.get("seed", "1")))
 		get_tree().quit()
+		return
 	if args.has("desktest"):
-		# Partie complète à la souris / au clavier (événements simulés)
 		var db := DesktopBot.new()
 		add_child(db)
 		db.setup(desk_rig, procedure, patient, tray)
 		await get_tree().process_frame
-		db.key(KEY_SPACE)
-		await get_tree().create_timer(0.2).timeout
-		while procedure.step < Procedure.STEPS.size():
-			var s := procedure.step
-			await db.do_step()
-			if procedure.step == s:
-				break
-			print("DESKTEST étape réussie : ", Procedure.STEPS[s]["id"])
-		print("DESKTEST ", "OK" if db.ok and procedure.step >= Procedure.STEPS.size() else "ÉCHEC")
+		await db.run_all()
 		get_tree().quit()
-	if args.has("restarttest"):
-		# Recommencer en fin de partie recharge la scène sans erreur
-		if Procedure.restarts == 0:
-			procedure.skip_to(Procedure.STEPS.size())
-			await get_tree().process_frame
-			procedure.on_continue()
-		else:
-			await get_tree().create_timer(0.5).timeout
-			print("RESTART OK (étape ", procedure.step, ")")
-			get_tree().quit()
+		return
 	if args.has("autotest"):
-		var bot: AutoBot = procedure.hands[0]
-		await bot.run(procedure, patient, tray)
+		var ad := AutoDriver.new()
+		add_child(ad)
+		ad.setup(procedure.hands[0], procedure, patient, tray)
+		await ad.run_all()
 		if not args.has("shot"):
 			get_tree().quit()
+			return
+	if args.has("restarttest"):
+		# Fin de partie -> menu (rechargement de scène) sans erreur
+		if Procedure.restarts == 0:
+			procedure.skip_to(procedure.steps.size())
+			await get_tree().process_frame
+			procedure.on_continue()
+			return
+		await get_tree().create_timer(0.5).timeout
+		print("RESTART OK (étape ", procedure.step, ")")
+		get_tree().quit()
+		return
 	if args.has("shot"):
 		_take_shot()
 

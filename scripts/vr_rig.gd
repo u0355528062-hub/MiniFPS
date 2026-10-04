@@ -7,9 +7,12 @@ extends XROrigin3D
 ## grand, petit, debout ou assis.
 
 signal continue_pressed
+signal menu_moved(delta: int)
 
 const EYE_HEIGHT := 1.62
-const SURGEON_SPOT := Vector3(0.12, 0.0, 0.6)
+
+var surgeon_spot := Vector3(0.12, 0.0, 0.6)
+var _menu_ready := true
 
 var camera: XRCamera3D
 var hands: Array[SurgeonHand] = []
@@ -81,6 +84,13 @@ func _process(delta: float) -> void:
 		global_transform = Transform3D.IDENTITY.translated(pivot) * t * Transform3D.IDENTITY.translated(-pivot) * global_transform
 	elif absf(turn) < 0.3:
 		_snap_ready = true
+	# Stick droit haut / bas : navigation dans le menu
+	var vy := _vec(right, "primary").y + _vec(left, "primary").y
+	if absf(vy) > 0.7 and _menu_ready:
+		_menu_ready = false
+		menu_moved.emit(-1 if vy > 0.0 else 1)
+	elif absf(vy) < 0.3:
+		_menu_ready = true
 	# B / Y : se replacer
 	var rc := _btn(left, "by_button") or _btn(right, "by_button")
 	if rc and not _recenter_was:
@@ -94,7 +104,9 @@ func _process(delta: float) -> void:
 
 
 ## Place la tête du joueur au poste du chirurgien, face à la table, yeux à 1,62 m.
-func recenter(target := SURGEON_SPOT) -> void:
+func recenter(target := Vector3.INF) -> void:
+	if target == Vector3.INF:
+		target = surgeon_spot
 	var head := camera.position
 	var f := -camera.transform.basis.z
 	var yaw := atan2(-f.x, -f.z) if Vector2(f.x, f.z).length() > 0.05 else 0.0

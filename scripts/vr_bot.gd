@@ -1,16 +1,12 @@
 class_name VRBot
-extends Node
-## Test robot de la VR sans casque : pilote les vraies mains VR (VRHand) en déplaçant les
-## manettes et en simulant grip / gâchette. `run` joue un scénario complet avec maladresses ;
-## `do_step` sait terminer l'étape en cours depuis n'importe quel état (utilisé par le test chaos).
+extends BotDriver
+## Robot de test VR sans casque : pilote les vraies mains VR (VRHand) en déplaçant les manettes et
+## en simulant grip / gâchette. `run` ajoute des maladresses volontaires à la partie complète.
 
 var rig: VRRig
-var proc: Procedure
-var patient: Patient
-var tray: InstrumentTray
 var R: VRHand
 var L: VRHand
-var ok := true
+var active: VRHand  ## main qui opère
 
 
 func setup(p_rig: VRRig, p_proc: Procedure, p_patient: Patient, p_tray: InstrumentTray) -> void:
@@ -18,39 +14,22 @@ func setup(p_rig: VRRig, p_proc: Procedure, p_patient: Patient, p_tray: Instrume
 	proc = p_proc
 	patient = p_patient
 	tray = p_tray
+	prefix = "VRTEST"
 	R = rig.hands[1]
 	L = rig.hands[0]
+	active = R
 	for h in [R, L]:
 		h.sim = true
 		h.controller.show_when_tracked = false
 
 
-func fail(msg: String) -> void:
-	print("VRTEST ÉCHEC : ", msg)
-	ok = false
-
-
-func _frames(n := 1) -> void:
-	for i in n:
-		await get_tree().process_frame
-
-
-func _wait(sec: float) -> void:
-	await get_tree().create_timer(sec).timeout
+func _home(h: VRHand) -> Vector3:
+	return rig.surgeon_spot + (Vector3(0.18, 1.3, -0.15) if h == R else Vector3(-0.22, 1.3, -0.15))
 
 
 func _aim(h: VRHand, pos: Vector3) -> void:
 	# Manette tenue vers l'avant et le bas, comme au-dessus du champ
 	h.controller.global_transform = Transform3D(Basis.looking_at(Vector3(0.0, -0.45, -0.9).normalized(), Vector3.UP), pos)
-
-
-## Amène la pointe de l'instrument tenu sur `target` (en déplaçant la manette).
-func _tip_to(h: VRHand, target: Vector3, frames := 12) -> void:
-	for i in frames:
-		if h.held:
-			var err := target - h.held.tip_global()
-			h.controller.global_position += err * (0.5 if i < frames - 3 else 1.0)
-		await _frames(1)
 
 
 func _grip_press(h: VRHand) -> void:
@@ -60,13 +39,13 @@ func _grip_press(h: VRHand) -> void:
 	await _frames(3)
 
 
-func _grab(h: VRHand, inst: Instrument, by_ray := false) -> void:
+func grab_with(h: VRHand, inst: Instrument, by_ray := false) -> void:
 	if h.held == inst:
 		return
 	if h.held:
-		await _grip_press(h)  # repose d'abord
+		await _grip_press(h)
 	if by_ray:
-		_aim(h, Vector3(0.25, 1.35, 0.85))
+		_aim(h, rig.surgeon_spot + Vector3(0.13, 1.35, 0.25))
 		await _frames(2)
 		var axis := h._hold_axis()
 		h.controller.global_position += inst.global_position - (h.grip_point() + axis * 0.45)
@@ -80,171 +59,112 @@ func _grab(h: VRHand, inst: Instrument, by_ray := false) -> void:
 		fail("impossible de prendre %s (%s)" % [inst.id, "rayon" if by_ray else "main"])
 
 
-func _put_back(h: VRHand) -> void:
-	if h.held:
-		await _grip_press(h)
+func take(inst_id: String) -> void:
+	await grab_with(active, tray.instruments[inst_id])
 
 
-func _click(h: VRHand) -> void:
-	h.sim_trigger = 1.0
-	await _frames(3)
-	h.sim_trigger = 0.0
-	await _frames(3)
-
-
-## Remet les deux mains dans un état neutre (gâchettes relâchées, instruments reposés).
-func cleanup() -> void:
+func put_back_all() -> void:
 	for h in [R, L]:
 		h.sim_trigger = 0.0
 		h.sim_grip = 0.0
-	await _frames(3)
+	await _frames(2)
 	for h in [R, L]:
-		await _put_back(h)
-	_aim(R, Vector3(0.3, 1.3, 0.45))
-	_aim(L, Vector3(-0.1, 1.3, 0.45))
-	await _wait(0.8)  # laisse finir les animations (retour d'instrument, appendice qui retombe)
+		if h.held:
+			await _grip_press(h)
+	_aim(R, _home(R))
+	_aim(L, _home(L))
 
 
-## Termine l'étape en cours, quel que soit l'état laissé par le joueur.
-func do_step() -> void:
-	var s := proc.step
-	if s < 0 or s >= Procedure.STEPS.size():
-		return
-	await cleanup()
-	var id: String = Procedure.STEPS[s]["id"]
-	var I := tray.instruments
-	match id:
-		"badigeon":
-			await _grab(R, I["mikulicz"])
-			_aim(R, R.controller.global_position)
-			R.sim_trigger = 1.0
-			var c := patient.center
-			for row in 13:
-				for k in 16:
-					var x := c.x - 0.08 + (k if row % 2 == 0 else 15 - k) * 0.0107
-					var z := c.z - 0.09 + row * 0.015
-					await _tip_to(R, Vector3(x, Patient.body_height(x, z) + 0.004, z), 2)
-					if proc.step != s:
-						break
-				if proc.step != s:
-					break
-			R.sim_trigger = 0.0
-		"incision":
-			await _grab(R, I["bistouri"])
-			# Reprend à l'endroit où l'incision s'est arrêtée
-			var t0 := maxf(proc._incision, 0.0)
-			await _tip_to(R, patient.incision_point(t0) + Vector3.UP * 0.003)
-			R.sim_trigger = 1.0
-			for i in 41:
-				await _tip_to(R, patient.incision_point(lerpf(t0, 1.0, i / 40.0)) + Vector3.UP * 0.002, 2)
-				if proc.step != s:
-					break
-			R.sim_trigger = 0.0
-		"ecarteur1", "ecarteur2":
-			await _grab(R, I["langenbeck" if id == "ecarteur1" else "roux"])
-			await _tip_to(R, patient.retractor_slot(-1.0 if id == "ecarteur1" else 1.0))
-			await _click(R)
-		"saisie":
-			await _grab(R, I["debakey"])
-			await _tip_to(R, patient.appendix_tip)
-			R.sim_trigger = 1.0
-			await _frames(2)
-			for i in 60:
-				R.controller.global_position += Vector3.UP * 0.002
-				await _frames(1)
-				if proc.step != s:
-					break
-			R.sim_trigger = 0.0
-		"ligature":
-			await _grab(L, I["overholt"])
-			await _tip_to(L, patient.appendix_point(0.18))
-			await _click(L)
-		"section":
-			await _grab(L, I["ciseaux"])
-			await _tip_to(L, patient.appendix_point(0.32))
-			await _click(L)
-		"retrait":
-			await _grab(R, I["debakey"])
-			await _wait(0.6)
-			await _tip_to(R, proc._piece.global_position)
-			R.sim_trigger = 1.0
-			await _frames(3)
-			await _tip_to(R, tray.dish_center + Vector3.UP * 0.06, 20)
-			R.sim_trigger = 0.0
-		"suture":
-			await _grab(R, I["porte_aiguille"])
-			for k in range(proc._stitch_i, Procedure.STITCH_T.size()):
-				await _tip_to(R, patient.incision_point(Procedure.STITCH_T[k]) + Vector3.UP * 0.002, 10)
-				await _click(R)
-	await _frames(5)
-	if proc.step == s:
-		fail("étape %s non terminée depuis l'état courant" % id)
+func tip_to(p: Vector3, frames_n := 12) -> void:
+	for i in frames_n:
+		if active.held:
+			var err := p - active.held.tip_global()
+			active.controller.global_position += err * (0.5 if i < frames_n - 3 else 1.0)
+		await _frames(1)
 
 
-## Scénario complet avec maladresses volontaires.
+func trigger(down: bool) -> void:
+	active.sim_trigger = 1.0 if down else 0.0
+
+
+func held_id() -> String:
+	return active.held.id if active.held else ""
+
+
+func cleanup() -> void:
+	await super.cleanup()
+	active = R
+
+
+## Partie complète + maladresses volontaires (mauvais instrument, prise au rayon, lâcher,
+## objet lâché loin de la cible, passage de main à main), puis recentrage assis.
 func run() -> void:
-	# Recentrage : tête n'importe où, tournée de 40°, yeux à 1,20 m (joueur assis)
 	rig.camera.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(40.0)), Vector3(0.3, 1.2, 0.1))
 	rig.recenter()
 	await _frames(1)
 	var cam := rig.camera.global_transform
-	if cam.origin.distance_to(Vector3(0.12, 1.62, 0.6)) > 0.01 or (-cam.basis.z).dot(Vector3.FORWARD) < 0.99:
+	var want := rig.surgeon_spot + Vector3(0, 1.62, 0)
+	if cam.origin.distance_to(want) > 0.01 or (-cam.basis.z).dot(Vector3.FORWARD) < 0.99:
 		fail("recentrage %s %s" % [cam.origin, -cam.basis.z])
 	else:
 		print("VRTEST recentrage OK (assis, tourné)")
 	rig.camera.transform = Transform3D.IDENTITY
-	rig.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.12, 0.0, 0.6))
-	_aim(R, Vector3(0.3, 1.3, 0.45))
-	_aim(L, Vector3(-0.1, 1.3, 0.45))
+	rig.global_transform = Transform3D(Basis.IDENTITY, rig.surgeon_spot)
+	_aim(R, _home(R))
+	_aim(L, _home(L))
 	await _frames(5)
-	proc.on_continue()
-	var I := tray.instruments
-	for s in Procedure.STEPS.size():
-		var id: String = Procedure.STEPS[s]["id"]
-		match id:
-			"badigeon":
-				# Mauvais instrument d'abord (1 erreur attendue)
-				await _grab(R, I["bistouri"])
-				await _put_back(R)
-			"incision":
+	await start()
+	var expected_errors := 0
+	for si in proc.steps.size():
+		var s: Dictionary = proc.steps[si]
+		var others := tray.ordered.filter(func(i: Instrument) -> bool: return i.id != s["inst"] and not i.parked)
+		match s["kind"]:
+			"paint":
+				if si == 0 and not others.is_empty():
+					# Mauvais instrument d'abord (1 erreur attendue)
+					await grab_with(R, others[0])
+					await _grip_press(R)
+					expected_errors += 1
+			"trace":
 				# Prise au rayon
-				await _grab(R, I["bistouri"], true)
-				await _put_back(R)
-			"saisie":
-				# On lâche en cours de route, l'appendice retombe
-				await _grab(R, I["debakey"])
-				await _tip_to(R, patient.appendix_tip)
+				await grab_with(R, tray.instruments[s["inst"]], true)
+				await _grip_press(R)
+			"lift":
+				# On lâche en cours de route : ça retombe
+				await grab_with(R, tray.instruments[s["inst"]])
+				await tip_to(s["target"].call())
 				R.sim_trigger = 1.0
 				for i in 8:
 					R.controller.global_position += Vector3.UP * 0.002
 					await _frames(1)
 				R.sim_trigger = 0.0
 				await _wait(0.9)
-			"retrait":
-				# Lâché loin du haricot : il revient à sa place
-				await _grab(R, I["debakey"])
-				await _tip_to(R, proc._piece.global_position)
+			"carry":
+				# Lâché loin de la cible : il revient à sa place
+				await _wait(0.6)
+				await grab_with(R, tray.instruments[s["inst"]])
+				await tip_to(s["object"].call().global_position)
 				R.sim_trigger = 1.0
 				await _frames(3)
-				await _tip_to(R, Vector3(0.3, 1.25, -0.2), 12)
+				await tip_to(rig.surgeon_spot + Vector3(0.2, 1.25, -0.8), 12)
 				R.sim_trigger = 0.0
 				await _wait(0.7)
-				if proc.step != s:
-					fail("lâché hors du haricot mais étape validée")
-			"suture":
-				# Passage de main à main
-				await _grab(R, I["porte_aiguille"])
+				if proc.step != si:
+					fail("lâché loin de la cible mais étape validée")
+			"points":
+				# Passage de main à main puis la main gauche termine
+				await grab_with(R, tray.instruments[s["inst"]])
 				L.controller.global_position += R.held.grip_global() - L.grip_point()
 				await _frames(2)
 				await _grip_press(L)
-				if L.held == null or L.held.id != "porte_aiguille" or R.held != null:
+				if L.held == null or L.held.id != s["inst"] or R.held != null:
 					fail("passage de main à main")
 		await do_step()
-		print("VRTEST étape réussie : ", id)
+		print("VRTEST étape réussie : ", s["id"])
 	await cleanup()
 	for inst in tray.ordered:
-		if inst.global_position.distance_to(inst.tray_transform.origin) > 0.01:
+		if not inst.parked and inst.global_position.distance_to(inst.tray_transform.origin) > 0.01:
 			fail("%s n'est pas revenu sur la table" % inst.id)
-	if proc.errors != 1:
-		fail("1 erreur attendue, %d comptées" % proc.errors)
-	print("VRTEST ", "OK" if ok else "ÉCHEC", " — erreurs : ", proc.errors)
+	if proc.errors != expected_errors:
+		fail("%d erreur(s) attendue(s), %d comptée(s)" % [expected_errors, proc.errors])
+	print("VRTEST ", "OK" if ok and proc.step >= proc.steps.size() else "ÉCHEC", " — ", proc.op.name, " — erreurs : ", proc.errors)

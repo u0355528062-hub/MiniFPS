@@ -2,20 +2,10 @@ class_name InstrumentTray
 extends Node3D
 ## Table de Mayo avec champ stérile et instruments rangés, haricot posé sur les jambes du patient.
 
-const MAYO_POS := Vector3(0.62, 0.0, 0.56)
 const TRAY_Y := 1.004
 
-## id, nom affiché, fichier, roulis (pour poser à plat), longueur visée (0 = taille réelle)
-const CATALOG := [
-	["mikulicz", "Pince à badigeon", "pince_mikulicz", 0.0, 0.0],
-	["bistouri", "Bistouri lame 15", "manche_bistouri", 0.0, 0.0],
-	["langenbeck", "Écarteur de Langenbeck", "ecarteur_langenbeck", 0.0, 0.0],
-	["roux", "Écarteur de Roux", "ecarteur_roux", 0.0, 0.0],
-	["debakey", "Pince De Bakey", "pince_debakey", 90.0, 0.0],
-	["overholt", "Overholt + fil de ligature", "clamp_overholt", 0.0, 0.0],
-	["ciseaux", "Ciseaux de Metzenbaum", "ciseaux_metzenbaum", 0.0, 0.19],
-	["porte_aiguille", "Porte-aiguille + fil", "porte_aiguille", 0.0, 0.19],
-]
+## Position de la table de Mayo (dépend de l'opération : toujours à droite du chirurgien)
+static var MAYO_POS := Vector3(0.62, 0.0, 0.56)
 
 var instruments: Dictionary = {}  # id -> Instrument
 var ordered: Array[Instrument] = []
@@ -25,7 +15,8 @@ var dish_center: Vector3
 var _steel := MeshUtil.mat(Color(0.86, 0.88, 0.9), 0.18, 1.0)
 
 
-func build() -> void:
+func build(op: Operation) -> void:
+	MAYO_POS = op.tray_pos
 	var mayo: PackedScene = load("res://assets/models/table_mayo.glb")
 	var m: Node3D = mayo.instantiate()
 	m.position = MAYO_POS
@@ -42,13 +33,18 @@ func build() -> void:
 	cloth.material_override = drape
 	add_child(cloth)
 
-	var n := CATALOG.size()
+	var n: int = op.catalog.size()
 	for i in n:
-		var c: Array = CATALOG[i]
-		var inst := Instrument.create(c[0], c[1], c[2], c[3], c[4])
+		var c: Array = op.catalog[i]
+		var rot: Vector3 = c[5] if c.size() > 5 else Vector3.ZERO
+		var inst: Instrument
+		if String(c[2]).begins_with("proc:"):
+			inst = Instrument.create_from_node(c[0], c[1], ProcInstruments.build(String(c[2]).substr(5)), c[3], c[4], rot)
+		else:
+			inst = Instrument.create(c[0], c[1], c[2], c[3], c[4], rot)
 		add_child(inst)
 		_decorate(inst)
-		var x := MAYO_POS.x - 0.2 + 0.4 * i / (n - 1)
+		var x := MAYO_POS.x - 0.2 + 0.4 * i / maxi(n - 1, 1)
 		# À plat, pointe vers la table d'opération (-Z), légèrement en éventail
 		var b := Basis(Vector3.UP, PI + deg_to_rad((i - n * 0.5) * 1.5))
 		var half := inst.length * 0.5
@@ -57,7 +53,8 @@ func build() -> void:
 		instruments[inst.id] = inst
 		ordered.append(inst)
 
-	_build_dish()
+	if op.with_dish:
+		_build_dish()
 	_props()
 
 
