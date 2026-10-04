@@ -65,7 +65,9 @@ func build() -> void:
 func _decorate(inst: Instrument) -> void:
 	match inst.id:
 		"bistouri":
-			inst.attach_tip_part(_blade())
+			var blade := _blade()
+			inst.attach_tip_part(blade)
+			inst.set_meta("blade_mat", blade.material_override)
 			# La pointe effective est au bout de la lame
 			inst.tip_local += Vector3(0, 0, 0.034)
 		"mikulicz":

@@ -235,7 +235,22 @@ def fibrin():
     save_gray("blood.png", b)
 
 
+# ------------------------------------------------------------------ Sol vinyle moucheté (tuile 1 m) et murs
+def room():
+    n = 1024
+    speck = dots(n, 9000, 0.6, 1.4, 150)
+    speck2 = dots(n, 2500, 0.6, 1.2, 151)
+    wear = fbm(n, 60, 4, 152)
+    v = 0.92 + 0.08 * (fbm(n, 4, 3, 153) - 0.5) - 0.18 * speck + 0.12 * speck2
+    save_gray("floor_detail.png", np.clip(v * (0.95 + 0.08 * (wear - 0.5)), 0, 1))
+    save_gray("floor_rough.png", 0.2 + 0.25 * wear + 0.1 * speck)
+    h = (fbm(n, 3, 3, 154) - 0.5) * 0.3 + (wear - 0.5) * 0.4
+    save_rgb("floor_normal.png", normal_from_height(blur(h, 1.0), 1.0))
+    save_gray("wall_detail.png", 0.94 + 0.06 * (fbm(512, 20, 4, 155) - 0.5) * 2)
+
+
 if __name__ == "__main__":
+    room()
     skin()
     fabric()
     vessels()

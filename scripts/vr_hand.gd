@@ -10,6 +10,10 @@ var controller: XRController3D
 var hand_model: Node3D
 var ray: MeshInstance3D
 var _grip_was := false
+## Simulation (test robot sans casque) : valeurs d'entrée imposées
+var sim := false
+var sim_trigger := 0.0
+var sim_grip := 0.0
 var _ray_mat := StandardMaterial3D.new()
 
 
@@ -39,15 +43,24 @@ func setup(c: XRController3D, left: bool) -> void:
 
 
 func trigger_value() -> float:
+	if sim:
+		return sim_trigger
 	return controller.get_float("trigger") if controller else 0.0
 
 
 func _grip() -> bool:
+	if sim:
+		return sim_grip > 0.6
 	return controller.get_float("grip") > 0.6 if controller else false
 
 
+## Point tenu dans la main (là où se place le point de prise de l'instrument).
+func grip_point() -> Vector3:
+	return controller.global_position + _hold_axis() * 0.035 - controller.global_basis.y * 0.01
+
+
 func pulse(amplitude := 0.5, duration := 0.05) -> void:
-	if controller:
+	if controller and not sim:
 		controller.trigger_haptic_pulse("haptic", 0.0, amplitude, duration, 0.0)
 
 
@@ -63,7 +76,7 @@ func _process(_delta: float) -> void:
 	global_transform = controller.global_transform
 	_update_edges()
 	var axis := _hold_axis()
-	var grip_point := controller.global_position + axis * 0.035 - controller.global_basis.y * 0.01
+	var grip_point := grip_point()
 
 	# Survol : instrument le plus proche de la main, sinon celui visé par le rayon
 	var best: Instrument = null

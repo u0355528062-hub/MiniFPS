@@ -54,6 +54,7 @@ var marker: TargetMarker
 var marker2: TargetMarker
 var _wrong_counted := false
 var _sound_cd := 0.0
+var _hint_cd := 0.0
 var _incision := 0.0
 var _grab_hand: SurgeonHand
 var _piece: Node3D
@@ -61,6 +62,7 @@ var _piece_home: Vector3
 var _piece_offset := Vector3.ZERO
 var _stitch_i := 0
 var _parked: Array[Instrument] = []
+var _anim: Tween  ## animation de l'appendice en cours (annulée si on le reprend)
 
 
 func setup() -> void:
@@ -105,7 +107,7 @@ func _show_intro() -> void:
 	step = -1
 	var go := "Appuie sur A (manette droite) pour commencer." if is_vr else "Appuie sur ESPACE pour commencer."
 	_ui_step("Bienvenue au bloc",
-		"Léa, 24 ans : appendicite aiguë confirmée au scanner. Elle est endormie et installée. Tu vas faire l'appendicectomie, étape par étape. Suis les consignes et les repères lumineux.\n" + go, "")
+		"Lucas, 24 ans : appendicite aiguë confirmée au scanner. Il est endormi et installé. Tu vas faire l'appendicectomie, étape par étape. Suis les consignes et les repères lumineux.\n" + go, "")
 
 
 ## Bouton A / Espace
@@ -171,9 +173,12 @@ func _finish() -> void:
 # ---------------------------------------------------------------- Prendre / reposer
 
 func _on_take(hand: SurgeonHand, inst: Instrument) -> void:
+	# Passer un instrument d'une main à l'autre
 	for h in hands:
 		if h != hand and h.held == inst:
-			return
+			if _grab_hand == h:
+				_release_grab(true)
+			h.release_parked()
 	if inst in _parked:
 		_toast("Cet écarteur tient la plaie ouverte : laisse-le en place.", false)
 		return
@@ -193,7 +198,7 @@ func _on_put_back(hand: SurgeonHand) -> void:
 	if hand.held == null:
 		return
 	if _grab_hand == hand:
-		_release_grab(false)
+		_release_grab(true)
 	Sfx.play("pose", hand.held.global_position, -8.0)
 	hand.put_back()
 
@@ -204,6 +209,7 @@ func _process(delta: float) -> void:
 	if running:
 		elapsed += delta
 	_sound_cd -= delta
+	_hint_cd -= delta
 	for ui in uis:
 		ui.set_status(elapsed, errors)
 
@@ -356,9 +362,17 @@ func _tick_incision(_delta: float) -> void:
 				_finish_incision()
 				_complete_step("Belle incision !")
 				return
+		elif h.trigger_down() and on_line and _skin_contact(p, 0.014) and _incision < 0.03 and t > 0.25 and _hint_cd <= 0.0:
+			_toast("Commence au point « DÉPART », puis va vers « ARRIVÉE ».", false)
+			_hint_cd = 3.0
 
 
 func _finish_incision() -> void:
+	# Un peu de sang sur la lame
+	var blade_mat: StandardMaterial3D = tray.instruments["bistouri"].get_meta("blade_mat", null)
+	if blade_mat:
+		blade_mat.albedo_color = Color(0.62, 0.22, 0.2)
+		blade_mat.metallic = 0.6
 	_incision = 1.0
 	patient.incision_progress = 1.0
 	monitor.stress(4.0)
@@ -430,6 +444,7 @@ func _tick_saisie(delta: float) -> void:
 		return
 	for h in _active_hands():
 		if h.trigger_just_pressed() and _near(h, patient.appendix_tip, 0.03):
+			_kill_anim()
 			_grab_hand = h
 			Sfx.play("prise", patient.appendix_tip, -12.0, 0.6)
 			h.pulse(0.4, 0.05)
@@ -445,6 +460,12 @@ func _finish_saisie(instant: bool) -> void:
 		tw.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(lifted_tip(), k)), 0.0, 1.0, 0.5)
 
 
+func _kill_anim() -> void:
+	if _anim and _anim.is_valid():
+		_anim.kill()
+	_anim = null
+
+
 func _release_grab(spring_back: bool) -> void:
 	var h := _grab_hand
 	_grab_hand = null
@@ -452,8 +473,9 @@ func _release_grab(spring_back: bool) -> void:
 		(h as DesktopHand).auto_lift = 0.0
 	if spring_back and step >= 0 and STEPS[step]["id"] == "saisie":
 		var from := patient.appendix_tip
-		var tw := create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-		tw.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(patient.appendix_rest_tip, k)), 0.0, 1.0, 0.7)
+		_kill_anim()
+		_anim = create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+		_anim.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(patient.appendix_rest_tip, k)), 0.0, 1.0, 0.7)
 	if step >= 0 and step < STEPS.size() and STEPS[step]["id"] == "retrait" and _piece:
 		_drop_piece()
 
@@ -501,6 +523,7 @@ func _tick_retrait(delta: float) -> void:
 		return
 	for h in _active_hands():
 		if h.trigger_just_pressed() and _near(h, _piece.global_position, 0.04):
+			_kill_anim()
 			_grab_hand = h
 			_piece_offset = (_piece.global_position - h.tip()).limit_length(0.02)
 			Sfx.play("prise", _piece.global_position, -12.0, 0.6)
@@ -510,7 +533,9 @@ func _tick_retrait(delta: float) -> void:
 
 func _drop_piece() -> void:
 	var flat := Vector2(_piece.global_position.x - tray.dish_center.x, _piece.global_position.z - tray.dish_center.z).length()
+	_kill_anim()
 	var tw := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_anim = tw
 	if flat < (0.11 if is_vr else 0.09):
 		tw.tween_property(_piece, "global_position", tray.dish_center + Vector3.UP * 0.008, 0.35)
 		tw.tween_callback(func() -> void: Sfx.play("pose", tray.dish_center, -6.0, 0.7))

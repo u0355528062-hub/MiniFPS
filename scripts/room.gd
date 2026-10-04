@@ -24,6 +24,8 @@ func _room_mat(kind: int, tint: Color) -> ShaderMaterial:
 	m.shader = room_shader
 	m.set_shader_parameter("kind", kind)
 	m.set_shader_parameter("tint", tint)
+	for t in ["floor_detail", "floor_rough", "floor_normal", "wall_detail"]:
+		m.set_shader_parameter(t, Tex.get_tex(t))
 	return m
 
 

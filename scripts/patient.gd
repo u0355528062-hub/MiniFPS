@@ -180,34 +180,67 @@ func _build_drapes() -> void:
 
 
 func _build_head() -> void:
-	# Tête (derrière l'arceau, visible côté anesthésie), bonnet et masque
-	var skin := MeshUtil.mat(Color(0.82, 0.62, 0.52), 0.55)
-	var head := MeshInstance3D.new()
-	var sp := SphereMesh.new()
-	sp.radius = 0.095
-	sp.height = 0.2
-	head.mesh = sp
-	head.material_override = skin
-	head.position = Vector3(-0.84, TABLE_TOP + 0.1, 0)
-	head.scale = Vector3(1.05, 0.95, 0.85)
-	add_child(head)
+	# Buste scanné (Lee Perry-Smith, Infinite-Realities, CC BY 3.0) allongé, côté anesthésie
+	var scene: PackedScene = load("res://assets/models/tete_patient.glb")
+	var bust: Node3D = scene.instantiate()
+	bust.name = "Tete"
+	bust.position = Vector3(-0.71, TABLE_TOP + 0.004, 0.0)
+	add_child(bust)
+	var skin := StandardMaterial3D.new()
+	skin.albedo_texture = Tex.get_tex_any("res://assets/textures/head_albedo.jpg")
+	skin.normal_enabled = true
+	skin.normal_texture = Tex.get_tex_any("res://assets/textures/head_normal.jpg")
+	skin.normal_scale = 0.8
+	skin.roughness = 0.62
+	skin.subsurf_scatter_enabled = true
+	skin.subsurf_scatter_strength = 0.35
+	skin.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	var nose := bust.global_position + Vector3.UP * 0.2
+	for mi in _meshes_in(bust):
+		mi.material_override = skin
+		# Bout du nez = point le plus haut : sert de repère pour placer sonde et pansements
+		var verts: PackedVector3Array = mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var best := -1.0e9
+		for v in verts:
+			var w: Vector3 = mi.global_transform * v
+			if w.y > best and absf(w.z) < 0.05:
+				best = w.y
+				nose = w
+	var white := MeshUtil.mat(Color(0.93, 0.93, 0.9), 0.7)
+	# Pansements occlusifs sur les yeux
+	for side in [-1.0, 1.0]:
+		var tape := MeshUtil.box_instance(self, Vector3(0.028, 0.002, 0.02), nose + Vector3(-0.042, -0.018, 0.033 * side), white, "Pansement")
+		tape.rotation_degrees = Vector3(12.0 * side, 0, -18)
+	# Sonde d'intubation : de la bouche vers le respirateur
+	var mouth := nose + Vector3(0.045, -0.022, 0.0)
+	var tube_pts := MeshUtil.bezier(mouth, mouth + Vector3(0.0, 0.07, 0.0), mouth + Vector3(-0.2, 0.14, -0.15), Vector3(-1.2, 1.12, -0.32), 40)
+	var tr := PackedFloat32Array()
+	tr.resize(tube_pts.size())
+	tr.fill(0.0065)
+	var tube := MeshInstance3D.new()
+	tube.name = "SondeIntubation"
+	tube.mesh = MeshUtil.tube(tube_pts, tr, 12)
+	var plastic := StandardMaterial3D.new()
+	plastic.albedo_color = Color(0.85, 0.92, 0.95, 0.45)
+	plastic.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	plastic.roughness = 0.12
+	plastic.metallic_specular = 0.8
+	tube.material_override = plastic
+	add_child(tube)
+	MeshUtil.box_instance(self, Vector3(0.016, 0.003, 0.07), mouth + Vector3(0.0, 0.004, 0.0), white, "Sparadrap")
+	MeshUtil.cylinder_instance(self, 0.011, 0.03, mouth + Vector3(0.0, 0.03, 0.0), MeshUtil.mat(Color(0.2, 0.45, 0.85), 0.3), "Raccord")
+	# Charlotte (bonnet) bleue sur le crâne
 	var cap := MeshInstance3D.new()
 	var cs := SphereMesh.new()
-	cs.radius = 0.1
-	cs.height = 0.2
+	cs.radius = 1.0
+	cs.height = 2.0
 	cs.is_hemisphere = true
 	cap.mesh = cs
-	cap.material_override = MeshUtil.mat(Color(0.3, 0.5, 0.65), 0.9)
-	cap.position = Vector3(-0.88, TABLE_TOP + 0.1, 0)
-	cap.rotation_degrees.z = 90
+	cap.material_override = Tex.drape(Color(0.2, 0.42, 0.6))
+	cap.position = nose + Vector3(-0.135, -0.1, 0.0)
+	cap.basis = Basis(Vector3(0, 0, 1), deg_to_rad(90)).scaled(Vector3(1, 1, 1))
+	cap.scale = Vector3(0.075, 0.1, 0.085)
 	add_child(cap)
-	var mask_scene: PackedScene = load("res://assets/models/masque.glb")
-	if mask_scene:
-		var mask: Node3D = mask_scene.instantiate()
-		mask.position = Vector3(-0.8, TABLE_TOP + 0.19, 0)
-		mask.rotation_degrees = Vector3(0, 90, 0)
-		add_child(mask)
-	MeshUtil.cylinder_instance(self, 0.05, 0.1, Vector3(-0.72, TABLE_TOP + 0.08, 0), skin, "Cou").rotation_degrees.z = 90
 
 
 func _build_skin() -> void:

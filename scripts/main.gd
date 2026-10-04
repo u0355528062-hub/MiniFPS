@@ -79,13 +79,16 @@ func _ready() -> void:
 		vr_rig.build()
 		procedure.is_vr = true
 		procedure.hands.append_array(vr_rig.hands)
-		vr_rig.position = Vector3(0.12, 0, 0.62)
-		get_tree().create_timer(1.0).timeout.connect(func() -> void: vr_rig.recenter())
-	elif args.has("vrmock"):
+		vr_rig.position = VRRig.SURGEON_SPOT
+		vr_rig.continue_pressed.connect(procedure.on_continue)
+	elif args.has("vrmock") or args.has("vrtest"):
 		# Capture de contrôle du rendu VR sans casque : manettes placées à la main
 		vr_rig = VRRig.new()
+		vr_rig.sim = true
 		add_child(vr_rig)
 		vr_rig.build()
+		for h in vr_rig.hands:
+			(h as VRHand).sim = true
 		procedure.is_vr = true
 		procedure.hands.append_array(vr_rig.hands)
 		for c in [vr_rig.left, vr_rig.right]:
@@ -127,6 +130,13 @@ func _ready() -> void:
 			var inst: Instrument = tray.instruments[id]
 			print(id, " len=", inst.length, " tipL=", inst.tip_local, " tip=", inst.tip_global(), " grip=", inst.grip_global(), " pos=", inst.global_position, " slot=", patient.center)
 		get_tree().quit()
+	if args.has("vrtest"):
+		var vb := VRBot.new()
+		vb.rig = vr_rig
+		add_child(vb)
+		await vb.run(procedure, patient, tray)
+		if not args.has("shot"):
+			get_tree().quit()
 	if args.has("autotest"):
 		var bot: AutoBot = procedure.hands[0]
 		await bot.run(procedure, patient, tray)
@@ -134,16 +144,6 @@ func _ready() -> void:
 			get_tree().quit()
 	if args.has("shot"):
 		_take_shot()
-
-
-func _process(_delta: float) -> void:
-	# A / X sur les manettes = continuer
-	if vr_rig:
-		for c in [vr_rig.left, vr_rig.right]:
-			var pressed: bool = c.is_button_pressed("ax_button")
-			if pressed and not c.get_meta("ax_was", false):
-				procedure.on_continue()
-			c.set_meta("ax_was", pressed)
 
 
 func _build_environment() -> void:
