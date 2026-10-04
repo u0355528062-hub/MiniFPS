@@ -5,7 +5,7 @@ extends RefCounted
 ## inject, retract, spread, lift, ligate, cut, carry, suture, insert, hold, place.
 
 ## Opérations proposées dans le menu
-const ALL := ["appendicectomie", "drain", "laparotomie", "abces"]
+const ALL := ["appendicectomie", "drain", "laparotomie", "abces", "canal"]
 
 var id := ""
 var name := ""
@@ -39,6 +39,8 @@ static func create(op_id: String) -> Operation:
 			return OpLaparo.new()
 		"abces":
 			return OpAbces.new()
+		"canal":
+			return OpCanal.new()
 		_:
 			return OpAppendix.new()
 

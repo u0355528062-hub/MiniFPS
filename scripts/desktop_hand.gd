@@ -40,7 +40,7 @@ func _aim_point(mouse: Vector2) -> Vector3:
 	var step := 0.004
 	for i in 225:  # 90 cm : portée de bras
 		p += dir * step
-		if p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.3:
+		if p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.5:
 			if p.y <= Patient.body_height(p.x, p.z):
 				# Affinage par dichotomie : précision ~0,1 mm sur la peau
 				var lo := p - dir * step

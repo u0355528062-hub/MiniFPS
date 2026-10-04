@@ -12,6 +12,8 @@ static func build(kind: String) -> Node3D:
 			return _gosset_closed()
 		"meche":
 			return _meche()
+		"endoscope":
+			return _endoscope()
 	return Node3D.new()
 
 
@@ -184,4 +186,50 @@ static func _meche() -> Node3D:
 	gm.normal_enabled = false
 	g.material_override = gm
 	gauze.add_child(g)
+	return root
+
+
+## Endoscope du canal carpien (type Agee) : poignée en plastique gris, fine canule à fenêtre au bout,
+## petite lame (« Lame ») qui sort par la fenêtre quand on serre la gâchette, câble de la caméra.
+static func _endoscope() -> Node3D:
+	var root := Node3D.new()
+	var grey := MeshUtil.mat(Color(0.28, 0.3, 0.33), 0.55, 0.1)
+	var dark := MeshUtil.mat(Color(0.08, 0.09, 0.1), 0.5)
+	var steel := MeshUtil.mat(Color(0.78, 0.8, 0.83), 0.25, 1.0)
+	var handle := MeshUtil.cylinder_instance(root, 0.0135, 0.1, Vector3(0, 0, -0.07), grey, "Poignee")
+	handle.rotation_degrees.x = 90
+	(handle.mesh as CylinderMesh).top_radius = 0.011
+	var ring := MeshUtil.cylinder_instance(root, 0.0145, 0.008, Vector3(0, 0, -0.022), dark, "Bague")
+	ring.rotation_degrees.x = 90
+	var trig := MeshUtil.box_instance(root, Vector3(0.006, 0.022, 0.012), Vector3(0, -0.018, -0.045), dark, "Gachette")
+	trig.rotation_degrees.x = 15
+	var cannula := MeshUtil.cylinder_instance(root, 0.0024, 0.075, Vector3(0, 0, 0.0195), steel, "Canule")
+	cannula.rotation_degrees.x = 90
+	var nose := MeshInstance3D.new()
+	var s := SphereMesh.new()
+	s.radius = 0.0024
+	s.height = 0.0048
+	nose.mesh = s
+	nose.material_override = steel
+	nose.position = Vector3(0, 0, 0.057)
+	root.add_child(nose)
+	# Fenêtre de la caméra (dessus de la canule) et lame
+	MeshUtil.box_instance(root, Vector3(0.0032, 0.0008, 0.008), Vector3(0, 0.0021, 0.05), dark, "Fenetre")
+	var blade := MeshInstance3D.new()
+	blade.name = "Lame"
+	var bm := PrismMesh.new()
+	bm.size = Vector3(0.0005, 0.0028, 0.005)
+	blade.mesh = bm
+	blade.material_override = MeshUtil.mat(Color(0.9, 0.92, 0.95), 0.12, 1.0)
+	blade.position = Vector3(0, 0.0004, 0.048)
+	root.add_child(blade)
+	# Câble de la caméra et de la lumière
+	var pts := MeshUtil.bezier(Vector3(0, 0, -0.12), Vector3(0, -0.01, -0.17), Vector3(0, -0.12, -0.22), Vector3(0, -0.3, -0.25), 14)
+	var rr := PackedFloat32Array()
+	rr.resize(pts.size())
+	rr.fill(0.003)
+	var cable := MeshInstance3D.new()
+	cable.mesh = MeshUtil.tube(pts, rr, 8)
+	cable.material_override = dark
+	root.add_child(cable)
 	return root

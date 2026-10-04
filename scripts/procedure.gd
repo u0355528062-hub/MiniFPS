@@ -381,6 +381,7 @@ func _process(delta: float) -> void:
 		"hold": _tick_hold(s, delta)
 		"place": _tick_place(s, delta)
 		"selfretract": _tick_selfretract(s, delta)
+		"endocut": _tick_endocut(s, delta)
 	if step >= 0 and step < steps.size() and current() == s:
 		_update_markers(s)
 	if not show_markers:
@@ -439,6 +440,9 @@ func _setup_hands(s: Dictionary) -> void:
 			mode = "hold"
 			pmax = 0.025
 			target = patient.center
+		"endocut":
+			mode = "hold"
+			pmax = 0.03
 	for h in hands:
 		var ok: bool = h.held != null and h.held.id == s["inst"]
 		h.assist_target = target if ok else Vector3.INF
@@ -469,10 +473,10 @@ func _update_zones(s: Dictionary) -> void:
 			# Profondeur comptée le long du trajet (perpendiculaire à la peau), convertie à la verticale
 			var dz: float = st.get("dissect", 0.008)
 			Contact.add_zone(p, p + axis * dz, 0.011, (dz + 0.004) / maxf(absf(axis.y), 0.3), ["tip", "body"])
-		"insert":
+		"insert", "endocut":
 			var p: Vector3 = s["target"].call()
 			var axis: Vector3 = s["axis"]
-			Contact.add_zone(p, p + axis * (s["depth"] + 0.03), 0.014, s["depth"] + 0.04, ["tube", "tip", "body"])
+			Contact.add_zone(p, p + axis * (s["depth"] + 0.03), s.get("zone_r", 0.014), s.get("zone_depth", s["depth"] + 0.04), ["tube", "tip", "body"])
 		"suture":
 			var pair := _suture_pair(s)
 			if not pair.is_empty():
@@ -537,6 +541,8 @@ func _update_markers(s: Dictionary) -> void:
 				marker.show_at(_retract_marker(s), s.get("label", "Accroche le bord"), 0.8)
 		"selfretract":
 			marker.show_at(patient.center - Vector3.UP * 0.004, s.get("label", ""), 1.2)
+		"endocut":
+			marker.visible = false
 		"spread", "insert", "hold", "place", "cut", "ligate":
 			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 0.9))
 		"lift":
@@ -1164,6 +1170,44 @@ func _tick_selfretract(s: Dictionary, delta: float) -> void:
 		else:
 			st["lock"] = 0.0
 			_caption("Écarte les doigts pour ouvrir l'écarteur" if spread < 0.5 else "Encore…")
+
+
+## Endoscope à lame : dans le canal, serrer sort la lame ; en reculant (ou en avançant) lame sortie,
+## le ligament est fendu là où la lame passe. Il faut le couper sur toute sa longueur.
+func _tick_endocut(s: Dictionary, _delta: float) -> void:
+	var entry: Vector3 = s["target"].call()
+	var axis: Vector3 = s["axis"]
+	var need: float = s["depth"]
+	for h in _active_hands():
+		var d := h.tip() - entry
+		var along := d.dot(axis)
+		var inside := along > 0.003 and (d - axis * along).length() < 0.014
+		var blade := h.squeeze_value() > 0.6
+		var last: float = st.get("last", along)
+		st["last"] = along
+		if not inside:
+			_caption("Glisse l'endoscope dans le canal (regarde l'écran)")
+			continue
+		if not blade:
+			_caption("Serre pour sortir la lame, puis recule doucement" if not st.has("lo") else "Lame rentrée : ressors-la pour continuer")
+			continue
+		var lo: float = st.get("lo", along)
+		var hi: float = st.get("hi", along)
+		if along < lo - 0.006 or along > hi + 0.006:
+			lo = along
+			hi = along
+		lo = minf(lo, along)
+		hi = maxf(hi, along)
+		st["lo"] = lo
+		st["hi"] = hi
+		s["cut"].call(lo, hi)
+		Sfx.loop("incision", h.tip(), clampf(absf(along - last) * 400.0, 0.0, 1.0))
+		h.pulse(0.1, 0.02)
+		_caption("Ligament coupé sur %d mm (sur %d)" % [int((hi - lo) * 1000.0), int((need - 0.006) * 1000.0)])
+		if lo <= 0.008 and hi >= need - 0.004:
+			_done(h, false)
+			_complete_step()
+			return
 
 
 ## Poser / clamper : amener la pointe sur la cible et serrer.

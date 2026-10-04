@@ -306,6 +306,21 @@ func do_step() -> void:
 				await tip_to(s["target"].call(), 1)
 				if proc.step != si:
 					break
+		"endocut":
+			var entry: Vector3 = s["target"].call()
+			var axis: Vector3 = s["axis"]
+			var depth: float = s["depth"]
+			squeeze(0.0)
+			await tip_to(entry - axis * 0.01, 14)
+			for i in 100:
+				await tip_to(entry + axis * minf(depth + 0.003, (i + 1) * 0.0008), 1)
+			squeeze(1.0)
+			await _frames(8)
+			for i in 120:
+				await tip_to(entry + axis * lerpf(depth + 0.003, 0.004, (i + 1) / 120.0), 1)
+				if proc.step != si:
+					break
+			squeeze(0.0)
 		"selfretract":
 			squeeze(1.0)
 			await tip_to(_above(patient.center, 0.01), 14)

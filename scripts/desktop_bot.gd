@@ -50,7 +50,7 @@ func aim(p: Vector3) -> void:
 	rig.yaw = atan2(-d.x, -d.z)
 	rig.pitch = clampf(asin(d.y), deg_to_rad(-85), deg_to_rad(30))
 	rig._apply_look()
-	var on_patient := p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.3
+	var on_patient := p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.5
 	var surf := Vector3(p.x, Patient.body_height(p.x, p.z), p.z) if on_patient else p
 	hand.sim_mouse = rig.camera.unproject_position(surf)
 
@@ -87,7 +87,7 @@ func put_back_all() -> void:
 ## Vise la surface sous p ; la hauteur (au-dessus ou sous la peau) passe par la molette.
 func tip_to(p: Vector3, frames_n := 12) -> void:
 	aim(p)
-	var on_patient := p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.3
+	var on_patient := p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.5
 	var surf := Patient.body_height(p.x, p.z) if on_patient else p.y
 	# Près de la cible de l'étape, l'aide au placement prend sa hauteur : la molette est relative à elle
 	var at := hand.assist_target

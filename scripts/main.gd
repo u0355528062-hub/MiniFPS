@@ -40,6 +40,7 @@ func _ready() -> void:
 	if args.has("op"):
 		Procedure.op_id = args["op"]
 	var op := Operation.create(Procedure.op_id)
+	Patient.arm_mode = op.id == "canal"
 	var spot := op.surgeon_spot
 	patient = Patient.new()
 	patient.name = "Patient"
@@ -190,6 +191,9 @@ func _ready() -> void:
 			pb.enable_hands()
 		await get_tree().process_frame
 		await pb.grab_with(pb.R, tray.instruments[args["pose"]])
+		if args.has("axis"):
+			var ax: PackedFloat64Array = args["axis"].split_floats(",")
+			pb.want_axis = Vector3(ax[0], ax[1], ax[2]).normalized()
 		var tp: PackedFloat64Array = args.get("tipat", "0.12,1.16,0.1").split_floats(",")
 		pb.squeeze(float(args.get("sq", "1")))
 		await pb.tip_to(Vector3(tp[0], tp[1], tp[2]), 40)

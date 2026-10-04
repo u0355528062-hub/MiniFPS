@@ -12,7 +12,7 @@ const SHORT := {
 	"mikulicz": "Badigeon", "bistouri": "Bistouri", "langenbeck": "Langenbeck", "roux": "Roux",
 	"debakey": "De Bakey", "overholt": "Overholt", "ciseaux": "Ciseaux", "porte_aiguille": "Porte-aiguille",
 	"seringue": "Seringue", "kelly": "Kelly", "drain": "Drain", "gosset": "Gosset", "aspirateur": "Aspiration",
-	"meche": "Mèche",
+	"meche": "Mèche", "endoscope": "Endoscope",
 }
 
 

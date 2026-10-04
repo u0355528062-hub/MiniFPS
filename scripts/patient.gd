@@ -119,7 +119,63 @@ static func body_height(x: float, z: float) -> float:
 	if x > 0.2:
 		var lt := 0.125 * smoothstep(0.2, 0.36, x) * (1.0 - 0.3 * smoothstep(0.7, 1.05, x)) * (1.0 - smoothstep(1.02, 1.08, x))
 		legs = maxf(lt * _shape(absf(z - 0.095) / 0.09), lt * _shape(absf(z + 0.095) / 0.09))
-	return TABLE_TOP + maxf(torso, legs)
+	var h := maxf(torso, legs)
+	if arm_mode:
+		h = maxf(h, arm_height(x, z))
+	return TABLE_TOP + h
+
+
+# ---------------------------------------------------------------- Bras droit (canal carpien)
+
+## Bras droit posé le long du corps, paume vers le haut, doigts vers les pieds (+X).
+static var arm_mode := false
+const ARM_Z := 0.38
+const WRIST_X := 0.125
+
+
+static func _ell(r: float) -> float:
+	return sqrt(maxf(0.0, 1.0 - r * r))
+
+
+## Épaisseur du bras, de la main et des doigts au-dessus de la table.
+static func arm_height(x: float, z: float) -> float:
+	if x < -0.56 or x > 0.33 or absf(z - ARM_Z) > 0.08:
+		return 0.0
+	var v := z - ARM_Z  # v > 0 : côté du pouce (vers le chirurgien)
+	var h := 0.0
+	if x < 0.228:
+		var w: float
+		var t: float
+		if x < WRIST_X:
+			var k := smoothstep(-0.5, WRIST_X, x)
+			w = lerpf(0.05, 0.03, k)
+			t = lerpf(0.07, 0.031, k) * smoothstep(-0.56, -0.46, x)
+		else:
+			var k := (x - WRIST_X) / (0.228 - WRIST_X)
+			w = 0.03 + 0.013 * smoothstep(0.0, 0.35, k)
+			t = lerpf(0.031, 0.024, k) * (1.0 - 0.5 * smoothstep(0.85, 1.0, k))
+		h = t * _ell(absf(v - 0.003) / w)
+		# Éminences thénar (pouce) et hypothénar, pli de flexion du poignet
+		h += 0.007 * exp(-pow((x - 0.165) / 0.03, 2.0) - pow((v - 0.022) / 0.013, 2.0))
+		h += 0.004 * exp(-pow((x - 0.175) / 0.035, 2.0) - pow((v + 0.022) / 0.01, 2.0))
+		h -= 0.0012 * exp(-pow((x - WRIST_X) / 0.003, 2.0)) * smoothstep(0.03, 0.0, absf(v))
+	# Doigts (index du côté du pouce), légèrement fléchis
+	var fv := [0.019, 0.006, -0.007, -0.019]
+	var fl := [0.074, 0.082, 0.077, 0.06]
+	for i in 4:
+		var s: float = (x - 0.218) / fl[i]
+		if s > 0.0 and s < 1.0:
+			var r: float = 0.0085 * (1.0 - 0.22 * s)
+			var tip := _ell(maxf(0.0, (s - 0.88) / 0.12))
+			h = maxf(h, (0.019 - 0.006 * s) * _ell(absf(v - fv[i]) / r) * tip)
+	# Pouce : en dehors, vers l'avant
+	var a := Vector2(0.14, 0.036)
+	var b := Vector2(0.2, 0.062)
+	var ab := b - a
+	var k2 := clampf((Vector2(x, v) - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+	var dth := (a + ab * k2).distance_to(Vector2(x, v))
+	h = maxf(h, (0.022 - 0.006 * k2) * _ell(dth / (0.0105 * (1.0 - 0.2 * k2))) * _ell(maxf(0.0, (k2 - 0.9) / 0.1)))
+	return h
 
 
 static func _smax(a: float, b: float, k := 0.025) -> float:
@@ -144,6 +200,11 @@ static func _drape_height(x: float, z: float) -> float:
 		top += 0.01 * sin(x * 21.0) * smoothstep(0.0, 0.2, e)
 	if x > 1.08:
 		top -= (x - 1.08) * (x - 1.08) * 40.0 + (x - 1.08) * 1.5
+	if arm_mode:
+		# Le champ recouvre aussi le bras posé le long du corps
+		var ah := arm_height(x, z)
+		var near_arm := TABLE_TOP + ah + 0.006 if ah > 0.0 else -1.0
+		top = maxf(top, _smax(top, near_arm, 0.02))
 	return maxf(top, 0.42)
 
 
@@ -405,7 +466,8 @@ func _build_skin() -> void:
 	zone_mat = _skin_material(true)
 	var mi := MeshInstance3D.new()
 	mi.name = "Peau"
-	mi.mesh = MeshUtil.height_grid(PATCH_MIN.x, PATCH_MIN.y, PATCH_SIZE.x, PATCH_SIZE.y, 100, 100, body_height)
+	var res := 150 if arm_mode else 100
+	mi.mesh = MeshUtil.height_grid(PATCH_MIN.x, PATCH_MIN.y, PATCH_SIZE.x, PATCH_SIZE.y, res, res, body_height)
 	mi.material_override = skin_mat
 	add_child(mi)
 	var zone := MeshInstance3D.new()
