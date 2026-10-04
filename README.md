@@ -88,6 +88,11 @@ Après `--` sur la ligne de commande :
 - `--autotest` : un robot fait toute l'opération et affiche `AUTOTEST OK` si tout s'enchaîne.
 - `--vrtest` : un robot fait toute l'opération **avec les mains VR** (grip, gâchette, rayon, deux
   mains, maladresses volontaires) et affiche `VRTEST OK`.
+- `--desktest` : un robot fait toute l'opération **à la souris et au clavier** (vrais événements).
+- `--chaos=vr` ou `--chaos=desk` avec `--seed=N` : à chaque étape, des centaines d'actions au hasard,
+  puis le robot doit pouvoir finir l'étape depuis l'état laissé. Des règles sont vérifiées à chaque
+  image (un instrument jamais dans deux mains, rien ne sort de la salle, l'étape ne recule jamais…).
+- `--restarttest` : vérifie que « recommencer » en fin de partie fonctionne.
 
 ---
 
