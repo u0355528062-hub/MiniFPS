@@ -396,8 +396,8 @@ func appendix_point(t: float) -> Vector3:
 
 func set_appendix_tip(p: Vector3) -> void:
 	var off := p - appendix_base
-	if off.length() > 0.075:
-		off = off.normalized() * 0.075
+	if off.length() > 0.095:
+		off = off.normalized() * 0.095
 	appendix_tip = appendix_base + off
 	_update_appendix()
 

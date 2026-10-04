@@ -126,13 +126,27 @@ func park(xf: Transform3D) -> void:
 	_tween.tween_property(self, "global_transform", xf, 0.3)
 
 
-## Place l'instrument pour que sa pointe soit en `tip` et que son axe suive `axis` (vers la pointe).
-func pose_tip(tip: Vector3, axis: Vector3, up_hint := Vector3.UP) -> void:
+## Transformation qui met la pointe en `tip`, l'axis de l'instrument suivant `axis` (vers la pointe).
+func tip_transform(tip: Vector3, axis: Vector3, up_hint := Vector3.UP) -> Transform3D:
 	var z := axis.normalized()
 	var x := up_hint.cross(z)
 	if x.length() < 0.01:
 		x = Vector3.RIGHT.cross(z)
 	x = x.normalized()
-	var y := z.cross(x)
-	var b := Basis(x, y, z)
-	global_transform = Transform3D(b, tip - b * tip_local)
+	var b := Basis(x, z.cross(x), z)
+	return Transform3D(b, tip - b * tip_local)
+
+
+func pose_tip(tip: Vector3, axis: Vector3, up_hint := Vector3.UP) -> void:
+	global_transform = tip_transform(tip, axis, up_hint)
+
+
+## Place l'instrument pour que son point de prise soit en `grip` (main VR).
+func pose_grip(grip: Vector3, axis: Vector3, up_hint := Vector3.UP) -> void:
+	var z := axis.normalized()
+	var x := up_hint.cross(z)
+	if x.length() < 0.01:
+		x = Vector3.RIGHT.cross(z)
+	x = x.normalized()
+	var b := Basis(x, z.cross(x), z)
+	global_transform = Transform3D(b, grip - b * grip_local)

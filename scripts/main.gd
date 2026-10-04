@@ -3,44 +3,118 @@ extends Node3D
 ## (casque VR si OpenXR est actif, sinon clavier + souris).
 ## Arguments de ligne de commande (après « -- ») :
 ##   --desktop            forcer le mode écran
-##   --shot=chemin.png    capture d'écran puis quitter   --view=overview|field|tray|panel
-##   --step=N             sauter à l'étape N (tests)
+##   --step=N             sauter à l'étape N (0 = désinfection … 9 = fin)
+##   --autotest           un robot fait toute l'opération (vérification)
+##   --shot=chemin.png    capture d'écran puis quitter   --view=overview|field|tray|panel|desk
+##   --cam=x,y,z --at=x,y,z   caméra libre pour la capture
 
 var room: OperatingRoom
+var patient: Patient
+var tray: InstrumentTray
+var monitor: VitalMonitor
+var panel: GuidePanel
+var procedure: Procedure
 var env: WorldEnvironment
 var args := {}
+var vr_rig: VRRig
+var desk_rig: DesktopRig
 
 
 func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "1"
+	var sfx := Sfx.new()
+	sfx.name = "Sons"
+	add_child(sfx)
 	_build_environment()
 	room = OperatingRoom.new()
 	room.name = "Bloc"
 	add_child(room)
 	room.build()
-	var patient := Patient.new()
+	patient = Patient.new()
 	patient.name = "Patient"
 	add_child(patient)
 	patient.build()
-	var tray := InstrumentTray.new()
+	tray = InstrumentTray.new()
 	tray.name = "Instruments"
 	add_child(tray)
 	tray.build()
-	if args.has("hide"):
-		for n in args["hide"].split(","):
-			var node := find_child(n, true, false)
-			if node:
-				node.visible = false
-	if args.has("open"):
-		patient.fill_iodine()
-		patient.incision_progress = 1.0
-		patient.opening = float(args["open"])
-		if args.has("lift"):
-			patient.set_appendix_tip(patient.appendix_base + Vector3(-0.01, 0.07, 0.01))
+
+	monitor = VitalMonitor.new()
+	monitor.name = "Moniteur"
+	add_child(monitor)
+	monitor.build()
+	monitor.position = Vector3(-0.62, 1.62, -0.58)
+	monitor.look_at(Vector3(0.12, 1.55, 0.65), Vector3.UP, true)
+
+	panel = GuidePanel.new()
+	panel.name = "PanneauGuide"
+	add_child(panel)
+	panel.build()
+	panel.position = Vector3(0.16, 1.66, -0.62)
+	panel.look_at(Vector3(0.12, 1.5, 0.7), Vector3.UP, true)
+
+	procedure = Procedure.new()
+	procedure.name = "Procedure"
+	procedure.patient = patient
+	procedure.tray = tray
+	procedure.monitor = monitor
+	procedure.uis.append(panel.ui)
+	add_child(procedure)
+
+	var xr := XRServer.find_interface("OpenXR")
+	var use_vr := xr != null and xr.is_initialized() and not args.has("desktop") and not args.has("autotest")
+	if use_vr:
+		get_viewport().use_xr = true
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		vr_rig = VRRig.new()
+		vr_rig.name = "JoueurVR"
+		add_child(vr_rig)
+		vr_rig.build()
+		procedure.is_vr = true
+		procedure.hands.append_array(vr_rig.hands)
+		vr_rig.position = Vector3(0.12, 0, 0.62)
+		get_tree().create_timer(1.0).timeout.connect(func() -> void: vr_rig.recenter())
+	elif args.has("autotest"):
+		var bot := AutoBot.new()
+		bot.name = "Robot"
+		add_child(bot)
+		procedure.hands.append(bot)
+	else:
+		desk_rig = DesktopRig.new()
+		desk_rig.name = "JoueurEcran"
+		add_child(desk_rig)
+		desk_rig.build()
+		procedure.hands.append_array(desk_rig.hands)
+		var hud := DesktopHUD.new()
+		hud.name = "HUD"
+		add_child(hud)
+		hud.build(desk_rig.hand, tray.ordered)
+		procedure.uis.append(hud.ui)
+		procedure.hud = hud
+		desk_rig.continue_pressed.connect(procedure.on_continue)
+	procedure.setup()
+
+	if args.has("step"):
+		procedure.skip_to(int(args["step"]))
+	if args.has("autotest"):
+		var bot: AutoBot = procedure.hands[0]
+		await bot.run(procedure, patient, tray)
+		if not args.has("shot"):
+			get_tree().quit()
 	if args.has("shot"):
 		_take_shot()
+
+
+func _process(_delta: float) -> void:
+	# A / X sur les manettes = continuer
+	if vr_rig:
+		for c in [vr_rig.left, vr_rig.right]:
+			var pressed: bool = c.is_button_pressed("ax_button")
+			if pressed and not c.get_meta("ax_was", false):
+				procedure.on_continue()
+			c.set_meta("ax_was", pressed)
 
 
 func _build_environment() -> void:
@@ -70,23 +144,27 @@ func _build_environment() -> void:
 
 
 func _take_shot() -> void:
-	var cam := Camera3D.new()
-	cam.fov = 70
-	add_child(cam)
-	if args.has("cam"):
-		var c: PackedFloat64Array = args["cam"].split_floats(",")
-		var t: PackedFloat64Array = args.get("at", "0,1,0").split_floats(",")
-		cam.look_at_from_position(Vector3(c[0], c[1], c[2]), Vector3(t[0], t[1], t[2]))
+	var cam: Camera3D
+	if desk_rig and args.get("view", "") == "desk":
+		cam = desk_rig.camera
 	else:
-		match args.get("view", "overview"):
-			"field":
-				cam.look_at_from_position(Vector3(0.12, 1.58, 0.55), Vector3(0.12, 1.14, 0.1))
-			"tray":
-				cam.look_at_from_position(Vector3(0.35, 1.6, 0.85), Vector3(0.62, 1.05, 0.5))
-			"panel":
-				cam.look_at_from_position(Vector3(0.1, 1.65, 0.75), Vector3(0.1, 1.45, -0.6))
-			_:
-				cam.look_at_from_position(Vector3(2.6, 2.1, 2.6), Vector3(0, 0.9, 0))
+		cam = Camera3D.new()
+		cam.fov = 70
+		add_child(cam)
+		if args.has("cam"):
+			var c: PackedFloat64Array = args["cam"].split_floats(",")
+			var t: PackedFloat64Array = args.get("at", "0,1,0").split_floats(",")
+			cam.look_at_from_position(Vector3(c[0], c[1], c[2]), Vector3(t[0], t[1], t[2]))
+		else:
+			match args.get("view", "overview"):
+				"field":
+					cam.look_at_from_position(Vector3(0.12, 1.58, 0.55), Vector3(0.12, 1.14, 0.1))
+				"tray":
+					cam.look_at_from_position(Vector3(0.35, 1.6, 0.85), Vector3(0.62, 1.05, 0.5))
+				"panel":
+					cam.look_at_from_position(Vector3(0.12, 1.62, 0.62), Vector3(0.12, 1.45, -0.4))
+				_:
+					cam.look_at_from_position(Vector3(2.6, 2.1, 2.6), Vector3(0, 0.9, 0))
 	cam.current = true
 	for i in int(args.get("frames", "40")):
 		await get_tree().process_frame

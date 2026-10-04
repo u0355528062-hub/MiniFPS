@@ -1,0 +1,138 @@
+class_name VitalMonitor
+extends Node3D
+## Moniteur de surveillance (scope) sur bras articulé : ECG défilant, SpO2 pléthysmo,
+## pression artérielle, fréquence respiratoire, température. Bip à chaque QRS.
+
+var heart_rate := 84.0
+var target_rate := 84.0
+var spo2 := 99.0
+var sys := 124
+var dia := 76
+var screen: MonitorScreen
+var _beat_t := 0.0
+var _viewport: SubViewport
+
+
+func build() -> void:
+	_viewport = SubViewport.new()
+	_viewport.size = Vector2i(800, 500)
+	_viewport.transparent_bg = false
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(_viewport)
+	screen = MonitorScreen.new()
+	screen.monitor = self
+	screen.size = Vector2(800, 500)
+	_viewport.add_child(screen)
+
+	var body := MeshUtil.mat(Color(0.86, 0.87, 0.88), 0.4, 0.1)
+	var dark := MeshUtil.mat(Color(0.08, 0.09, 0.1), 0.3)
+	MeshUtil.box_instance(self, Vector3(0.46, 0.32, 0.07), Vector3(0, 0, -0.035), body, "Boitier")
+	MeshUtil.box_instance(self, Vector3(0.43, 0.27, 0.005), Vector3(0, 0.005, 0.002), dark, "Cadre")
+	var quad := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = Vector2(0.4, 0.25)
+	quad.mesh = qm
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_texture = _viewport.get_texture()
+	m.emission_enabled = true
+	m.emission_texture = _viewport.get_texture()
+	m.emission_energy_multiplier = 0.4
+	quad.material_override = m
+	quad.position = Vector3(0, 0.005, 0.006)
+	add_child(quad)
+	# Bras au plafond
+	var steel := MeshUtil.mat(Color(0.8, 0.82, 0.84), 0.3, 0.8)
+	var pole := MeshUtil.cylinder_instance(self, 0.018, 1.3, Vector3(0, 0.82, -0.08), steel, "Bras")
+	pole.rotation_degrees.x = -4
+	MeshUtil.box_instance(self, Vector3(0.08, 0.06, 0.06), Vector3(0, 0.18, -0.07), dark, "Rotule")
+
+
+func _process(delta: float) -> void:
+	heart_rate = lerpf(heart_rate, target_rate, delta * 0.3)
+	_beat_t += delta
+	var period := 60.0 / heart_rate
+	if _beat_t >= period:
+		_beat_t -= period
+		screen.beat()
+		Sfx.play("bip", global_position, -16.0, 1.0 if spo2 > 96 else 0.92)
+
+
+## Petite tachycardie quand on incise, retour au calme ensuite.
+func stress(amount: float) -> void:
+	target_rate = clampf(84.0 + amount, 70.0, 125.0)
+
+
+class MonitorScreen:
+	extends Control
+	var monitor: VitalMonitor
+	var ecg := PackedFloat32Array()
+	var pleth := PackedFloat32Array()
+	var head := 0
+	var _since_beat := 10.0
+	var _resp := 0.0
+	var font: Font
+
+	func _ready() -> void:
+		ecg.resize(400)
+		pleth.resize(400)
+		font = load("res://assets/fonts/Inter.ttf")
+
+	func beat() -> void:
+		_since_beat = 0.0
+
+	func _process(delta: float) -> void:
+		# Deux échantillons par image environ : balayage de 4 s sur l'écran
+		var n := maxi(1, int(round(delta * 100.0)))
+		for i in n:
+			_since_beat += 0.01
+			_resp += 0.01
+			var t := _since_beat
+			var v := 0.0
+			v += 0.12 * exp(-pow((t - 0.06) / 0.025, 2.0))  # P
+			v -= 0.12 * exp(-pow((t - 0.15) / 0.008, 2.0))  # Q
+			v += 1.0 * exp(-pow((t - 0.17) / 0.011, 2.0))  # R
+			v -= 0.25 * exp(-pow((t - 0.19) / 0.01, 2.0))  # S
+			v += 0.22 * exp(-pow((t - 0.38) / 0.05, 2.0))  # T
+			ecg[head] = v + randf_range(-0.015, 0.015)
+			var pt := t - 0.22
+			pleth[head] = (0.85 * exp(-pow((pt - 0.12) / 0.09, 2.0)) + 0.3 * exp(-pow((pt - 0.36) / 0.08, 2.0))) if pt > 0.0 else 0.0
+			head = (head + 1) % ecg.size()
+		queue_redraw()
+
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.01, 0.02, 0.03))
+		var w := 560.0
+		_trace(ecg, Rect2(16, 40, w, 150), Color(0.25, 1.0, 0.4), 0.9)
+		_trace(pleth, Rect2(16, 230, w, 110), Color(0.3, 0.85, 1.0), 1.0)
+		# Respiration (capnographie simplifiée)
+		var cap := PackedVector2Array()
+		for i in 120:
+			var x := 16.0 + i * w / 120.0
+			var ph := fmod(_resp - (120 - i) * 0.033 + 100.0, 4.0)
+			var y := 470.0 - (60.0 if ph > 1.6 and ph < 3.4 else 0.0) * clampf(minf(ph - 1.6, 3.4 - ph) * 8.0, 0.0, 1.0)
+			cap.append(Vector2(x, y))
+		draw_polyline(cap, Color(1.0, 0.85, 0.2), 2.0, true)
+		draw_string(font, Vector2(16, 28), "II", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.25, 1.0, 0.4))
+		draw_string(font, Vector2(16, 222), "Pleth", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.3, 0.85, 1.0))
+		draw_string(font, Vector2(16, 395), "CO2", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1.0, 0.85, 0.2))
+		var x0 := 600.0
+		draw_string(font, Vector2(x0, 34), "FC", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.25, 1.0, 0.4))
+		draw_string(font, Vector2(x0, 120), str(int(round(monitor.heart_rate))), HORIZONTAL_ALIGNMENT_LEFT, -1, 92, Color(0.25, 1.0, 0.4))
+		draw_string(font, Vector2(x0, 226), "SpO2 %", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.3, 0.85, 1.0))
+		draw_string(font, Vector2(x0, 300), str(int(monitor.spo2)), HORIZONTAL_ALIGNMENT_LEFT, -1, 72, Color(0.3, 0.85, 1.0))
+		draw_string(font, Vector2(x0, 344), "PNI mmHg", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.4, 0.4))
+		draw_string(font, Vector2(x0, 384), "%d/%d" % [monitor.sys, monitor.dia], HORIZONTAL_ALIGNMENT_LEFT, -1, 38, Color(1, 0.4, 0.4))
+		draw_string(font, Vector2(x0, 430), "FR 14   T° 37,9", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
+		draw_string(font, Vector2(x0, 478), "EtCO2 36", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
+
+	func _trace(buf: PackedFloat32Array, r: Rect2, c: Color, amp: float) -> void:
+		var pts := PackedVector2Array()
+		var n := buf.size()
+		var gap := 8
+		for i in n:
+			var idx := (head + i) % n
+			if i > n - gap:
+				continue
+			pts.append(Vector2(r.position.x + r.size.x * i / n, r.position.y + r.size.y * (0.7 - buf[idx] * amp * 0.6)))
+		draw_polyline(pts, c, 2.5, true)
