@@ -40,8 +40,9 @@ var _hand_xf := Transform3D.IDENTITY  ## repère de la paume (lissé), en global
 var _last_xf := Transform3D.IDENTITY  ## dernière pose valide (main ou manette)
 var _have_hand_xf := false
 var _visual: Node3D
-var _joint_balls: Array[MeshInstance3D] = []
-var _bones: Array[MeshInstance3D] = []
+var _skel: Skeleton3D
+var _bone_of: Array[int] = []
+var _rest_frame := Basis.IDENTITY
 
 
 func setup(c: XRController3D, left: bool) -> void:
@@ -52,9 +53,8 @@ func setup(c: XRController3D, left: bool) -> void:
 	var scene: PackedScene = load(path)
 	if scene:
 		hand_model = scene.instantiate()
-		var glove: Material = load("res://addons/godot-xr-tools/hands/materials/labglove.tres")
-		if glove and "hand_material_override" in hand_model:
-			hand_model.set("hand_material_override", glove)
+		if "hand_material_override" in hand_model:
+			hand_model.set("hand_material_override", glove_material())
 		controller.add_child(hand_model)
 	# Rayon de visée (fin, discret) pour attraper à distance
 	ray = MeshInstance3D.new()
@@ -72,41 +72,88 @@ func setup(c: XRController3D, left: bool) -> void:
 	_build_hand_visual()
 
 
-## Main nue dessinée en gant de nitrile : une bille par articulation + des segments.
+## Gant de nitrile mat, bleu clair (le gant d'origine de XR Tools est verni et brille sous le scialytique).
+static var _glove_mat: StandardMaterial3D
+
+static func glove_material() -> Material:
+	if _glove_mat == null:
+		_glove_mat = StandardMaterial3D.new()
+		_glove_mat.albedo_color = Color(0.45, 0.58, 0.8)
+		_glove_mat.roughness = 0.75
+		_glove_mat.metallic_specular = 0.2
+		_glove_mat.normal_enabled = true
+		_glove_mat.normal_scale = 0.15
+		_glove_mat.normal_texture = load("res://addons/godot-xr-tools/hands/textures/glove_normal.png")
+	return _glove_mat
+
+
+## Main nue : le vrai gant 3D (squelette de 26 os) déformé par les articulations suivies.
 func _build_hand_visual() -> void:
-	_visual = Node3D.new()
+	var path := "res://addons/godot-xr-tools/hands/model/hand_%s.gltf" % ("l" if is_left else "r")
+	var scene: PackedScene = load(path)
+	_visual = scene.instantiate() if scene else Node3D.new()
 	_visual.name = "MainSuivie"
 	_visual.visible = false
+	# Attaché à l'origine XR : les articulations sont données dans ce repère
+	_visual.top_level = true
 	add_child(_visual)
-	var glove := StandardMaterial3D.new()
-	glove.albedo_color = Color(0.16, 0.32, 0.78)
-	glove.roughness = 0.32
-	glove.metallic_specular = 0.6
-	var sm := SphereMesh.new()
-	sm.radius = 1.0
-	sm.height = 2.0
-	sm.radial_segments = 12
-	sm.rings = 6
-	var cm := CylinderMesh.new()
-	cm.top_radius = 1.0
-	cm.bottom_radius = 1.0
-	cm.height = 1.0
-	cm.radial_segments = 10
+	var skels := _visual.find_children("*", "Skeleton3D", true, false)
+	if skels.is_empty():
+		return
+	_skel = skels[0]
+	for mi in _visual.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).material_override = glove_material()
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var side := "L" if is_left else "R"
+	var names := ["Palm", "Wrist", "Thumb_Metacarpal", "Thumb_Proximal", "Thumb_Distal", "Thumb_Tip"]
+	for f in ["Index", "Middle", "Ring", "Little"]:
+		for part in ["Metacarpal", "Proximal", "Intermediate", "Distal", "Tip"]:
+			names.append("%s_%s" % [f, part])
+	_bone_of.resize(XRHandTracker.HAND_JOINT_MAX)
 	for j in XRHandTracker.HAND_JOINT_MAX:
-		var b := MeshInstance3D.new()
-		b.mesh = sm
-		b.material_override = glove
-		b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_visual.add_child(b)
-		_joint_balls.append(b)
+		_bone_of[j] = _skel.find_bone("%s_%s" % [names[j], side])
+	# Repère de la main au repos (positions des os) pour transférer l'orientation globale
+	var rest := []
+	for j in XRHandTracker.HAND_JOINT_MAX:
+		rest.append(_skel.get_bone_global_rest(_bone_of[j]).origin if _bone_of[j] >= 0 else Vector3.ZERO)
+	_rest_frame = _hand_frame(rest)
+
+
+## Repère de main construit avec des positions seulement (même chiralité au repos et en suivi).
+static func _hand_frame(p: Array) -> Basis:
+	var fwd: Vector3 = (p[XRHandTracker.HAND_JOINT_MIDDLE_FINGER_PHALANX_PROXIMAL] - p[XRHandTracker.HAND_JOINT_WRIST]).normalized()
+	var across: Vector3 = (p[XRHandTracker.HAND_JOINT_INDEX_FINGER_PHALANX_PROXIMAL] - p[XRHandTracker.HAND_JOINT_PINKY_FINGER_PHALANX_PROXIMAL]).normalized()
+	var up := fwd.cross(across).normalized()
+	across = up.cross(fwd).normalized()
+	return Basis(across, fwd, up)
+
+
+## Pose le squelette du gant sur les articulations (origine = articulation, os orienté vers l'enfant).
+func _pose_glove(pts: Array) -> void:
+	if _skel == null:
+		return
+	var to_skel := _skel.global_transform.affine_inverse()
+	var local := []
+	for p in pts:
+		local.append(to_skel * (p as Vector3))
+	var q := _hand_frame(local) * _rest_frame.inverse()
+	for j in [XRHandTracker.HAND_JOINT_WRIST, XRHandTracker.HAND_JOINT_PALM]:
+		var bj: int = _bone_of[j]
+		if bj >= 0:
+			_skel.set_bone_global_pose(bj, Transform3D(q * _skel.get_bone_global_rest(bj).basis, local[j]))
 	for chain in CHAINS:
-		for k in chain.size() - 1:
-			var bone := MeshInstance3D.new()
-			bone.mesh = cm
-			bone.material_override = glove
-			bone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			_visual.add_child(bone)
-			_bones.append(bone)
+		for k in range(1, chain.size()):
+			var j: int = chain[k]
+			var bj: int = _bone_of[j]
+			if bj < 0:
+				continue
+			var rest_b := q * _skel.get_bone_global_rest(bj).basis
+			var b := rest_b
+			if k < chain.size() - 1:
+				var d: Vector3 = (local[chain[k + 1]] - local[j])
+				if d.length() > 0.001:
+					b = Basis(Quaternion(rest_b.y.normalized(), d.normalized())) * rest_b
+			_skel.set_bone_global_pose(bj, Transform3D(b.orthonormalized(), local[j]))
 
 
 func trigger_value() -> float:
@@ -188,27 +235,9 @@ func _update_hand(tr: XRHandTracker, delta: float) -> void:
 			_fist_t = 0.0
 	else:
 		_fist_t = 0.0
-	# Dessin de la main
-	for j in pts.size():
-		var r := maxf(tr.get_hand_joint_radius(j), 0.006)
-		if j == XRHandTracker.HAND_JOINT_PALM:
-			_joint_balls[j].global_transform = Transform3D(_hand_xf.basis.orthonormalized().scaled(Vector3(0.035, 0.012, 0.04)), pts[j])
-		else:
-			_joint_balls[j].global_transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * r), pts[j])
-	var bi := 0
-	for chain in CHAINS:
-		for k in chain.size() - 1:
-			var a: Vector3 = pts[chain[k]]
-			var b: Vector3 = pts[chain[k + 1]]
-			var bone := _bones[bi]
-			bi += 1
-			var seg := a.distance_to(b)
-			if seg < 0.001:
-				bone.visible = false
-				continue
-			bone.visible = true
-			var r := maxf(tr.get_hand_joint_radius(chain[k + 1]), 0.006) * 0.95
-			bone.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, (b - a) / seg)).scaled(Vector3(r, seg, r)), (a + b) * 0.5)
+	# Dessin : le gant suit les articulations
+	_visual.global_transform = Transform3D.IDENTITY
+	_pose_glove(pts)
 
 
 func _process(delta: float) -> void:
