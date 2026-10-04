@@ -70,7 +70,7 @@ func _process(_delta: float) -> void:
 	if held == null:
 		var best_d := 0.13
 		for inst in instruments:
-			if inst.parked and not inst.id.begins_with("ecarteur"):
+			if inst.parked:
 				continue
 			var d := inst.grip_global().distance_to(grip_point)
 			if d < best_d:
@@ -79,6 +79,8 @@ func _process(_delta: float) -> void:
 		if best == null:
 			var best_ray := 0.045
 			for inst in instruments:
+				if inst.parked:
+					continue
 				var to := inst.global_position - grip_point
 				var along := to.dot(axis)
 				if along < 0.05 or along > 2.0:

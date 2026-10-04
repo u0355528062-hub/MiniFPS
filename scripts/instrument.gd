@@ -96,7 +96,7 @@ func set_highlight(mode: int) -> void:
 	_mode = mode
 	for m in _meshes:
 		m.material_overlay = _overlay if mode > 0 else null
-	_overlay.set_shader_parameter("strength", 1.0 if mode == 1 else 1.6)
+	_overlay.set_shader_parameter("strength", 1.0 if mode == 1 else 0.8)
 	_overlay.set_shader_parameter("glow", Color(0.2, 0.95, 0.85) if mode == 1 else Color(0.9, 0.95, 1.0))
 
 

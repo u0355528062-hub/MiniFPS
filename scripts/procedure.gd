@@ -362,8 +362,9 @@ func _tween_opening(v: float, dur: float) -> void:
 
 func _retractor_pose(inst: Instrument, side: float) -> Transform3D:
 	var slot := patient.retractor_slot(side)
-	var tip := slot - Vector3.UP * 0.026 + patient.perp3 * side * 0.006
-	var axis := (-patient.perp3 * side * 0.8 - Vector3.UP * 0.6).normalized()
+	# Lame crochetée sous le bord de la plaie, manche couché vers l'extérieur
+	var tip := slot - Vector3.UP * 0.022 - patient.perp3 * side * 0.004
+	var axis := (-patient.perp3 * side * 0.93 - Vector3.UP * 0.36).normalized()
 	return inst.tip_transform(tip, axis, Vector3.UP)
 
 

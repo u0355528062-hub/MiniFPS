@@ -48,7 +48,7 @@ func _process(delta: float) -> void:
 	if held == null:
 		var best_d := 46.0
 		for inst in instruments:
-			if camera.is_position_behind(inst.global_position):
+			if inst.parked or camera.is_position_behind(inst.global_position):
 				continue
 			var sp := camera.unproject_position(inst.global_position)
 			var spt := camera.unproject_position(inst.tip_global())

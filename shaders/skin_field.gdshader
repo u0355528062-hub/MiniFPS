@@ -76,8 +76,8 @@ void fragment() {
 	// Bord de plaie humide et rosé
 	if (opening > 0.01) {
 		float rim = 1.0 - smoothstep(1.0, 1.9, ell);
-		col = mix(col, vec3(0.62, 0.18, 0.15), rim * 0.65);
-		rough = mix(rough, 0.15, rim);
+		col = mix(col, vec3(0.55, 0.14, 0.12), rim * 0.65);
+		rough = mix(rough, 0.38, rim);
 	}
 
 	// Ombre douce au bord de la fenêtre du champ

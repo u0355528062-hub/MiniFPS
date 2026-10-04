@@ -220,6 +220,7 @@ func set_status(seconds: float, errors: int) -> void:
 
 
 func toast(text: String, ok := true) -> void:
+	move_child(_toast, -1)
 	_toast_label.text = text
 	_toast_style.bg_color = Color(GOOD, 0.92) if ok else Color(BAD, 0.92)
 	if _toast_tween:
@@ -232,6 +233,7 @@ func toast(text: String, ok := true) -> void:
 
 
 func show_end(seconds: float, errors: int, stars: int, restart_hint: String) -> void:
+	move_child(_end, -1)
 	_end.visible = true
 	_end_stars.text = "★".repeat(stars) + "☆".repeat(3 - stars)
 	_end_stats.text = "Durée : %02d:%02d     Erreurs : %d\nAppendice retiré, ligature en place, peau suturée.\n\n%s" % [int(seconds) / 60, int(seconds) % 60, errors, restart_hint]

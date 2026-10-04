@@ -45,15 +45,16 @@ func _ready() -> void:
 	monitor.name = "Moniteur"
 	add_child(monitor)
 	monitor.build()
-	monitor.position = Vector3(-0.62, 1.62, -0.58)
+	monitor.position = Vector3(-0.6, 1.9, -0.4)
 	monitor.look_at(Vector3(0.12, 1.55, 0.65), Vector3.UP, true)
 
 	panel = GuidePanel.new()
 	panel.name = "PanneauGuide"
 	add_child(panel)
 	panel.build()
-	panel.position = Vector3(0.16, 1.66, -0.62)
-	panel.look_at(Vector3(0.12, 1.5, 0.7), Vector3.UP, true)
+	panel.position = Vector3(0.1, 1.44, -0.52)
+	panel.scale = Vector3.ONE * 0.85
+	panel.look_at(Vector3(0.12, 1.62, 0.62), Vector3.UP, true)
 
 	procedure = Procedure.new()
 	procedure.name = "Procedure"
@@ -67,6 +68,10 @@ func _ready() -> void:
 	var use_vr := xr != null and xr.is_initialized() and not args.has("desktop") and not args.has("autotest")
 	if use_vr:
 		get_viewport().use_xr = true
+		# Air Link + RTX 3050 : on allège ce qui coûte cher en stéréo
+		env.environment.ssao_enabled = false
+		RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+		RenderingServer.positional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 		vr_rig = VRRig.new()
 		vr_rig.name = "JoueurVR"
@@ -76,6 +81,18 @@ func _ready() -> void:
 		procedure.hands.append_array(vr_rig.hands)
 		vr_rig.position = Vector3(0.12, 0, 0.62)
 		get_tree().create_timer(1.0).timeout.connect(func() -> void: vr_rig.recenter())
+	elif args.has("vrmock"):
+		# Capture de contrôle du rendu VR sans casque : manettes placées à la main
+		vr_rig = VRRig.new()
+		add_child(vr_rig)
+		vr_rig.build()
+		procedure.is_vr = true
+		procedure.hands.append_array(vr_rig.hands)
+		for c in [vr_rig.left, vr_rig.right]:
+			c.show_when_tracked = false
+			c.visible = true
+		vr_rig.right.global_transform = Transform3D(Basis.looking_at(Vector3(-0.15, -0.55, -0.6).normalized(), Vector3.UP), Vector3(0.24, 1.3, 0.38))
+		vr_rig.left.global_transform = Transform3D(Basis.looking_at(Vector3(0.2, -0.3, -0.7).normalized(), Vector3.UP), Vector3(-0.08, 1.25, 0.42))
 	elif args.has("autotest"):
 		var bot := AutoBot.new()
 		bot.name = "Robot"
@@ -92,12 +109,22 @@ func _ready() -> void:
 		add_child(hud)
 		hud.build(desk_rig.hand, tray.ordered)
 		procedure.uis.append(hud.ui)
+		panel.visible = false  # en mode écran, la consigne est en surimpression
 		procedure.hud = hud
 		desk_rig.continue_pressed.connect(procedure.on_continue)
 	procedure.setup()
 
 	if args.has("step"):
 		procedure.skip_to(int(args["step"]))
+	if args.has("vrmock") and args.has("hold"):
+		var h: SurgeonHand = vr_rig.hands[1]
+		h.take(tray.instruments[args["hold"]])
+	if args.has("dbg"):
+		await get_tree().create_timer(1.0).timeout
+		for id in ["langenbeck", "roux"]:
+			var inst: Instrument = tray.instruments[id]
+			print(id, " len=", inst.length, " tipL=", inst.tip_local, " tip=", inst.tip_global(), " grip=", inst.grip_global(), " pos=", inst.global_position, " slot=", patient.center)
+		get_tree().quit()
 	if args.has("autotest"):
 		var bot: AutoBot = procedure.hands[0]
 		await bot.run(procedure, patient, tray)
