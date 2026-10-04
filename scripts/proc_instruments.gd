@@ -126,7 +126,7 @@ static func _gosset_closed() -> Node3D:
 ## Écarteur de Gosset ouvert dans la plaie : deux valves écartées de `width` le long de `perp`.
 static func gosset_open(center: Vector3, _along: Vector3, perp: Vector3, width: float, skin_y: float) -> Node3D:
 	var root := Node3D.new()
-	var steel := MeshUtil.mat(Color(0.85, 0.87, 0.9), 0.2, 1.0)
+	var steel := MeshUtil.mat(Color(0.66, 0.68, 0.71), 0.38, 1.0)
 	root.transform = Transform3D(Basis(perp.normalized(), Vector3.UP, perp.normalized().cross(Vector3.UP)), Vector3(center.x, skin_y, center.z))
 	# Barre transversale avec crémaillère
 	MeshUtil.box_instance(root, Vector3(width + 0.1, 0.01, 0.014), Vector3(0, 0.035, 0.0), steel, "Barre")

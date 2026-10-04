@@ -300,11 +300,7 @@ func _vr_performance(xr: XRInterface) -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	var vp := get_viewport()
 	vp.positional_shadow_atlas_size = 2048
-	# Rendu fovéal : moins de détails sur les bords de l'image (cartes graphiques qui le gèrent)
-	vp.vrs_mode = Viewport.VRS_XR
-	if xr is OpenXRInterface:
-		(xr as OpenXRInterface).vrs_strength = 1.0
-		(xr as OpenXRInterface).vrs_min_radius = 25.0
+	# (Pas de rendu fovéal ni d'envoi de la profondeur : ils font planter certains pilotes avec Link)
 	# Résolution ajustée en continu pour garder la cadence du casque
 	var gov := FrameGovernor.new()
 	gov.name = "Regulateur"

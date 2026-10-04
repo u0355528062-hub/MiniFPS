@@ -52,10 +52,10 @@ void fragment() {
 
 	vec3 nw = tri_normal(tissue_normal, wpos, n0, tex_scale, normal_strength);
 	ALBEDO = col;
-	ROUGHNESS = mix(mix(0.5, 0.18, wetness), 0.75, fib);
-	SPECULAR = 0.5;
-	CLEARCOAT = wetness * 0.6 * (1.0 - fib);
-	CLEARCOAT_ROUGHNESS = 0.12;
+	ROUGHNESS = mix(mix(0.6, 0.4, wetness), 0.78, fib);
+	SPECULAR = 0.28;
+	CLEARCOAT = wetness * 0.4 * (1.0 - fib);
+	CLEARCOAT_ROUGHNESS = 0.2;
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	SSS_STRENGTH = 0.6;
 	BACKLIGHT = base_color * 0.3;
