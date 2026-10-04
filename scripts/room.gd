@@ -260,5 +260,5 @@ func _environment_probe() -> void:
 	probe.ambient_mode = ReflectionProbe.AMBIENT_COLOR
 	probe.ambient_color = Color(0.55, 0.62, 0.64)
 	probe.ambient_color_energy = 0.5
-	probe.intensity = 0.45
+	probe.intensity = 0.25
 	add_child(probe)

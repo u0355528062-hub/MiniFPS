@@ -61,8 +61,8 @@ void fragment() {
 	vec2 suv = p / 0.065;
 	vec3 col = texture(skin_albedo, suv).rgb * skin_tint;
 	col *= 0.94 + 0.1 * texture(blood_tex, p * 3.0).r; // grandes variations de teint
-	float rough = 0.18 + texture(skin_rough, suv).r;
-	float spec = 0.14;
+	float rough = 0.3 + texture(skin_rough, suv).r;
+	float spec = 0.07;
 	vec3 nw = planar_normal(skin_normal, suv, normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz), 0.55);
 
 	// Tracé au feutre chirurgical (violet de gentiane), légèrement baveux
@@ -82,8 +82,8 @@ void fragment() {
 	float iod_cov = smoothstep(0.05, 0.35, iod);
 	float lum = dot(col, vec3(0.3, 0.5, 0.2)) / 0.45;
 	col = mix(col, iod_col * lum, iod_cov * 0.88);
-	rough = mix(rough, mix(0.32, 0.5, 1.0 - iodine_wet), iod_cov);
-	spec = mix(spec, 0.2, iod_cov);
+	rough = mix(rough, mix(0.45, 0.62, 1.0 - iodine_wet), iod_cov);
+	spec = mix(spec, 0.12, iod_cov);
 	col = mix(col, mix(vec3(0.30, 0.10, 0.42), vec3(0.18, 0.05, 0.2), iod_cov), guide * 0.85);
 
 	// Incision déjà faite : fente rouge sombre + perles de sang

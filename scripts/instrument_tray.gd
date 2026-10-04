@@ -32,7 +32,7 @@ func build() -> void:
 	add_child(m)
 
 	# Champ stérile bleu-vert sur le plateau
-	var drape := Tex.drape(Color(0.16, 0.42, 0.56))
+	var drape := Tex.drape(Color(0.2, 0.4, 0.5))
 	var cloth := MeshInstance3D.new()
 	cloth.mesh = MeshUtil.height_grid(MAYO_POS.x - 0.26, MAYO_POS.z - 0.22, 0.52, 0.44, 30, 26, func(x: float, z: float) -> float:
 		var ex := maxf(absf(x - MAYO_POS.x) - 0.235, 0.0)
@@ -169,7 +169,7 @@ func _build_dish() -> void:
 	var rim := MeshUtil.cylinder_instance(self, 0.172, 0.02, base + Vector3(0, top_y + 0.012, 0), brushed, "RebordGueridon")
 	(rim.mesh as CylinderMesh).top_radius = 0.175
 	# Petit champ stérile sur le plateau
-	var cloth := MeshUtil.cylinder_instance(self, 0.16, 0.002, base + Vector3(0, top_y + 0.008, 0), Tex.drape(Color(0.16, 0.42, 0.56)), "ChampGueridon")
+	var cloth := MeshUtil.cylinder_instance(self, 0.16, 0.002, base + Vector3(0, top_y + 0.008, 0), Tex.drape(Color(0.2, 0.4, 0.5)), "ChampGueridon")
 	(cloth.mesh as CylinderMesh).radial_segments = 40
 	var scene: PackedScene = load("res://assets/models/bassin.glb")
 	dish = scene.instantiate()

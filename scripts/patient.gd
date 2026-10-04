@@ -116,7 +116,7 @@ func build() -> void:
 
 
 func _build_drapes() -> void:
-	var m := Tex.drape(Color(0.16, 0.42, 0.56), WINDOW_MIN, WINDOW_MAX, 0.006)
+	var m := Tex.drape(Color(0.2, 0.4, 0.5), WINDOW_MIN, WINDOW_MAX, 0.006)
 	var mi := MeshInstance3D.new()
 	mi.name = "Champs"
 	mi.mesh = MeshUtil.height_grid(-0.64, -0.66, 1.84, 1.32, 150, 110, _drape_height)
@@ -139,11 +139,11 @@ func _build_drapes() -> void:
 	var lip_mi := MeshInstance3D.new()
 	lip_mi.name = "BordChamp"
 	lip_mi.mesh = MeshUtil.tube(lip, lr, 8, false, false)
-	lip_mi.material_override = Tex.drape(Color(0.14, 0.39, 0.53))
+	lip_mi.material_override = Tex.drape(Color(0.18, 0.37, 0.47))
 	add_child(lip_mi)
 
 	# Arceau d'anesthésie : sépare le champ stérile de la tête du patient
-	var screen_mat := Tex.drape(Color(0.16, 0.42, 0.56))
+	var screen_mat := Tex.drape(Color(0.2, 0.4, 0.5))
 	var screen := MeshInstance3D.new()
 	screen.name = "Arceau"
 	# Voile vertical légèrement tombant

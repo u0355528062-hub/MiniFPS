@@ -153,10 +153,10 @@ func _build_environment() -> void:
 	e.background_color = Color(0.05, 0.06, 0.07)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.58, 0.64, 0.66)
-	e.ambient_light_energy = 0.35
+	e.ambient_light_energy = 0.28
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_BG
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
-	e.tonemap_exposure = 0.8
+	e.tonemap_exposure = 0.66
 	e.tonemap_white = 6.0
 	e.ssao_enabled = true
 	e.ssao_radius = 0.5

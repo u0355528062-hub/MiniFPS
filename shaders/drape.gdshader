@@ -50,7 +50,7 @@ void fragment() {
 
 	ALBEDO = col;
 	ROUGHNESS = rough;
-	SPECULAR = 0.2;
+	SPECULAR = 0.12;
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	BACKLIGHT = fabric * 0.12;
 	RIM = 0.08;
