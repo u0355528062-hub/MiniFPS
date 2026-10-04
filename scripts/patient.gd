@@ -154,7 +154,7 @@ func _build_drapes() -> void:
 	for j in ny + 1:
 		for i in nz + 1:
 			var z := -0.72 + 1.44 * i / nz
-			var y := 0.55 + 1.15 * j / ny
+			var y := 0.62 + 0.56 * j / ny
 			var sag := 0.03 * sin(PI * float(i) / nz) * (1.0 - float(j) / ny) + 0.008 * sin(z * 40.0)
 			sm.set_uv(Vector2(float(i) / nz, float(j) / ny))
 			sm.add_vertex(Vector3(-0.64 + sag, y, z))
@@ -173,10 +173,10 @@ func _build_drapes() -> void:
 	screen.material_override = screen_mat
 	add_child(screen)
 	var steel := MeshUtil.mat(Color(0.8, 0.82, 0.84), 0.25, 0.9)
-	var bar := MeshUtil.cylinder_instance(self, 0.008, 1.46, Vector3(-0.64, 1.71, 0), steel, "Barre")
+	var bar := MeshUtil.cylinder_instance(self, 0.008, 1.46, Vector3(-0.64, 1.19, 0), steel, "Barre")
 	bar.rotation_degrees.x = 90
 	for s in [-1.0, 1.0]:
-		MeshUtil.cylinder_instance(self, 0.008, 0.8, Vector3(-0.64, 1.31, s * 0.73), steel, "Montant")
+		MeshUtil.cylinder_instance(self, 0.008, 0.6, Vector3(-0.64, 0.9, s * 0.73), steel, "Montant")
 
 
 func _build_head() -> void:

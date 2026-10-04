@@ -156,14 +156,26 @@ func _thread_loop() -> Node3D:
 	return root
 
 
+## Guéridon inox à gauche du chirurgien, avec le haricot qui recevra l'appendice.
 func _build_dish() -> void:
+	var base := Vector3(-0.28, 0.0, 0.62)
+	var top_y := 0.98
+	var brushed := MeshUtil.mat(Color(0.62, 0.64, 0.66), 0.38, 0.9)
+	MeshUtil.cylinder_instance(self, 0.012, top_y, base + Vector3(0, top_y * 0.5, 0), brushed, "PiedGueridon")
+	var foot := MeshUtil.cylinder_instance(self, 0.16, 0.02, base + Vector3(0, 0.03, 0), brushed, "SocleGueridon")
+	(foot.mesh as CylinderMesh).top_radius = 0.12
+	var plate := MeshUtil.cylinder_instance(self, 0.17, 0.012, base + Vector3(0, top_y, 0), brushed, "PlateauGueridon")
+	(plate.mesh as CylinderMesh).radial_segments = 48
+	var rim := MeshUtil.cylinder_instance(self, 0.172, 0.02, base + Vector3(0, top_y + 0.012, 0), brushed, "RebordGueridon")
+	(rim.mesh as CylinderMesh).top_radius = 0.175
+	# Petit champ stérile sur le plateau
+	var cloth := MeshUtil.cylinder_instance(self, 0.16, 0.002, base + Vector3(0, top_y + 0.008, 0), Tex.drape(Color(0.16, 0.42, 0.56)), "ChampGueridon")
+	(cloth.mesh as CylinderMesh).radial_segments = 40
 	var scene: PackedScene = load("res://assets/models/bassin.glb")
 	dish = scene.instantiate()
-	var x := 0.52
-	var z := 0.11
-	dish_center = Vector3(x, Patient.body_height(x, z) + 0.012, z)
-	dish.position = dish_center - Vector3.UP * 0.01
-	dish.rotation_degrees = Vector3(0, 10, 0)
+	dish_center = base + Vector3(0, top_y + 0.02, 0)
+	dish.position = base + Vector3(0, top_y + 0.009, 0)
+	dish.rotation_degrees = Vector3(0, 25, 0)
 	add_child(dish)
 
 

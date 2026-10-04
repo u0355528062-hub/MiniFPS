@@ -29,7 +29,7 @@ const STEPS := [
 		"text": "Place les ciseaux sur le repère, juste au-dessus de la ligature, et appuie sur la gâchette."},
 	{"id": "retrait", "list": "Retrait", "inst": "debakey",
 		"title": "Dépose l'appendice",
-		"text": "Attrape l'appendice coupé avec la pince (gâchette maintenue) et lâche-le au-dessus du haricot métallique."},
+		"text": "Attrape l'appendice coupé avec la pince (gâchette maintenue) et lâche-le dans le haricot, sur le guéridon à ta gauche."},
 	{"id": "suture", "list": "Suture", "inst": "porte_aiguille",
 		"title": "Referme la peau",
 		"text": "Les écarteurs sont retirés. Avec le porte-aiguille, touche les 4 points de suture un par un (gâchette)."},
@@ -389,7 +389,7 @@ func _retractor_pose(inst: Instrument, side: float) -> Transform3D:
 	# plongée dans la plaie et tirant le bord vers l'extérieur.
 	var edge := patient.center + patient.perp3 * side * 0.02
 	var tip := Vector3(edge.x, Patient.body_height(edge.x, edge.z) + 0.004, edge.z)
-	var axis := (-patient.perp3 * side + Vector3.UP * 0.12).normalized()
+	var axis := (-patient.perp3 * side + Vector3.UP * 0.6).normalized()
 	return inst.tip_transform(tip, axis, Vector3.DOWN)
 
 
@@ -477,6 +477,9 @@ func _release_grab(spring_back: bool) -> void:
 		_anim = create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 		_anim.tween_method(func(k: float) -> void: patient.set_appendix_tip(from.lerp(patient.appendix_rest_tip, k)), 0.0, 1.0, 0.7)
 	if step >= 0 and step < STEPS.size() and STEPS[step]["id"] == "retrait" and _piece:
+		# On juge l'endroit où la pince lâche (l'appendice la suit avec un léger retard)
+		if h and h.held:
+			_piece.global_position = h.tip() + _piece_offset
 		_drop_piece()
 
 

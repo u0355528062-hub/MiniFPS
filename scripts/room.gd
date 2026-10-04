@@ -149,7 +149,7 @@ func _lights() -> void:
 	lam.rotation_degrees = Vector3(-90, 0, 0)
 	lam.spot_angle = 38
 	lam.spot_range = 4.0
-	lam.light_energy = 1.1
+	lam.light_energy = 0.8
 	lam.light_color = Color(0.95, 0.98, 1.0)
 	lam.shadow_enabled = true
 	lam.light_size = 0.6
@@ -165,7 +165,7 @@ func _lights() -> void:
 		l.rotation_degrees = Vector3(-90, 0, 0)
 		l.spot_angle = 75
 		l.spot_range = 4.0
-		l.light_energy = 0.9
+		l.light_energy = 0.75
 		l.light_color = Color(0.96, 0.98, 1.0)
 		add_child(l)
 
@@ -177,7 +177,7 @@ func _lights() -> void:
 	scialytique_light.spot_angle = 24
 	scialytique_light.spot_angle_attenuation = 0.6
 	scialytique_light.spot_range = 3.0
-	scialytique_light.light_energy = 1.1
+	scialytique_light.light_energy = 0.8
 	scialytique_light.light_color = Color(1.0, 0.97, 0.93)
 	scialytique_light.shadow_enabled = true
 	scialytique_light.light_size = 0.25
@@ -191,7 +191,7 @@ func _lights() -> void:
 	second.look_at_from_position(second.position, Vector3(0.12, 1.1, 0.1))
 	second.spot_angle = 18
 	second.spot_range = 3.0
-	second.light_energy = 0.9
+	second.light_energy = 0.5
 	second.light_color = Color(0.98, 0.98, 1.0)
 	second.shadow_enabled = false
 
