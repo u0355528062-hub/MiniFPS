@@ -46,6 +46,7 @@ var _grab_hand: SurgeonHand
 var _carry_home := Vector3.ZERO
 var _carry_offset := Vector3.ZERO
 var _anim: Tween
+var _finished_at := 0
 
 
 var steps: Array:
@@ -72,7 +73,7 @@ func setup() -> void:
 
 func _hint() -> String:
 	if is_vr:
-		return "GRIP : prendre / reposer un instrument (ou vise-le de loin)   ·   GÂCHETTE : agir   ·   B/Y : recentrer"
+		return "Manettes : GRIP prendre / reposer · GÂCHETTE agir · B recentrer\nMains nues : POING prendre / reposer · PINCER pouce-index agir"
 	return "Clic : prendre   ·   Clic maintenu : agir   ·   Molette : lever / baisser   ·   R : reposer   ·   1-8 : choisir un instrument"
 
 
@@ -101,7 +102,7 @@ func _show_menu() -> void:
 	for i in entries.size():
 		lines += ("▶  " if i == menu_index else "     ") + "%d.  %s\n" % [i + 1, entries[i][0]]
 	lines += "\n" + entries[menu_index][1] + "\n\n"
-	lines += "Stick haut / bas pour choisir, A pour valider." if is_vr else "Flèches haut / bas (ou 1-%d) pour choisir, ESPACE pour valider." % entries.size()
+	lines += "Main droite : pince pour changer · main gauche : pince pour valider\n(manettes : stick haut / bas puis A)" if is_vr else "Flèches haut / bas (ou 1-%d) pour choisir, ESPACE pour valider." % entries.size()
 	for ui in uis:
 		ui.set_steps([])
 		ui.show_step(-2, 0, "Choisis ton opération", lines, "", _hint())
@@ -130,8 +131,24 @@ func _show_intro() -> void:
 		titles.append(s["list"])
 	for ui in uis:
 		ui.set_steps(titles)
-	var go := "Appuie sur A (manette droite) pour commencer." if is_vr else "Appuie sur ESPACE pour commencer."
+	var go := "Pince pouce-index (ou A) pour commencer." if is_vr else "Appuie sur ESPACE pour commencer."
 	_ui_step(op.name, op.intro_text + "\n" + go, "")
+
+
+## Pincement main nue : navigation sans manettes.
+func on_hand_pinch(left: bool) -> void:
+	match step:
+		MENU:
+			if left:
+				on_continue()
+			else:
+				menu_move(1)
+		INTRO:
+			on_continue()
+		_:
+			# Fin : on attend un peu (le dernier point de suture se fait aussi en pinçant)
+			if step >= steps.size() and left and Time.get_ticks_msec() - _finished_at > 1500:
+				on_continue()
 
 
 ## Bouton A / Espace
@@ -212,7 +229,8 @@ func _finish() -> void:
 	if elapsed > 480.0:
 		stars = maxi(1, stars - 1)
 	Sfx.play("fin", Vector3.INF, -2.0)
-	var again := "Appuie sur A pour revenir au menu." if is_vr else "Appuie sur ESPACE pour revenir au menu."
+	var again := "Pince main gauche (ou A) pour revenir au menu." if is_vr else "Appuie sur ESPACE pour revenir au menu."
+	_finished_at = Time.get_ticks_msec()
 	for ui in uis:
 		ui.show_end(elapsed, errors, stars, op.summary + "\n" + again)
 	finished.emit(elapsed, errors)

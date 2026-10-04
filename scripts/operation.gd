@@ -7,7 +7,8 @@ extends RefCounted
 ##   push   : enfoncer la pointe en profondeur lift   : saisir et soulever
 ##   carry  : saisir un objet et le déposer    points : toucher une série de points (sutures)
 
-const ALL := ["appendicectomie", "drain", "laparotomie"]
+## Opérations proposées dans le menu (la laparotomie y entrera quand elle sera terminée)
+const ALL := ["appendicectomie", "drain"]
 
 var id := ""
 var name := ""

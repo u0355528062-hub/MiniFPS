@@ -25,7 +25,7 @@ func _ready() -> void:
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "1"
 	# Tests robots : cadence réaliste (90 images/s comme un casque)
-	for t in ["autotest", "vrtest", "desktest", "chaos", "restarttest"]:
+	for t in ["autotest", "vrtest", "desktest", "chaos", "restarttest", "handtest"]:
 		if args.has(t):
 			Engine.max_fps = 90
 	var sfx := Sfx.new()
@@ -106,13 +106,15 @@ func _ready() -> void:
 		vr_rig.position = spot
 		vr_rig.continue_pressed.connect(procedure.on_continue)
 		vr_rig.menu_moved.connect(procedure.menu_move)
-	elif args.has("vrmock") or args.has("vrtest") or args.get("chaos", "") == "vr":
+		vr_rig.hand_pinch.connect(procedure.on_hand_pinch)
+	elif args.has("vrmock") or args.has("vrtest") or args.has("handtest") or args.get("chaos", "") == "vr":
 		# Capture de contrôle du rendu VR sans casque : manettes placées à la main
 		vr_rig = VRRig.new()
 		vr_rig.sim = true
 		vr_rig.surgeon_spot = spot
 		add_child(vr_rig)
 		vr_rig.position = spot
+		vr_rig.hand_pinch.connect(procedure.on_hand_pinch)
 		vr_rig.build()
 		for h in vr_rig.hands:
 			(h as VRHand).sim = true
@@ -157,6 +159,15 @@ func _ready() -> void:
 				(node as Node3D).visible = false
 	if args.has("nolabels"):
 		procedure.show_markers = false
+	if args.has("handmock"):
+		# Capture : mains nues simulées (faux suivi des mains) au lieu des manettes
+		var hm := VRBot.new()
+		add_child(hm)
+		hm.setup(vr_rig, procedure, patient, tray)
+		hm.enable_hands()
+		if args.has("pinch"):
+			hm.R.sim_trigger = 1.0
+		await get_tree().process_frame
 	if args.has("vrmock") and args.has("hold"):
 		var h: SurgeonHand = vr_rig.hands[1]
 		h.take(tray.instruments[args["hold"]])
@@ -165,6 +176,24 @@ func _ready() -> void:
 		add_child(vb)
 		vb.setup(vr_rig, procedure, patient, tray)
 		await vb.run()
+		get_tree().quit()
+		return
+	if args.has("handtest"):
+		# Partie complète aux mains nues (faux suivi des mains), menu compris
+		if Procedure.restarts > 0:
+			print("HANDTEST retour au menu OK (étape ", procedure.step, ")")
+			get_tree().quit()
+			return
+		var hb := VRBot.new()
+		add_child(hb)
+		hb.setup(vr_rig, procedure, patient, tray)
+		hb.enable_hands()
+		await hb.start_with_pinches()
+		await hb.run_all()
+		# Fin -> retour au menu au pincement de la main gauche (après le délai de sécurité)
+		await get_tree().create_timer(1.8).timeout
+		print("HANDTEST retour au menu demandé")
+		await hb.pinch(hb.L)
 		get_tree().quit()
 		return
 	if args.has("chaos"):
@@ -177,6 +206,8 @@ func _ready() -> void:
 			var vb := VRBot.new()
 			add_child(vb)
 			vb.setup(vr_rig, procedure, patient, tray)
+			if args.has("hands"):
+				vb.enable_hands()
 			ct.bot = vb
 		else:
 			var db := DesktopBot.new()

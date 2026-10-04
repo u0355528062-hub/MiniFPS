@@ -31,6 +31,23 @@ brille sur la table, un anneau lumineux montre où agir.
 
 ## Commandes
 
+### Casque SANS manettes (mains nues)
+
+Le jeu suit tes vraies mains (suivi des mains du Quest 3). Pose les manettes et regarde tes mains :
+elles apparaissent en gants bleus.
+
+| Geste | Action |
+|---|---|
+| **Fermer le poing** (majeur, annulaire, auriculaire repliés) | prendre l'instrument près de ta main ou visé par le rayon / le reposer |
+| **Pincer pouce + index** | agir : badigeonner, inciser, poser, piquer, saisir… (garde le pincement pour les gestes longs) |
+| **Pincer main gauche** | valider dans le menu, commencer, revenir au menu à la fin |
+| **Pincer main droite** (menu) | changer d'opération |
+
+Si tes mains n'apparaissent pas :
+1. dans le casque : **Paramètres → Mouvements → Suivi des mains** activé ;
+2. sur le PC, application **Meta Quest Link → Paramètres → Bêta** : active
+   **« Fonctionnalités d'exécution pour les développeurs »** (nécessaire au suivi des mains via Link).
+
 ### Casque (manettes Quest)
 
 | Bouton | Action |
@@ -63,7 +80,14 @@ Tu peux tenir un instrument dans chaque main, et passer un instrument d'une main
 
 ---
 
-## Les 9 étapes
+## Opérations
+
+- **Appendicectomie** (9 étapes, ci-dessous).
+- **Drain thoracique** (6 étapes) : désinfection du flanc, anesthésie locale, incision le long de la
+  côte, dissection jusqu'à la plèvre (l'air s'échappe), pose du drain (l'oxygène remonte sur le
+  moniteur, bulles dans le bocal), fixation par 3 points.
+
+## Les 9 étapes de l'appendicectomie
 
 1. **Désinfection** — pince à badigeon, frotter la peau jusqu'à 100 %.
 2. **Incision** — bistouri, suivre le pointillé violet de « DÉPART » à « ARRIVÉE ».
@@ -93,6 +117,9 @@ Après `--` sur la ligne de commande :
   puis le robot doit pouvoir finir l'étape depuis l'état laissé. Des règles sont vérifiées à chaque
   image (un instrument jamais dans deux mains, rien ne sort de la salle, l'étape ne recule jamais…).
 - `--restarttest` : vérifie que « recommencer » en fin de partie fonctionne.
+- `--handtest` : partie complète **aux mains nues** (faux suivi des mains : 26 articulations par main,
+  pincement et poing), menu compris. `--chaos=vr --hands` : chaos aux mains nues.
+- `--op=drain` : choisit l'opération pour les tests.
 
 ---
 

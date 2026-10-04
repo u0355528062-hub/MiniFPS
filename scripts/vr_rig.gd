@@ -8,6 +8,7 @@ extends XROrigin3D
 
 signal continue_pressed
 signal menu_moved(delta: int)
+signal hand_pinch(left: bool)  ## pincement main nue (menus sans manettes)
 
 const EYE_HEIGHT := 1.62
 
@@ -48,6 +49,7 @@ func _controller(tracker: String, is_left: bool) -> XRController3D:
 	h.name = "Main_" + ("G" if is_left else "D")
 	add_child(h)
 	h.setup(c, is_left)
+	h.pinched.connect(func(_h: VRHand) -> void: hand_pinch.emit(is_left))
 	hands.append(h)
 	return c
 
