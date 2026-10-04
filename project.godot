@@ -1,19 +1,27 @@
-; Bloc VR — prototype d'appendicectomie guidée en réalité virtuelle (Godot 4.7, OpenXR).
+; BLOC URGENCES — simulateur de chirurgie à la première personne (Godot 4.7, PC).
 
 config_version=5
 
 [application]
 
-config/name="Bloc VR"
-config/description="Chirurgie en VR : appendicectomie, drain thoracique, laparotomie, drainage d'abcès ; casque (Quest Link / Air Link, mains nues) ou clavier et souris."
+config/name="Bloc Urgences"
+config/description="Simulateur chirurgical à la première personne : pose d'un drain thoracique en urgence, anatomie réelle."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
+[autoload]
+
+Settings="*res://scripts/settings.gd"
+
 [display]
 
-window/size/viewport_width=1600
-window/size/viewport_height=900
-window/vsync/vsync_mode=0
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1600
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/vsync/vsync_mode=1
 
 [gui]
 
@@ -21,7 +29,7 @@ theme/custom_font="res://assets/fonts/Inter.ttf"
 
 [physics]
 
-common/physics_ticks_per_second=90
+common/physics_ticks_per_second=120
 
 [rendering]
 
@@ -31,23 +39,4 @@ lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 environment/defaults/default_clear_color=Color(0.05, 0.06, 0.07, 1)
 reflections/sky_reflections/roughness_layers=7
-
-[xr]
-
-openxr/enabled=true
-openxr/default_action_map="res://openxr_action_map.tres"
-openxr/startup_alert=false
-openxr/foveation_level=2
-openxr/extensions/hand_tracking=true
-openxr/extensions/hand_tracking_unobstructed_data_source=true
-openxr/extensions/hand_interaction_profile=true
-shaders/enabled=true
-
-[autoload]
-
-XRToolsUserSettings="*res://addons/godot-xr-tools/user_settings/user_settings.gd"
-XRToolsRumbleManager="*res://addons/godot-xr-tools/rumble/rumble_manager.gd"
-
-[editor_plugins]
-
-enabled=PackedStringArray("res://addons/godot-xr-tools/plugin.cfg")
+textures/default_filters/anisotropic_filtering_level=4

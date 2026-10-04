@@ -11,6 +11,8 @@ var held: Instrument
 var hovered: Instrument
 ## Aide au placement (souris) : la procédure indique la cible de l'étape en cours
 var assist_target := Vector3.INF
+## Axe du trajet à suivre près de la cible (pince, drain) : l'instrument s'y aligne
+var assist_axis := Vector3.ZERO
 var instruments: Array[Instrument] = []
 var slot := 0  ## 0 ou 1 : pour la peau enfoncée sous chaque main
 
@@ -60,6 +62,19 @@ func raw_tip() -> Vector3:
 ## Bout de l'index (boutons à toucher), INF si la main n'en a pas.
 func fingertip() -> Vector3:
 	return Vector3.INF
+
+
+## Poids d'alignement sur le trajet (1 = l'instrument suit l'axe) : selon la distance de la pointe
+## à la ligne du trajet, de 3 cm avant l'entrée jusqu'au fond.
+func tract_weight(p: Vector3) -> float:
+	if assist_axis == Vector3.ZERO or assist_target == Vector3.INF:
+		return 0.0
+	var d := p - assist_target
+	var along := d.dot(assist_axis)
+	if along < -0.04 or along > 0.16:
+		return 0.0
+	var lat := (d - assist_axis * along).length()
+	return 1.0 - smoothstep(0.012, 0.035, lat)
 
 
 func pulse(_amplitude := 0.5, _duration := 0.05) -> void:

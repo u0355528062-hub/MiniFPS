@@ -1,16 +1,16 @@
 class_name Operation
 extends RefCounted
 ## Une opération = un réglage du patient + une liste d'instruments + une liste d'étapes.
-## Chaque étape est d'un type de geste générique et physique (voir Procedure) : paint, incise,
-## inject, retract, spread, lift, ligate, cut, carry, suture, insert, hold, place.
+## Chaque étape est d'un type de geste générique et physique (voir Procedure) : mark, paint,
+## inject, incise, spread, insert, suture.
 
-## Opérations proposées dans le menu
-const ALL := ["appendicectomie", "drain", "laparotomie", "abces", "canal"]
+## Opérations disponibles
+const ALL := ["drain"]
 
 var id := ""
 var name := ""
 var tagline := ""
-var intro_title := "Bienvenue au bloc"
+var intro_title := "Bloc opératoire"
 var intro_text := ""
 var summary := ""  ## phrase de l'écran de fin
 var header := "BLOC 2"  ## bandeau du panneau
@@ -33,16 +33,8 @@ var root: Node3D
 
 static func create(op_id: String) -> Operation:
 	match op_id:
-		"drain":
-			return OpDrain.new()
-		"laparotomie":
-			return OpLaparo.new()
-		"abces":
-			return OpAbces.new()
-		"canal":
-			return OpCanal.new()
 		_:
-			return OpAppendix.new()
+			return OpDrain.new()
 
 
 static func menu_entries() -> Array:

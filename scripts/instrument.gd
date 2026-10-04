@@ -10,7 +10,7 @@ signal grabbed(inst: Instrument)
 const GRIP := {
 	"bistouri": 0.56, "ciseaux": 0.42, "porte_aiguille": 0.42, "kelly": 0.44, "overholt": 0.44,
 	"mikulicz": 0.42, "debakey": 0.4, "langenbeck": 0.2, "roux": 0.24, "seringue": 0.3,
-	"drain": 0.3, "gosset": 0.3, "aspirateur": 0.32, "meche": 0.2, "endoscope": 0.58,
+	"drain": 0.3, "feutre": 0.35,
 }
 ## Mâchoires : [type (1 = branches croisées, 2 = mors de pince), pivot z (modèle), angle max (°)]
 const JAWS := {
@@ -116,7 +116,7 @@ func build_samples() -> void:
 			tag = "blade"
 		"seringue", "porte_aiguille":
 			tag = "needle"
-		"drain", "meche", "endoscope":
+		"drain":
 			tag = "tube"
 		"langenbeck", "roux":
 			tag = "hook"
@@ -129,7 +129,7 @@ func build_samples() -> void:
 		var t := "body"
 		if id == "seringue" and f <= 0.25:
 			t = "needle"
-		elif (id == "drain" or id == "meche" or id == "endoscope") and f <= 0.45:
+		elif id == "drain" and f <= 0.45:
 			t = "tube"
 		elif id in ["kelly", "debakey", "overholt", "ciseaux", "mikulicz"] and f <= 0.1:
 			t = "tip"

@@ -37,12 +37,14 @@ static func _zone_depth(p: Vector3, tag: String) -> float:
 	return best
 
 
-## Hauteur de la surface solide sous p (peau, champs, plateau, guéridon), -INF s'il n'y a rien.
+## Hauteur de la surface solide sous p (peau, champ, table, plateau), -INF s'il n'y a rien.
 static func surface(p: Vector3) -> float:
-	if patient and p.x > -0.62 and p.x < 1.15 and absf(p.z) < 0.6:
+	if patient:
 		if patient.in_window(p.x, p.z):
 			return Patient.body_height(p.x, p.z) + patient.breath_offset(p.x, p.z)
-		return Patient._drape_height(p.x, p.z) + patient.breath_offset(p.x, p.z)
+		var top := Patient.top_height(p.x, p.z)
+		if top > 0.0:
+			return top + patient.breath_offset(p.x, p.z)
 	var m := InstrumentTray.MAYO_POS
 	if absf(p.x - m.x) < 0.26 and absf(p.z - m.z) < 0.22:
 		return InstrumentTray.TRAY_Y + 0.003

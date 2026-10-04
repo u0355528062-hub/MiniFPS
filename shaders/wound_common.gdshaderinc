@@ -14,10 +14,10 @@ uniform vec4 press_a = vec4(0.0); // x, z, rayon, profondeur : peau enfoncée pa
 uniform vec4 press_b = vec4(0.0);
 uniform vec4 bleb = vec4(0.0); // x, z, rayon, hauteur : bouton d'anesthésie
 uniform float breath_now = 0.0; // soulèvement actuel du thorax (m)
-uniform vec4 abscess = vec4(0.0); // x, z, rayon, hauteur : dôme d'un abcès
 
+// Thorax qui se soulève en respirant (patient couché sur le côté, tête vers +X)
 float chest_mask(vec2 xz) {
-	return (1.0 - smoothstep(-0.25, -0.05, xz.x)) * smoothstep(-0.7, -0.5, xz.x) * (1.0 - smoothstep(0.12, 0.3, abs(xz.y)));
+	return smoothstep(-0.34, -0.16, xz.x) * (1.0 - smoothstep(0.08, 0.2, xz.x)) * (1.0 - smoothstep(0.1, 0.2, abs(xz.y)));
 }
 
 vec2 inc_dir() {
@@ -65,11 +65,6 @@ float relief(vec2 xz) {
 	h -= press_b.w * exp(-dot(db, db) / max(press_b.z * press_b.z, 1e-6));
 	h += bleb.w * exp(-dot(dl, dl) / max(bleb.z * bleb.z, 1e-6));
 	h += breath_now * chest_mask(xz);
-	if (abscess.w > 0.0) {
-		float d = length(xz - abscess.xy) / abscess.z;
-		float k = max(0.0, 1.0 - d * d);
-		h += abscess.w * k * k;
-	}
 	return h;
 }
 

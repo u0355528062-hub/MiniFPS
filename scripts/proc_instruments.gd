@@ -6,14 +6,8 @@ static func build(kind: String) -> Node3D:
 	match kind:
 		"drain":
 			return _drain()
-		"aspirateur":
-			return _suction()
-		"gosset":
-			return _gosset_closed()
-		"meche":
-			return _meche()
-		"endoscope":
-			return _endoscope()
+		"feutre":
+			return _feutre()
 	return Node3D.new()
 
 
@@ -41,7 +35,7 @@ static func _drain() -> Node3D:
 	clear.roughness = 0.1
 	clear.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var tube := MeshInstance3D.new()
-	tube.mesh = MeshUtil.tube(_line(-0.16, 0.16, 24), _radii(24, 0.0048), 14, true, true)
+	tube.mesh = MeshUtil.tube(_line(-0.16, 0.16, 24), _radii(24, 0.0048), 16, true, true)
 	tube.material_override = clear
 	root.add_child(tube)
 	var stripe := MeshInstance3D.new()
@@ -72,164 +66,26 @@ static func _drain() -> Node3D:
 	return root
 
 
-## Canule d'aspiration de Yankauer : manche nervuré, tube rigide coudé, embout percé.
-static func _suction() -> Node3D:
+## Feutre dermographique stérile (marqueur chirurgical) : corps violet, bague blanche, pointe en
+## feutre violet de gentiane.
+static func _feutre() -> Node3D:
 	var root := Node3D.new()
-	var plastic := StandardMaterial3D.new()
-	plastic.albedo_color = Color(0.85, 0.92, 0.95, 0.65)
-	plastic.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	plastic.roughness = 0.15
-	var pts := _line(-0.13, 0.13, 30, Vector3(0, -0.035, 0))
-	var rr := PackedFloat32Array()
-	for i in pts.size():
-		var t := float(i) / (pts.size() - 1)
-		rr.append(lerpf(0.0085, 0.0042, smoothstep(0.35, 0.6, t)) + 0.0006 * sin(t * 120.0) * (1.0 - smoothstep(0.3, 0.35, t)))
-	var tube := MeshInstance3D.new()
-	tube.mesh = MeshUtil.tube(pts, rr, 14, true, true)
-	tube.material_override = plastic
-	root.add_child(tube)
-	var tip := MeshInstance3D.new()
-	var s := SphereMesh.new()
-	s.radius = 0.0055
-	s.height = 0.011
-	tip.mesh = s
-	tip.material_override = plastic
-	tip.position = pts[pts.size() - 1]
-	root.add_child(tip)
-	# Tubulure qui part vers le bas
-	var hose := MeshUtil.bezier(Vector3(0, 0, -0.13), Vector3(0, -0.02, -0.2), Vector3(0, -0.15, -0.25), Vector3(0, -0.3, -0.3), 16)
-	var hm := MeshInstance3D.new()
-	hm.mesh = MeshUtil.tube(hose, _radii(hose.size(), 0.004), 8)
-	hm.material_override = plastic
-	root.add_child(hm)
-	return root
-
-
-## Écarteur autostatique de Gosset replié (tenu comme un instrument).
-static func _gosset_closed() -> Node3D:
-	var root := Node3D.new()
-	var steel := MeshUtil.mat(Color(0.85, 0.87, 0.9), 0.2, 1.0)
-	MeshUtil.box_instance(root, Vector3(0.012, 0.008, 0.2), Vector3(0, 0, -0.02), steel, "Cremaillere")
-	for side in [-1.0, 1.0]:
-		MeshUtil.box_instance(root, Vector3(0.05, 0.003, 0.03), Vector3(0.012 * side, -0.01, 0.07), steel, "Valve")
-		MeshUtil.box_instance(root, Vector3(0.05, 0.035, 0.003), Vector3(0.012 * side, -0.028, 0.085), steel, "Lame")
-	var ring := MeshInstance3D.new()
-	var tm := TorusMesh.new()
-	tm.inner_radius = 0.012
-	tm.outer_radius = 0.017
-	ring.mesh = tm
-	ring.material_override = steel
+	var body := MeshInstance3D.new()
+	body.mesh = MeshUtil.tube(_line(-0.065, 0.045, 6), _radii(6, 0.0055), 18, true, false)
+	body.material_override = MeshUtil.mat(Color(0.42, 0.16, 0.55), 0.35)
+	root.add_child(body)
+	var ring := MeshUtil.cylinder_instance(root, 0.0058, 0.012, Vector3(0, 0, -0.058), MeshUtil.mat(Color(0.92, 0.92, 0.9), 0.4), "Bague")
 	ring.rotation_degrees.x = 90
-	ring.position = Vector3(0, 0, -0.12)
-	root.add_child(ring)
-	return root
-
-
-## Écarteur de Gosset ouvert dans la plaie : deux valves écartées de `width` le long de `perp`.
-static func gosset_open(center: Vector3, _along: Vector3, perp: Vector3, width: float, skin_y: float) -> Node3D:
-	var root := Node3D.new()
-	var steel := MeshUtil.mat(Color(0.66, 0.68, 0.71), 0.38, 1.0)
-	root.transform = Transform3D(Basis(perp.normalized(), Vector3.UP, perp.normalized().cross(Vector3.UP)), Vector3(center.x, skin_y, center.z))
-	# Barre transversale avec crémaillère
-	MeshUtil.box_instance(root, Vector3(width + 0.1, 0.01, 0.014), Vector3(0, 0.035, 0.0), steel, "Barre")
-	for k in 9:
-		MeshUtil.box_instance(root, Vector3(0.004, 0.006, 0.016), Vector3(-0.04 + k * 0.01, 0.042, 0), steel, "Dent")
-	for side in [-1.0, 1.0]:
-		var x: float = side * width * 0.5
-		MeshUtil.box_instance(root, Vector3(0.006, 0.04, 0.012), Vector3(x + side * 0.004, 0.015, 0), steel, "Bras")
-		# Valve courbe qui plonge dans la plaie
-		var valve := MeshInstance3D.new()
-		var pts := PackedVector3Array()
-		for i in 8:
-			var t := float(i) / 7.0
-			pts.append(Vector3(x + side * 0.004 - side * 0.012 * t * t, -0.045 * t, 0))
-		var rr := PackedFloat32Array()
-		rr.resize(pts.size())
-		rr.fill(0.003)
-		valve.mesh = MeshUtil.tube(pts, rr, 6)
-		valve.material_override = steel
-		valve.scale = Vector3(1, 1, 1)
-		root.add_child(valve)
-		MeshUtil.box_instance(root, Vector3(0.004, 0.035, 0.06), Vector3(x - side * 0.006, -0.025, 0), steel, "Lame")
-	return root
-
-
-## Porte-mèche : fine tige (stylet boutonné) et mèche de gaze imbibée au bout, qu'on laisse dans la
-## cavité pour qu'elle continue de drainer. La gaze est un nœud nommé « Gaze ».
-static func _meche() -> Node3D:
-	var root := Node3D.new()
-	var steel := MeshUtil.mat(Color(0.85, 0.87, 0.9), 0.22, 1.0)
-	var rod := MeshUtil.cylinder_instance(root, 0.0016, 0.15, Vector3(0, 0, -0.02), steel, "Stylet")
-	rod.rotation_degrees.x = 90
-	var knob := MeshInstance3D.new()
-	var s := SphereMesh.new()
-	s.radius = 0.0045
-	s.height = 0.009
-	knob.mesh = s
-	knob.material_override = steel
-	knob.position = Vector3(0, 0, -0.095)
-	root.add_child(knob)
-	# Gaze : ruban plissé, un peu imbibé de sérum
-	var gauze := Node3D.new()
-	gauze.name = "Gaze"
-	root.add_child(gauze)
-	var pts := PackedVector3Array()
-	for i in 14:
-		var t := float(i) / 13.0
-		pts.append(Vector3(0.0025 * sin(t * 18.0), 0.002 * cos(t * 13.0), 0.055 - t * 0.075))
-	var rr := PackedFloat32Array()
-	rr.resize(pts.size())
-	rr.fill(0.0032)
-	var g := MeshInstance3D.new()
-	g.mesh = MeshUtil.tube(pts, rr, 8)
-	var gm := MeshUtil.mat(Color(0.95, 0.94, 0.9), 0.85)
-	gm.normal_enabled = false
-	g.material_override = gm
-	gauze.add_child(g)
-	return root
-
-
-## Endoscope du canal carpien (type Agee) : poignée en plastique gris, fine canule à fenêtre au bout,
-## petite lame (« Lame ») qui sort par la fenêtre quand on serre la gâchette, câble de la caméra.
-static func _endoscope() -> Node3D:
-	var root := Node3D.new()
-	var grey := MeshUtil.mat(Color(0.28, 0.3, 0.33), 0.55, 0.1)
-	var dark := MeshUtil.mat(Color(0.08, 0.09, 0.1), 0.5)
-	var steel := MeshUtil.mat(Color(0.78, 0.8, 0.83), 0.25, 1.0)
-	var handle := MeshUtil.cylinder_instance(root, 0.0135, 0.1, Vector3(0, 0, -0.07), grey, "Poignee")
-	handle.rotation_degrees.x = 90
-	(handle.mesh as CylinderMesh).top_radius = 0.011
-	var ring := MeshUtil.cylinder_instance(root, 0.0145, 0.008, Vector3(0, 0, -0.022), dark, "Bague")
-	ring.rotation_degrees.x = 90
-	var trig := MeshUtil.box_instance(root, Vector3(0.006, 0.022, 0.012), Vector3(0, -0.018, -0.045), dark, "Gachette")
-	trig.rotation_degrees.x = 15
-	var cannula := MeshUtil.cylinder_instance(root, 0.0024, 0.075, Vector3(0, 0, 0.0195), steel, "Canule")
-	cannula.rotation_degrees.x = 90
-	var nose := MeshInstance3D.new()
-	var s := SphereMesh.new()
-	s.radius = 0.0024
-	s.height = 0.0048
-	nose.mesh = s
-	nose.material_override = steel
-	nose.position = Vector3(0, 0, 0.057)
-	root.add_child(nose)
-	# Fenêtre de la caméra (dessus de la canule) et lame
-	MeshUtil.box_instance(root, Vector3(0.0032, 0.0008, 0.008), Vector3(0, 0.0021, 0.05), dark, "Fenetre")
-	var blade := MeshInstance3D.new()
-	blade.name = "Lame"
-	var bm := PrismMesh.new()
-	bm.size = Vector3(0.0005, 0.0028, 0.005)
-	blade.mesh = bm
-	blade.material_override = MeshUtil.mat(Color(0.9, 0.92, 0.95), 0.12, 1.0)
-	blade.position = Vector3(0, 0.0004, 0.048)
-	root.add_child(blade)
-	# Câble de la caméra et de la lumière
-	var pts := MeshUtil.bezier(Vector3(0, 0, -0.12), Vector3(0, -0.01, -0.17), Vector3(0, -0.12, -0.22), Vector3(0, -0.3, -0.25), 14)
-	var rr := PackedFloat32Array()
-	rr.resize(pts.size())
-	rr.fill(0.003)
-	var cable := MeshInstance3D.new()
-	cable.mesh = MeshUtil.tube(pts, rr, 8)
-	cable.material_override = dark
-	root.add_child(cable)
+	var cone := MeshInstance3D.new()
+	var pts := PackedVector3Array([Vector3(0, 0, 0.045), Vector3(0, 0, 0.055), Vector3(0, 0, 0.062)])
+	var rr := PackedFloat32Array([0.0055, 0.003, 0.0016])
+	cone.mesh = MeshUtil.tube(pts, rr, 16, false, false)
+	cone.material_override = MeshUtil.mat(Color(0.9, 0.9, 0.9), 0.3)
+	root.add_child(cone)
+	var felt := MeshInstance3D.new()
+	var fp := PackedVector3Array([Vector3(0, 0, 0.062), Vector3(0, 0, 0.068)])
+	var fr := PackedFloat32Array([0.0012, 0.0007])
+	felt.mesh = MeshUtil.tube(fp, fr, 10, false, true)
+	felt.material_override = MeshUtil.mat(Color(0.25, 0.06, 0.32), 0.7)
+	root.add_child(felt)
 	return root

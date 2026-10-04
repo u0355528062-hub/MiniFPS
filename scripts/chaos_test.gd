@@ -1,6 +1,6 @@
 class_name ChaosTest
 extends Node
-## Test « chaos » : à chaque étape, des centaines d'actions au hasard (mains VR ou souris/clavier),
+## Test « chaos » : à chaque étape, des centaines d'actions au hasard (souris, clavier, regard),
 ## puis le robot doit pouvoir terminer l'étape depuis l'état laissé. Des invariants sont vérifiés à
 ## chaque image (instrument tenu par deux mains, valeurs absurdes, étape qui recule...).
 
@@ -49,18 +49,8 @@ func _physics_process(_delta: float) -> void:
 	# 4. Patient cohérent
 	if not is_finite(patient.opening) or patient.opening < -0.01 or patient.opening > 1.4:
 		_violation("ouverture de plaie absurde %f" % patient.opening)
-	if proc.op.id == "appendicectomie":
-		if not _finite(patient.appendix_tip) or patient.appendix_tip.distance_to(patient.appendix_base) > 0.1:
-			_violation("pointe d'appendice absurde %s" % patient.appendix_tip)
-	var cur := proc.current()
-	if not cur.is_empty() and cur["kind"] == "carry":
-		var obj: Node3D = cur["object"].call()
-		if obj and not _finite(obj.global_position):
-			_violation("objet transporté : position invalide")
-	if not cur.is_empty() and cur["kind"] == "lift":
-		var t: Vector3 = cur["target"].call()
-		if not _finite(t) or t.distance_to(patient.center) > 0.4:
-			_violation("objet soulevé hors de portée %s" % t)
+	if not is_finite(patient.lung_collapse) or patient.tract_depth < 0.0 or patient.tract_depth > 0.06:
+		_violation("état anatomique absurde (poumon %.2f, trajet %.3f)" % [patient.lung_collapse, patient.tract_depth])
 	# 5. Aucun instrument tenu ne traverse la peau hors des zones permises
 	for h in proc.hands:
 		if h.held and not h.held.samples.is_empty():
@@ -82,63 +72,38 @@ func _physics_process(_delta: float) -> void:
 
 func _random_point() -> Vector3:
 	match rng.randi_range(0, 4):
-		0, 1:  # champ opératoire / plaie
+		0, 1, 2:  # champ opératoire / plaie
 			var c := patient.center
 			return c + Vector3(rng.randf_range(-0.12, 0.12), rng.randf_range(-0.06, 0.15), rng.randf_range(-0.12, 0.12))
-		2:  # plateau d'instruments
+		3:  # plateau d'instruments
 			return InstrumentTray.MAYO_POS + Vector3(rng.randf_range(-0.3, 0.3), InstrumentTray.TRAY_Y + rng.randf_range(0.0, 0.25), rng.randf_range(-0.25, 0.25))
-		3:  # haricot (ou autour du chirurgien)
-			var base := tray.dish_center if proc.op.with_dish else proc.op.surgeon_spot + Vector3(0, 1.1, -0.2)
-			return base + Vector3(rng.randf_range(-0.15, 0.15), rng.randf_range(0.0, 0.2), rng.randf_range(-0.15, 0.15))
 		_:  # n'importe où
 			return Vector3(rng.randf_range(-1.5, 1.5), rng.randf_range(0.5, 2.0), rng.randf_range(-1.5, 1.5))
 
 
-## Rafale d'actions au hasard avec les mains VR.
-func chaos_vr(frames: int) -> void:
+## Rafale d'actions au hasard : regard, clic, molette, touches (instruments, reposer, vue anatomique).
+func chaos_burst(frames: int) -> void:
+	var b := bot as PlayerBot
 	for f in frames:
-		var vb := bot as VRBot
-		for h in [vb.R, vb.L]:
-			if rng.randf() < 0.12:
-				var basis := Basis.from_euler(Vector3(rng.randf_range(-1.2, 0.3), rng.randf_range(-PI, PI), rng.randf_range(-0.8, 0.8)))
-				h.controller.global_transform = Transform3D(basis, _random_point())
-			if rng.randf() < 0.05 and h.held and proc.marker.visible:
-				# Vise une cible de l'étape (fait parfois avancer l'opération par hasard)
-				h.controller.global_position += proc.marker.global_position - h.held.tip_global()
-			if rng.randf() < 0.04:
-				h.sim_grip = 1.0 - h.sim_grip
-			if rng.randf() < 0.1:
-				h.sim_trigger = rng.randf() if rng.randf() < 0.5 else float(rng.randi_range(0, 1))
-			if vb.hand_mode and rng.randf() < 0.01:
-				vb._open[h] = not vb._open.get(h, false)
-		if rng.randf() < 0.01 and proc.step == Procedure.INTRO:
-			proc.on_continue()
-		await get_tree().process_frame
-
-
-## Rafale d'actions au hasard à la souris et au clavier.
-func chaos_desk(frames: int) -> void:
-	var b := bot as DesktopBot
-	for f in frames:
-		if rng.randf() < 0.2:
-			b.hand.sim_mouse = Vector2(rng.randf_range(0, 1280), rng.randf_range(0, 720))
-		if rng.randf() < 0.05:
+		if rng.randf() < 0.08:
 			b.aim(_random_point())
+		if rng.randf() < 0.03 and proc.marker.visible:
+			b.aim(proc.marker.global_position)
 		var r := rng.randf()
 		if r < 0.06:
-			b.mouse_button(MOUSE_BUTTON_LEFT, rng.randf() < 0.5)
+			b.hand.sim_click = rng.randi_range(0, 1)
 		elif r < 0.08:
-			b.mouse_button(MOUSE_BUTTON_RIGHT, true)
-			b.mouse_motion(Vector2(rng.randf_range(-40, 40), rng.randf_range(-40, 40)))
-			b.mouse_button(MOUSE_BUTTON_RIGHT, false)
+			b.key([KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_R, KEY_9, KEY_0, KEY_E][rng.randi_range(0, 11)])
 		elif r < 0.10:
-			b.key([KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_R, KEY_9, KEY_0][rng.randi_range(0, 10)])
-		elif r < 0.12:
-			b.mouse_button([MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN][rng.randi_range(0, 1)], true)
+			b.hand.lift = clampf(b.hand.lift + rng.randf_range(-0.01, 0.01), 0.0, 0.12)
+		elif r < 0.105:
+			b.player.view_mode_requested.emit()
+		elif r < 0.11:
+			b.player.position = b.home + Vector3(rng.randf_range(-0.3, 0.3), 0, rng.randf_range(0.0, 0.4))
 		await get_tree().process_frame
 
 
-func run(mode: String, seed_value: int) -> void:
+func run(seed_value: int) -> void:
 	rng.seed = seed_value
 	_checking = true
 	await get_tree().process_frame
@@ -147,23 +112,19 @@ func run(mode: String, seed_value: int) -> void:
 	while proc.step >= 0 and proc.step < proc.steps.size() and guard < 40:
 		guard += 1
 		var s := proc.step
-		if mode == "vr":
-			await chaos_vr(rng.randi_range(120, 360))
-		else:
-			await chaos_desk(rng.randi_range(120, 360))
+		await chaos_burst(rng.randi_range(120, 360))
+		(bot as PlayerBot).player.position = (bot as PlayerBot).home
+		if patient.view_mode != 0:
+			patient.set_view_mode(0)
 		await bot.do_step()
 		if proc.step == s:
 			print("CHAOS BLOQUÉ à l'étape ", proc.steps[s]["id"])
 			break
 	var ok := proc.step >= proc.steps.size() and violations == 0 and bot.ok
-	for vb in [bot]:
-		if vb is VRBot:
-			for h in (vb as VRBot)._open:
-				(vb as VRBot)._open[h] = false
 	await bot.cleanup()
 	await get_tree().create_timer(0.8).timeout
 	for inst in tray.ordered:
 		if not inst.parked and inst.global_position.distance_to(inst.tray_transform.origin) > 0.01:
 			print("CHAOS : ", inst.id, " pas revenu sur la table")
 			ok = false
-	print("CHAOS %s %s graine %d : %s (étapes %d/%d, erreurs joueur %d, invariants violés %d)" % [mode, proc.op.id, seed_value, "OK" if ok else "ÉCHEC", proc.step, proc.steps.size(), proc.errors, violations])
+	print("CHAOS %s graine %d : %s (étapes %d/%d, erreurs joueur %d, invariants violés %d)" % [proc.op.id, seed_value, "OK" if ok else "ÉCHEC", proc.step, proc.steps.size(), proc.errors, violations])

@@ -14,12 +14,18 @@ var clock_label: Label3D
 var _clock_t := 0.0
 
 
+## Table d'opération (le patient est couché dessus, tête vers +X)
+const TABLE_X := -0.36
+
+
 func build() -> void:
 	_shell()
 	_ceiling_fixtures()
 	_lights()
 	_furniture()
+	_patient_supports()
 	_environment_probe()
+	_colliders()
 
 
 func _room_mat(kind: int, tint: Color) -> ShaderMaterial:
@@ -76,7 +82,7 @@ func _shell() -> void:
 	MeshUtil.box_instance(door, Vector3(0.06, 0.45, 0.5), Vector3(0, 1.55, 0), MeshUtil.mat(Color(0.12, 0.16, 0.18), 0.05, 0.0), "Hublot")
 	MeshUtil.box_instance(door, Vector3(0.07, 0.04, 1.6), Vector3(0, 2.24, 0), steel, "Rail")
 	var sign_lbl := Label3D.new()
-	sign_lbl.text = "BLOC 2"
+	sign_lbl.text = "DÉCHOCAGE"
 	sign_lbl.font_size = 64
 	sign_lbl.pixel_size = 0.0015
 	sign_lbl.modulate = Color(0.85, 0.95, 0.95)
@@ -112,7 +118,7 @@ func _shell() -> void:
 	MeshUtil.box_instance(neg, Vector3(1.0, 0.42, 0.01), Vector3(0, 0, 0.035), MeshUtil.emissive(Color(0.75, 0.82, 0.9), 1.2), "Ecran")
 	var scan := Label3D.new()
 	scan_label = scan
-	scan.text = "SCANNER ABDOMINAL\nAppendice épaissi (11 mm)\ninfiltration de la graisse"
+	scan.text = "RADIO THORAX\nPneumothorax droit"
 	scan.font_size = 40
 	scan.pixel_size = 0.0012
 	scan.modulate = Color(0.1, 0.12, 0.15)
@@ -137,10 +143,10 @@ func _shell() -> void:
 func _ceiling_fixtures() -> void:
 	# Plafond soufflant à flux laminaire au-dessus de la table
 	var frame := MeshUtil.mat(Color(0.92, 0.93, 0.94), 0.35, 0.3)
-	MeshUtil.box_instance(self, Vector3(2.6, 0.08, 2.0), Vector3(0, HEIGHT - 0.04, 0), frame, "FluxLaminaire")
+	MeshUtil.box_instance(self, Vector3(2.6, 0.08, 2.0), Vector3(TABLE_X, HEIGHT - 0.04, 0), frame, "FluxLaminaire")
 	for i in 2:
 		for j in 2:
-			MeshUtil.box_instance(self, Vector3(1.15, 0.01, 0.85), Vector3(-0.62 + i * 1.24, HEIGHT - 0.085, -0.46 + j * 0.92), MeshUtil.emissive(Color(0.96, 0.98, 1.0), 0.9), "Diffuseur")
+			MeshUtil.box_instance(self, Vector3(1.15, 0.01, 0.85), Vector3(TABLE_X - 0.62 + i * 1.24, HEIGHT - 0.085, -0.46 + j * 0.92), MeshUtil.emissive(Color(0.96, 0.98, 1.0), 0.9), "Diffuseur")
 	# Dalles lumineuses de la salle
 	for p in [Vector3(-2.3, 0, -1.8), Vector3(2.3, 0, -1.8), Vector3(-2.3, 0, 1.8), Vector3(2.3, 0, 1.8)]:
 		MeshUtil.box_instance(self, Vector3(1.2, 0.03, 0.6), Vector3(p.x, HEIGHT - 0.02, p.z), MeshUtil.emissive(Color(0.97, 0.98, 1.0), 1.1), "Dalle")
@@ -150,14 +156,15 @@ func _lights() -> void:
 	# Lumière du flux laminaire : large, douce, ombres légères
 	var lam := SpotLight3D.new()
 	lam.name = "LumiereLaminaire"
-	lam.position = Vector3(0, HEIGHT - 0.12, 0)
+	lam.position = Vector3(TABLE_X, HEIGHT - 0.12, 0)
 	lam.rotation_degrees = Vector3(-90, 0, 0)
 	lam.spot_angle = 38
 	lam.spot_range = 4.0
-	lam.light_energy = 0.8
+	lam.light_energy = 0.9
 	lam.light_color = Color(0.95, 0.98, 1.0)
-	# Une seule lumière à ombres (le scialytique) : les ombres coûtent cher en stéréo
-	lam.shadow_enabled = false
+	lam.shadow_enabled = true
+	lam.light_size = 1.2
+	lam.shadow_bias = 0.05
 	add_child(lam)
 
 	# Éclairage général de la salle
@@ -175,25 +182,25 @@ func _lights() -> void:
 	scialytique_light = SpotLight3D.new()
 	scialytique_light.name = "Scialytique"
 	add_child(scialytique_light)
-	scialytique_light.look_at_from_position(Vector3(0.05, 1.95, 0.3), Vector3(0.12, 1.1, 0.1))
-	scialytique_light.spot_angle = 24
+	scialytique_light.look_at_from_position(Vector3(-0.05, 2.25, 0.35), Vector3(0.0, 1.3, 0.0))
+	scialytique_light.spot_angle = 16
 	scialytique_light.spot_angle_attenuation = 0.6
 	scialytique_light.spot_range = 3.0
-	scialytique_light.light_energy = 0.8
+	scialytique_light.light_energy = 2.2
 	scialytique_light.light_color = Color(1.0, 0.97, 0.93)
 	scialytique_light.shadow_enabled = true
-	scialytique_light.light_size = 0.25
+	scialytique_light.light_size = 0.35
 	scialytique_light.shadow_bias = 0.08
 	scialytique_light.shadow_normal_bias = 2.5
 	scialytique_light.light_specular = 0.6
 	var second := SpotLight3D.new()
 	second.name = "Scialytique2"
-	second.position = Vector3(0.45, 1.9, -0.2)
+	second.position = Vector3(0.4, 2.2, -0.3)
 	add_child(second)
-	second.look_at_from_position(second.position, Vector3(0.12, 1.1, 0.1))
-	second.spot_angle = 18
+	second.look_at_from_position(second.position, Vector3(0.0, 1.3, 0.0))
+	second.spot_angle = 14
 	second.spot_range = 3.0
-	second.light_energy = 0.5
+	second.light_energy = 1.1
 	second.light_color = Color(0.98, 0.98, 1.0)
 	second.shadow_enabled = false
 
@@ -213,18 +220,20 @@ func _place(file: String, pos: Vector3, yaw_deg := 0.0, scale := 1.0) -> Node3D:
 
 
 func _furniture() -> void:
-	_place("table_operation", Vector3.ZERO)
+	var table := _place("table_operation", Vector3(TABLE_X, 0, 0))
+	# Table abaissée pour la position latérale (dessus à 0,80 m)
+	table.scale = Vector3(1.0, Patient.TABLE_TOP / 0.96, 1.0)
 	_place("table_sterile_2", Vector3(0.25, 0, 1.75), 90)
 	_place("table_sterile_1", Vector3(-1.9, 0, 2.6), 0)
 	_place("table_sterile_3", Vector3(2.4, 0, -1.2), 90)
 	_place("chariot_pharmacie", Vector3(-2.7, 0, -2.6), 0)
 	_place("chariot_inox", Vector3(1.6, 0, -2.75), 0)
 	_place("chariot", Vector3(-1.75, 0, 1.0), 90)
-	_place("perfusion", Vector3(-1.05, 0, -0.55))
+	_place("perfusion", Vector3(0.95, 0, -0.62))
 	_place("tabouret", Vector3(1.0, 0, 1.1))
 	_place("lavabo", Vector3(1.4, 0, SIZE_Z / 2 - 0.45), 180)
 	_place("paravent", Vector3(2.9, 0, 0.2), 90)
-	var lamp := _place("scialytique", Vector3(0.1, HEIGHT - 1.3, 0.1), 0)
+	var lamp := _place("scialytique", Vector3(0.05, HEIGHT - 1.05, 0.2), 0)
 	# La coupole ne doit pas faire d'ombre à sa propre lumière
 	for mi in lamp.find_children("*", "GeometryInstance3D", true, false):
 		(mi as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -245,8 +254,8 @@ func _furniture() -> void:
 func _anesthesia_station() -> void:
 	var st := Node3D.new()
 	st.name = "Anesthesie"
-	st.position = Vector3(-1.45, 0, -0.35)
-	st.rotation_degrees.y = 90
+	st.position = Vector3(1.45, 0, -0.2)
+	st.rotation_degrees.y = -90
 	add_child(st)
 	var body := MeshUtil.mat(Color(0.86, 0.88, 0.9), 0.35, 0.1)
 	var dark := MeshUtil.mat(Color(0.12, 0.13, 0.15), 0.4)
@@ -259,6 +268,78 @@ func _anesthesia_station() -> void:
 		MeshUtil.cylinder_instance(st, 0.025, 0.04, Vector3(-0.08 * i + 0.1, 0.12, 0.25), dark, "Roue")
 	for i in 3:
 		MeshUtil.box_instance(st, Vector3(0.68, 0.02, 0.01), Vector3(0, 0.3 + i * 0.22, 0.301), dark, "Tiroir")
+
+
+## Coussin sous la tête (position latérale), appui-bras sous le bras droit levé.
+func _patient_supports() -> void:
+	var cloth := Tex.drape(Color(0.82, 0.86, 0.9))
+	var pillow := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.30, 0.25, 0.34)
+	bm.subdivide_width = 6
+	bm.subdivide_height = 4
+	bm.subdivide_depth = 6
+	pillow.mesh = bm
+	pillow.material_override = cloth
+	pillow.position = Vector3(0.43, Patient.TABLE_TOP + 0.12, -0.01)
+	pillow.name = "Coussin"
+	add_child(pillow)
+	# Appui-bras rembourré fixé au rail de la table, sous le coude et l'avant-bras
+	var pad_mat := MeshUtil.mat(Color(0.12, 0.13, 0.15), 0.6)
+	var arm := Node3D.new()
+	arm.name = "AppuiBras"
+	add_child(arm)
+	var pad := MeshUtil.box_instance(arm, Vector3(0.34, 0.045, 0.11), Vector3(0.43, 1.475, -0.04), pad_mat, "Gouttiere")
+	pad.rotation_degrees.z = 24
+	var steel := MeshUtil.mat(Color(0.78, 0.8, 0.82), 0.25, 0.9)
+	MeshUtil.cylinder_instance(arm, 0.012, 0.66, Vector3(0.36, Patient.TABLE_TOP + 0.31, -0.33), steel, "Tige")
+	var bar := MeshUtil.cylinder_instance(arm, 0.01, 0.3, Vector3(0.38, 1.43, -0.19), steel, "Bras")
+	bar.rotation_degrees.x = 90
+
+
+## Murs et meubles solides pour le joueur.
+func _colliders() -> void:
+	var body := StaticBody3D.new()
+	body.name = "Solides"
+	add_child(body)
+	var add_box := func(center: Vector3, size: Vector3) -> void:
+		var cs := CollisionShape3D.new()
+		var b := BoxShape3D.new()
+		b.size = size
+		cs.shape = b
+		cs.position = center
+		body.add_child(cs)
+	var t := 0.3
+	add_box.call(Vector3(0, HEIGHT / 2, -SIZE_Z / 2 - t / 2), Vector3(SIZE_X, HEIGHT, t))
+	add_box.call(Vector3(0, HEIGHT / 2, SIZE_Z / 2 + t / 2), Vector3(SIZE_X, HEIGHT, t))
+	add_box.call(Vector3(-SIZE_X / 2 - t / 2, HEIGHT / 2, 0), Vector3(t, HEIGHT, SIZE_Z))
+	add_box.call(Vector3(SIZE_X / 2 + t / 2, HEIGHT / 2, 0), Vector3(t, HEIGHT, SIZE_Z))
+	add_box.call(Vector3(0, -0.05, 0), Vector3(SIZE_X, 0.1, SIZE_Z))
+	# Table + patient (on peut s'en approcher à ~25 cm)
+	add_box.call(Vector3(TABLE_X, 0.7, 0), Vector3(2.15, 1.4, 0.72))
+	# Meubles : boîte englobante de chaque modèle
+	for n in get_children():
+		if n is Node3D and String(n.name) in ["table_sterile_1", "table_sterile_2", "table_sterile_3", "chariot_pharmacie", "chariot_inox", "chariot", "lavabo", "paravent", "Anesthesie", "tabouret", "perfusion"]:
+			var box := _world_aabb(n)
+			if box.size.length() > 0.01:
+				add_box.call(box.get_center(), box.size)
+
+
+func _world_aabb(n: Node) -> AABB:
+	var out := AABB()
+	var first := true
+	for mi in n.find_children("*", "MeshInstance3D", true, false):
+		var g := mi as MeshInstance3D
+		var b := g.global_transform * g.get_aabb()
+		if first:
+			out = b
+			first = false
+		else:
+			out = out.merge(b)
+	if n is MeshInstance3D:
+		var g2 := n as MeshInstance3D
+		out = g2.global_transform * g2.get_aabb() if first else out.merge(g2.global_transform * g2.get_aabb())
+	return out
 
 
 func _environment_probe() -> void:

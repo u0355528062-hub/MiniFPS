@@ -6,7 +6,7 @@ var ring: MeshInstance3D
 var label: Label3D
 var _mat := StandardMaterial3D.new()
 var _t := 0.0
-var color := GuideUI.ACCENT: set = set_color
+var color := UIKit.ACCENT: set = set_color
 
 
 func _init() -> void:

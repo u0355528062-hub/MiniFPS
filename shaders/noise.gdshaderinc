@@ -52,6 +52,13 @@ vec4 tri_tex(sampler2D t, vec3 p, vec3 n, float scale) {
 	return texture(t, p.zy * scale) * w.x + texture(t, p.xz * scale) * w.y + texture(t, p.xy * scale) * w.z;
 }
 
+// Même chose pour une texture de couleur (les échantillonneurs passés à une fonction doivent
+// tous avoir les mêmes réglages : une fonction par type de texture).
+vec4 tri_col(sampler2D t, vec3 p, vec3 n, float scale) {
+	vec3 w = tri_weights(n);
+	return texture(t, p.zy * scale) * w.x + texture(t, p.xz * scale) * w.y + texture(t, p.xy * scale) * w.z;
+}
+
 // Normale monde perturbée par une carte de normales (mélange « whiteout »).
 vec3 tri_normal(sampler2D t, vec3 p, vec3 n, float scale, float strength) {
 	vec3 w = tri_weights(n);
