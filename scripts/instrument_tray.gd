@@ -32,7 +32,7 @@ func build() -> void:
 	add_child(m)
 
 	# Champ stérile bleu-vert sur le plateau
-	var drape := Tex.drape(Color(0.1, 0.3, 0.42))
+	var drape := Tex.drape(Color(0.16, 0.42, 0.56))
 	var cloth := MeshInstance3D.new()
 	cloth.mesh = MeshUtil.height_grid(MAYO_POS.x - 0.26, MAYO_POS.z - 0.22, 0.52, 0.44, 30, 26, func(x: float, z: float) -> float:
 		var ex := maxf(absf(x - MAYO_POS.x) - 0.235, 0.0)

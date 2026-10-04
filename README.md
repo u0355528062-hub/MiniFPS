@@ -42,7 +42,11 @@ brille sur la table, un anneau lumineux montre où agir.
 | Stick gauche | te déplacer doucement |
 | Stick droit | tourner par crans |
 
-Tu peux tenir un instrument dans chaque main.
+Tu peux tenir un instrument dans chaque main, et passer un instrument d'une main à l'autre.
+
+**Hauteur automatique** : au lancement (et à chaque appui sur B / Y), le jeu place tes yeux à
+1,62 m face au patient. La table est donc à la bonne hauteur que tu sois grand, petit, debout ou
+**assis**. Si tu te sens mal placé, appuie simplement sur **B**.
 
 ### Souris et clavier
 
@@ -82,6 +86,8 @@ Après `--` sur la ligne de commande :
 - `--desktop` : forcer le mode écran.
 - `--step=N` : commencer directement à l'étape N (0 à 8).
 - `--autotest` : un robot fait toute l'opération et affiche `AUTOTEST OK` si tout s'enchaîne.
+- `--vrtest` : un robot fait toute l'opération **avec les mains VR** (grip, gâchette, rayon, deux
+  mains, maladresses volontaires) et affiche `VRTEST OK`.
 
 ---
 
@@ -104,10 +110,11 @@ Les modèles 3D restent la propriété de leurs auteurs, selon leur licence :
 | Pied à perfusion | Somar52 | CC BY 4.0 |
 | Table d'opération, scialytique, table de Mayo | générés par IA (fournis par le propriétaire du projet) | — |
 | Appendice, cæcum, intestin grêle, méso, artères | Z-Anatomy (d'après BodyParts3D, © DBCLS) | CC BY-SA 4.0 |
+| Tête du patient (scan « Lee Perry-Smith ») | Infinite-Realities (via three.js) | CC BY 3.0 |
 | Mains gantées, outils VR | Godot XR Tools | MIT |
 | Police Inter | Rasmus Andersson | SIL OFL 1.1 |
 
-Tout le reste a été fait pour ce projet : salle, champs, peau, plaie, shaders, sons synthétisés,
-interface et code.
+Tout le reste a été fait pour ce projet : salle, champs, peau, plaie, textures procédurales
+(`tools/gen_textures.py`), shaders, sons synthétisés, interface et code.
 
 Attention : à cause de la licence **CC BY-NC** des instruments, ce prototype ne peut pas être vendu.

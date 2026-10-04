@@ -35,7 +35,7 @@ void fragment() {
 	float sc = 1.0 / 0.04;
 	float det = tri_tex(fabric_detail, wpos, wnorm, sc).r;
 	float mot = tri_tex(mottle, wpos, wnorm, 2.0).r;
-	vec3 col = fabric * (0.86 + 0.18 * det) * (0.93 + 0.12 * mot);
+	vec3 col = fabric * (0.88 + 0.16 * det) * (0.96 + 0.06 * mot);
 	float rough = 0.93;
 	vec3 nw = tri_normal(fabric_normal, wpos, normalize(wnorm * (FRONT_FACING ? 1.0 : -1.0)), sc, 0.9);
 
