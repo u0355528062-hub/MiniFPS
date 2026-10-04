@@ -14,6 +14,8 @@ var auto_lift := 0.0  ## levée automatique demandée par la procédure (appendi
 var press_mode := "press"
 var press_max := 0.006
 var depth := 0.0
+## Sans clic, l'instrument survole la peau de 2,5 mm (il ne coupe pas, ne peint pas par accident)
+const HOVER := 0.0025
 var _tip := Vector3.ZERO
 var sim_mouse := Vector2(-1, -1)  ## test robot : position de souris imposée
 
@@ -89,13 +91,16 @@ func _process(delta: float) -> void:
 			depth = move_toward(depth, press_max, 0.045 * delta)
 		elif press_mode != "hold":
 			depth = move_toward(depth, 0.0, 0.1 * delta)
-		var target := _aim_point(mouse) + Vector3.UP * (lift + auto_lift - depth)
+		var aim := _aim_point(mouse)
+		if patient:
+			aim.y += patient.breath_offset(aim.x, aim.z)
+		var target := aim + Vector3.UP * (lift + auto_lift - depth + HOVER)
 		# Aide : attire la pointe vers la cible de l'étape quand on en est proche
 		if assist_target != Vector3.INF:
 			var flat := Vector2(target.x - assist_target.x, target.z - assist_target.z).length()
 			if flat < 0.035:
 				var w := 1.0 - smoothstep(0.012, 0.035, flat)
-				var snapped := assist_target + Vector3.UP * (lift + auto_lift - depth)
+				var snapped := assist_target + Vector3.UP * (lift + auto_lift - depth + HOVER)
 				target = target.lerp(snapped, w)
 		_tip = target if _tip == Vector3.ZERO else _tip.lerp(target, 1.0 - exp(-delta * 22.0))
 		var fwd := -camera.global_basis.z

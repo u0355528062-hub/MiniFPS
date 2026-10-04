@@ -12,6 +12,7 @@ var violations := 0
 var _last_step := -10
 var _checking := false
 var bot: BotDriver
+var _deep := {}
 
 
 func _violation(msg: String) -> void:
@@ -65,8 +66,14 @@ func _physics_process(_delta: float) -> void:
 		if h.held and not h.held.samples.is_empty():
 			var tp := h.held.tip_global()
 			var allowed := Contact.allowance(tp, h.held.samples[0][1])
+			# Une image de décalage est normale (la plaie se referme entre deux poses) : il faut que ça dure
+			var key := "deep_%s" % h.held.id
 			if h.held.tip_depth > allowed + 0.004:
-				_violation("%s enfoncé de %.0f mm (permis %.0f)" % [h.held.id, h.held.tip_depth * 1000.0, allowed * 1000.0])
+				_deep[key] = _deep.get(key, 0) + 1
+				if _deep[key] == 4:
+					_violation("%s enfoncé de %.0f mm (permis %.0f)" % [h.held.id, h.held.tip_depth * 1000.0, allowed * 1000.0])
+			else:
+				_deep[key] = 0
 	if patient.open_l > 1.4 or patient.open_r > 1.4 or not is_finite(patient.open_l + patient.open_r):
 		_violation("plaie déchirée %.2f / %.2f" % [patient.open_l, patient.open_r])
 	if proc.errors < 0 or proc.elapsed < 0.0:

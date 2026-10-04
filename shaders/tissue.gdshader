@@ -54,8 +54,8 @@ void fragment() {
 	ALBEDO = col;
 	ROUGHNESS = mix(mix(0.5, 0.18, wetness), 0.75, fib);
 	SPECULAR = 0.5;
-	CLEARCOAT = wetness * (1.0 - fib);
-	CLEARCOAT_ROUGHNESS = 0.06;
+	CLEARCOAT = wetness * 0.6 * (1.0 - fib);
+	CLEARCOAT_ROUGHNESS = 0.12;
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	SSS_STRENGTH = 0.6;
 	BACKLIGHT = base_color * 0.3;

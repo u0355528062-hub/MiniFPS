@@ -9,6 +9,9 @@ const MODELS := "res://assets/models/"
 
 var room_shader: Shader = preload("res://shaders/room.gdshader")
 var scialytique_light: SpotLight3D
+var scan_label: Label3D
+var clock_label: Label3D
+var _clock_t := 0.0
 
 
 func build() -> void:
@@ -108,6 +111,7 @@ func _shell() -> void:
 	MeshUtil.box_instance(neg, Vector3(1.1, 0.5, 0.06), Vector3.ZERO, MeshUtil.mat(Color(0.9, 0.9, 0.9), 0.4), "Negatoscope")
 	MeshUtil.box_instance(neg, Vector3(1.0, 0.42, 0.01), Vector3(0, 0, 0.035), MeshUtil.emissive(Color(0.75, 0.82, 0.9), 1.2), "Ecran")
 	var scan := Label3D.new()
+	scan_label = scan
 	scan.text = "SCANNER ABDOMINAL\nAppendice épaissi (11 mm)\ninfiltration de la graisse"
 	scan.font_size = 40
 	scan.pixel_size = 0.0012
@@ -119,6 +123,7 @@ func _shell() -> void:
 	# Horloge murale (mur sud)
 	var clock := Label3D.new()
 	clock.name = "Horloge"
+	clock_label = clock
 	clock.text = "08:42"
 	clock.font_size = 96
 	clock.pixel_size = 0.002
@@ -269,3 +274,12 @@ func _environment_probe() -> void:
 	probe.ambient_color_energy = 0.5
 	probe.intensity = 0.25
 	add_child(probe)
+
+
+## Horloge murale : l'heure réelle (mise à jour toutes les 10 s).
+func _process(delta: float) -> void:
+	_clock_t -= delta
+	if _clock_t <= 0.0 and clock_label:
+		_clock_t = 10.0
+		var t := Time.get_time_dict_from_system()
+		clock_label.text = "%02d:%02d" % [t.hour, t.minute]

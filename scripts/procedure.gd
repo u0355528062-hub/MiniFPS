@@ -224,6 +224,9 @@ func _enter_step(i: int) -> void:
 	_caption("")
 	if hud:
 		hud.mark_required(s["inst"])
+	if s["kind"] == "inject":
+		# Seringue pleine pour chaque injection (anesthésie, puis sérum de lavage)
+		inst.set_volume(1.0)
 	if s.has("enter"):
 		s["enter"].call()
 
@@ -354,6 +357,7 @@ func _process(delta: float) -> void:
 		"insert": _tick_insert(s, delta)
 		"hold": _tick_hold(s, delta)
 		"place": _tick_place(s, delta)
+		"selfretract": _tick_selfretract(s, delta)
 	if step >= 0 and step < steps.size() and current() == s:
 		_update_markers(s)
 	if not show_markers:
@@ -369,14 +373,14 @@ func _setup_hands(s: Dictionary) -> void:
 	var lift := 0.0
 	match s["kind"]:
 		"paint":
-			pmax = 0.003
+			pmax = 0.0055
 		"incise":
-			pmax = 0.004
+			pmax = 0.0065
 		"inject":
-			pmax = 0.006
+			pmax = 0.0085
 			target = s["target"].call()
 		"retract":
-			pmax = 0.014
+			pmax = 0.0165
 			if not st.has("hook"):
 				target = _retract_marker(s)
 		"spread":
@@ -401,13 +405,17 @@ func _setup_hands(s: Dictionary) -> void:
 			mode = "none"
 			target = s["target"].call()
 		"suture":
-			pmax = 0.004
+			pmax = 0.0065
 			var pair := _suture_pair(s)
 			if not pair.is_empty():
 				target = pair[1] if st.get("phase", 0) == 1 else pair[0]
 		"hold":
 			mode = "none"
 			target = s["target"].call()
+		"selfretract":
+			mode = "hold"
+			pmax = 0.025
+			target = patient.center
 	for h in hands:
 		var ok: bool = h.held != null and h.held.id == s["inst"]
 		h.assist_target = target if ok else Vector3.INF
@@ -504,6 +512,8 @@ func _update_markers(s: Dictionary) -> void:
 				marker.show_at(goal, "Tire jusqu'ici", 0.7)
 			else:
 				marker.show_at(_retract_marker(s), s.get("label", "Accroche le bord"), 0.8)
+		"selfretract":
+			marker.show_at(patient.center - Vector3.UP * 0.004, s.get("label", ""), 1.2)
 		"spread", "insert", "hold", "place", "cut", "ligate":
 			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 0.9))
 		"lift":
@@ -616,7 +626,9 @@ func _tick_inject(s: Dictionary, delta: float) -> void:
 		var inst := h.held
 		var tipp := h.tip()
 		var depth := inst.tip_depth
-		var inside := _flat(tipp, target) < _tol(0.02) and depth > 0.002
+		# Une aiguille piquée reste dans la peau même quand le thorax respire (hystérésis)
+		var was_in: bool = st.get("in", false)
+		var inside := _flat(tipp, target) < _tol(0.02) and (depth > 0.002 or (was_in and depth > -0.003))
 		var sq := h.squeeze_value()
 		# Le pouce qui vient de pincer la seringue pour la prendre ne pousse pas le piston :
 		# il faut d'abord relâcher, puis serrer
@@ -633,7 +645,10 @@ func _tick_inject(s: Dictionary, delta: float) -> void:
 			inj = minf(1.0, inj + rate * delta)
 			inst.set_volume(maxf(inst.volume - rate * delta, 0.0))
 			pushing = rate
-			patient.set_bleb(target, 0.005 + 0.009 * inj, 0.001 + 0.0026 * inj)
+			if s.get("bleb", true):
+				patient.set_bleb(target, 0.005 + 0.009 * inj, 0.001 + 0.0026 * inj)
+			if s.has("progress"):
+				s["progress"].call(inj)
 			h.pulse(0.06, 0.02)
 		elif rate > 0.0 and not inside and h is VRHand and inst.volume > 0.92:
 			# Hors de la peau, le produit gicle par l'aiguille (on peut purger un peu, pas plus)
@@ -642,19 +657,25 @@ func _tick_inject(s: Dictionary, delta: float) -> void:
 			if _hint_cd <= 0.0:
 				_hint_cd = 3.0
 				_toast("Le produit coule dans le vide : pique d'abord la peau.", false)
-		if inj >= 0.97 and depth < 0.0:
+		# Seringue vide (un peu de produit a pu être purgé dans l'air) ou tout injecté
+		var full := inj >= 0.97 or (inst.volume <= 0.01 and inj >= 0.5)
+		if full and depth < 0.0:
 			# Aiguille retirée : l'anesthésie commence à agir
 			st["inj"] = inj
 			var wait: float = s.get("wait", 10.0)
-			anesthesia_ready_at = Time.get_ticks_msec() + int(wait * 1000.0)
-			op.anesthesia_started(wait)
+			if wait > 0.0:
+				anesthesia_ready_at = Time.get_ticks_msec() + int(wait * 1000.0)
+				op.anesthesia_started(wait)
 			_done(h, false)
 			_complete_step()
 			return
 	st["inj"] = inj
 	Sfx.loop("piston", target, 1.0 if pushing > 0.0 else 0.0)
-	if inj < 0.97:
-		_caption("Produit injecté : %d %%" % int(inj * 100) if inj > 0.0 else "")
+	var any_empty := false
+	for h in _active_hands():
+		any_empty = any_empty or h.held.volume <= 0.01
+	if inj < 0.97 and not (any_empty and inj >= 0.5):
+		_caption("%s injecté : %d %%" % [s.get("what", "Produit"), int(inj * 100)] if inj > 0.0 else "")
 	else:
 		_caption("Tout est injecté : retire l'aiguille.")
 
@@ -1031,16 +1052,17 @@ func _tick_suture(s: Dictionary, _delta: float) -> void:
 		return
 	var pair: Array = pairs[k]
 	var r := _tol(s.get("radius", 0.008))
+	var free: bool = s.get("free", false)  # tissu hors de la peau (intestin) : distance en 3D
 	for h in _active_hands():
 		var tipp := h.tip()
 		var depth := h.held.tip_depth
 		if st.get("phase", 0) == 0:
-			if _flat(tipp, pair[0]) < r and depth > 0.0015:
+			if (tipp.distance_to(pair[0]) < r) if free else (_flat(tipp, pair[0]) < r and depth > 0.0015):
 				st["phase"] = 1
 				Sfx.play("pique", tipp, -10.0)
 				h.pulse(0.3, 0.03)
 			continue
-		if _flat(tipp, pair[1]) < r and depth > -0.004:
+		if (tipp.distance_to(pair[1]) < r) if free else (_flat(tipp, pair[1]) < r and depth > -0.004):
 			s["point"].call(k, false)
 			Sfx.play(s.get("sound", "fil"), pair[1], -6.0)
 			h.pulse(0.3, 0.05)
@@ -1089,6 +1111,32 @@ func _tick_hold(s: Dictionary, delta: float) -> void:
 			return
 
 
+## Écarteur autostatique : on l'enfonce fermé dans la plaie, on écarte les doigts, il s'ouvre et
+## écarte les deux bords ; grand ouvert, sa crémaillère se bloque.
+func _tick_selfretract(s: Dictionary, delta: float) -> void:
+	for h in _active_hands():
+		var tipp := h.tip()
+		if h.held.tip_depth < 0.006 or patient.hole_depth(tipp) <= 0.0:
+			_caption("Enfonce l'écarteur fermé dans la plaie")
+			continue
+		var spread := 1.0 - h.squeeze_value()
+		var want := patient.rest_open + spread * 1.05
+		patient.drive_l = want
+		patient.drive_r = want
+		Sfx.loop("ecarte", tipp, spread * 0.6)
+		h.pulse(0.05 * spread, 0.02)
+		if minf(patient.open_l, patient.open_r) >= 0.9:
+			st["lock"] = st.get("lock", 0.0) + delta
+			_caption("Clac ! La crémaillère se bloque")
+			if st["lock"] > 0.3:
+				_done(h, false)
+				_complete_step()
+				return
+		else:
+			st["lock"] = 0.0
+			_caption("Écarte les doigts pour ouvrir l'écarteur" if spread < 0.5 else "Encore…")
+
+
 ## Poser / clamper : amener la pointe sur la cible et serrer.
 func _tick_place(s: Dictionary, _delta: float) -> void:
 	var p: Vector3 = s["target"].call()
@@ -1127,12 +1175,19 @@ func skip_to(n: int) -> void:
 			"inject":
 				var inst: Instrument = tray.instruments[s["inst"]]
 				inst.set_volume(0.0)
-				patient.set_bleb(s["target"].call(), 0.014, 0.0036)
-				op.anesthesia_started(0.0)
+				if s.get("bleb", true):
+					patient.set_bleb(s["target"].call(), 0.014, 0.0036)
+				if s.has("progress"):
+					s["progress"].call(1.0)
+				if s.get("wait", 10.0) > 0.0:
+					op.anesthesia_started(0.0)
 				anesthesia_ready_at = 0
 			"retract":
 				_done(null, true, _free_side(s))
 				continue
+			"hold":
+				if s.has("progress"):
+					s["progress"].call(1.0)
 			"suture":
 				var pairs: Array = s["pairs"].call()
 				for k in pairs.size():

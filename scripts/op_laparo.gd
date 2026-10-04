@@ -27,12 +27,15 @@ func _init() -> void:
 	tagline = "Plaie au couteau dans le ventre : grande incision du haut au bas du ventre, aspiration du sang, réparation de l'intestin perforé, puis fermeture en deux plans."
 	intro_text = "Hugo, 27 ans, coup de couteau dans le ventre. Il saigne à l'intérieur : tension basse, cœur rapide. Il est endormi. Tu vas ouvrir tout le ventre, trouver l'intestin perforé, le réparer et refermer."
 	summary = "Hémorragie aspirée, intestin réparé, ventre refermé en deux plans (aponévrose puis peau)."
+	header = "URGENCES  ·  LAPAROTOMIE MÉDIANE  ·  PLAIE PAR ARME BLANCHE"
+	scan_text = "ÉCHOGRAPHIE (FAST)\nÉpanchement intra-abdominal\nabondant : hémopéritoine"
+	breath_rate = 20.0
 	surgeon_spot = Vector3(-0.12, 0.0, 0.62)
 	tray_pos = Vector3(0.42, 0.0, 0.6)
 	vitals = {"hr": 118.0, "spo2": 96.0, "sys": 86, "dia": 50}
 	catalog = [
 		["mikulicz", "Pince à badigeon", "pince_mikulicz", 0.0, 0.0],
-		["bistouri", "Bistouri lame 23", "manche_bistouri", 0.0, 0.0],
+		["bistouri", "Bistouri lame 23", "manche_bistouri", 90.0, 0.0],
 		["gosset", "Écarteur autostatique de Gosset", "proc:gosset", 0.0, 0.0],
 		["aspirateur", "Canule d'aspiration", "proc:aspirateur", 0.0, 0.0],
 		["debakey", "Pince De Bakey", "pince_debakey", 90.0, 0.0],
@@ -186,60 +189,58 @@ func define_steps() -> void:
 	steps = [
 		{"id": "badigeon", "kind": "paint", "list": "Désinfection", "inst": "mikulicz",
 			"title": "Désinfecte tout le ventre",
-			"text": "Frotte toute la peau du ventre avec la pince à badigeon (gâchette appuyée), du bas des côtes jusqu'au pubis, jusqu'à 100 %.",
+			"text": "Frotte la compresse de la pince à badigeon sur toute la peau du ventre, du bas des côtes jusqu'au pubis, jusqu'à ce qu'elle soit toute brune.",
 			"label": "Zone à désinfecter", "ring": 6.0, "done_msg": "Ventre désinfecté"},
 		{"id": "incision", "kind": "incise", "list": "Incision médiane", "inst": "bistouri",
 			"title": "Ouvre le ventre sur la ligne médiane",
-			"text": "Grande incision du bas du sternum jusque sous le nombril : pose la lame sur « DÉPART » et suis le pointillé, gâchette appuyée.",
-			"done": _incision_done, "done_msg": "Ventre ouvert"},
-		{"id": "gosset", "kind": "place", "list": "Écarteur de Gosset", "inst": "gosset",
-			"title": "Écarte les deux bords",
-			"text": "Pose l'écarteur autostatique de Gosset au milieu de l'incision (gâchette) : il ouvre grand le ventre.",
-			"label": "Écarteur ici", "radius": 0.04, "sound": "pose",
-			"target": func() -> Vector3: return c + Vector3.UP * 0.005,
-			"done": _gosset_done, "done_msg": "Le ventre est plein de sang !"},
+			"text": "Grande incision du haut du ventre jusque sous le nombril : pose la lame sur « DÉPART », appuie, et suis le pointillé d'un long geste.",
+			"done": _incision_done, "done_msg": "Ventre ouvert : du sang remonte"},
+		{"id": "gosset", "kind": "selfretract", "list": "Écarteur de Gosset", "inst": "gosset",
+			"title": "Ouvre grand le ventre",
+			"text": "Enfonce l'écarteur de Gosset fermé au milieu de la plaie, puis écarte le pouce de l'index : ses deux valves s'ouvrent et écartent les bords. Grand ouvert, il se bloque tout seul.",
+			"label": "Écarteur ici", "done": _gosset_done, "done_msg": "Le ventre est plein de sang !"},
 		{"id": "aspiration", "kind": "hold", "list": "Aspirer le sang", "inst": "aspirateur",
 			"title": "Aspire le sang",
-			"text": "Plonge la canule d'aspiration dans la flaque de sang et maintiens la gâchette jusqu'à ce que tout soit aspiré.",
-			"label": "Aspire ici", "radius": 0.035, "duration": 3.0, "hold_sound": "aspiration", "progress_label": "Aspiration…",
+			"text": "Plonge le bout de la canule d'aspiration dans le sang et promène-la dans la flaque : elle aspire tant qu'elle y trempe.",
+			"label": "Aspire ici", "radius": 0.06, "duration": 4.0, "hold_sound": "aspiration",
 			"target": func() -> Vector3: return pool.global_position,
-			"progress": _aspirate, "done": func(_instant: bool) -> void: _aspirate(1.0),
-			"done_msg": "Sang aspiré : on voit la plaie de l'intestin"},
+			"progress": _aspirate, "done_msg": "Sang aspiré : on voit l'intestin qui saigne"},
 		{"id": "exploration", "kind": "lift", "list": "Sortir l'anse", "inst": "debakey",
 			"title": "Sors l'anse qui saigne",
-			"text": "Attrape avec la pince l'anse d'intestin qui saigne (gâchette maintenue) et sors-la du ventre pour la voir.",
-			"label": "Anse perforée", "radius": 0.03, "auto_lift": 0.08,
+			"text": "Mets les mors de la pince sur l'anse d'intestin qui saigne, serre les doigts pour la saisir et sors-la doucement du ventre.",
+			"label": "Anse perforée", "radius": 0.025, "auto_lift": 0.08,
 			"target": func() -> Vector3: return apex,
 			"move": set_apex, "goal": _lift_goal,
 			"rest": func() -> Vector3: return apex_rest,
 			"done": _lift_done, "done_msg": "Perforation trouvée"},
 		{"id": "clamp", "kind": "place", "list": "Clamper", "inst": "kelly",
 			"title": "Clampe la perforation",
-			"text": "Pose le clamp sur la perforation pour arrêter le saignement (gâchette sur le repère).",
-			"label": "Clamp ici", "radius": 0.025, "sound": "pose",
+			"text": "Ouvre le clamp, place ses mors sur l'anse à côté du trou, puis serre : le saignement s'arrête.",
+			"label": "Clamp ici", "radius": 0.022, "sound": "pose",
 			"target": func() -> Vector3: return apex + Vector3.UP * 0.011,
 			"done": _clamp_done, "done_msg": "Saignement arrêté"},
 		{"id": "reparation", "kind": "suture", "list": "Réparer l'intestin", "inst": "porte_aiguille",
 			"title": "Recouds la perforation",
-			"text": "Avec le porte-aiguille, fais les 3 points autour du trou de l'intestin (gâchette sur chaque repère).",
-			"label": "Point", "radius": 0.016,
+			"text": "Avec le porte-aiguille, 3 points autour du trou de l'intestin : pique d'un côté du trou (repère), ressors de l'autre.",
+			"label": "Point", "radius": 0.008, "free": true,
 			"pairs": func() -> Array: return _pairs_around(_repair_points(), patient.perp3 * 0.004), "point": _repair_point, "done": _repaired,
 			"done_msg": "Intestin réparé, remis dans le ventre"},
 		{"id": "lavage", "kind": "hold", "list": "Lavage", "inst": "aspirateur",
 			"title": "Lave le ventre",
-			"text": "L'aide verse du sérum chaud. Aspire-le au fond du ventre (gâchette maintenue) pour bien nettoyer.",
-			"label": "Aspire ici", "radius": 0.04, "duration": 2.0, "hold_sound": "aspiration", "progress_label": "Lavage…",
-			"target": func() -> Vector3: return c + Vector3(0.03, -0.035, -0.02),
-			"done": _washed, "done_msg": "Ventre propre, écarteur retiré"},
+			"text": "L'aide verse du sérum chaud dans le ventre. Aspire-le avec la canule, au fond, jusqu'à ce que tout soit propre.",
+			"label": "Aspire ici", "radius": 0.06, "duration": 3.0, "hold_sound": "aspiration",
+			"enter": _pour_saline,
+			"target": func() -> Vector3: return pool.global_position,
+			"progress": _wash, "done": _washed, "done_msg": "Ventre propre, écarteur retiré"},
 		{"id": "aponevrose", "kind": "suture", "list": "Fermer l'aponévrose", "inst": "porte_aiguille",
 			"title": "Ferme le plan profond",
-			"text": "Referme l'aponévrose (le tissu solide sous la graisse) : 5 points, du haut vers le bas, sur les repères au fond de la plaie.",
-			"label": "Point", "radius": 0.02,
+			"text": "Referme l'aponévrose (le tissu blanc et solide au fond de la plaie) : 5 points. Pique d'un côté, ressors de l'autre.",
+			"label": "Point", "radius": 0.009,
 			"pairs": func() -> Array: return _pairs_around(_apo_points(), patient.perp3 * 0.006), "point": _apo_point, "done_msg": "Paroi solide refermée"},
 		{"id": "peau", "kind": "suture", "list": "Fermer la peau", "inst": "porte_aiguille",
 			"title": "Ferme la peau",
-			"text": "Dernière étape : 7 points sur la peau, le long de la cicatrice.",
-			"label": "Point", "radius": 0.02,
+			"text": "Dernière étape : 7 points sur la peau, le long de la cicatrice. Pique à l'entrée, ressors sur l'autre bord.",
+			"label": "Point", "radius": 0.008,
 			"pairs": _skin_pairs, "point": _skin_point, "done": _closed,
 			"done_msg": "Ventre refermé !"},
 	]
@@ -265,14 +266,30 @@ func _gosset_done(hand: SurgeonHand, instant: bool) -> void:
 	# L'instrument « replié » disparaît sous le champ ; l'écarteur ouvert apparaît dans la plaie
 	park(inst, Transform3D(Basis.IDENTITY, inst.tray_transform.origin - Vector3.UP * 0.3), true)
 	inst.visible = false
+	patient.held_l = maxf(patient.open_l, 1.0)
+	patient.held_r = maxf(patient.open_r, 1.0)
 	gosset_open = ProcInstruments.gosset_open(patient.center, patient.dir3, patient.perp3, 0.13, patient.center.y)
 	gosset_open.name = "GossetOuvert"
 	root.add_child(gosset_open)
 	if instant:
 		patient.opening = 1.0
-	else:
-		tween_opening(1.0, 1.0)
 	monitor.target_rate = 124.0
+
+
+## L'aide verse du sérum tiède (rosé par le sang qui reste) : nouvelle flaque à aspirer.
+func _pour_saline() -> void:
+	var m := pool.material_override as StandardMaterial3D
+	m.albedo_color = Color(0.75, 0.42, 0.4, 0.7)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pool.visible = true
+	_wash(0.0)
+	Sfx.play("bulles", pool.global_position, -6.0, 0.6)
+
+
+func _wash(v: float) -> void:
+	pool.scale = Vector3(0.13 * (1.0 - 0.6 * v), 0.005 * (1.0 - v) + 0.0005, 0.065 * (1.0 - 0.6 * v))
+	pool.position.y = patient.center.y - 0.03 - 0.02 * v
+	pool.visible = v < 1.0
 
 
 func _aspirate(v: float) -> void:
@@ -356,6 +373,9 @@ func _repaired(instant: bool) -> void:
 
 
 func _washed(instant: bool) -> void:
+	pool.visible = false
+	patient.held_l = -1.0
+	patient.held_r = -1.0
 	if gosset_open:
 		gosset_open.queue_free()
 		gosset_open = null

@@ -148,6 +148,12 @@ func _ready() -> void:
 		desk_rig.menu_moved.connect(procedure.menu_move)
 		desk_rig.menu_number.connect(procedure.menu_select)
 	procedure.setup()
+	for ui in procedure.uis:
+		ui.set_header(op.header)
+	if op.scan_text != "":
+		room.scan_label.text = op.scan_text
+	patient.breath_rate = op.breath_rate
+	monitor.resp_rate = op.breath_rate
 	if args.has("perf"):
 		var pp := PerfProbe.new()
 		pp.proc = procedure

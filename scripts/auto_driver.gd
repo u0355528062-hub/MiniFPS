@@ -48,3 +48,7 @@ func debug_state() -> String:
 func lift_clear() -> void:
 	bot.bot_tip = Vector3(bot.bot_tip.x, maxf(bot.bot_tip.y, Patient.TABLE_TOP + 0.35), bot.bot_tip.z)
 	await _frames(2)
+
+
+func held_inst() -> Instrument:
+	return bot.held

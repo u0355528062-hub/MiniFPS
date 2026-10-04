@@ -25,7 +25,10 @@ var paint_r := Vector2(0.075, 0.085)  ## demi-axes (x, z) de la zone à désinfe
 var bowl_radii := Vector3(0.1, 0.075, 0.08)  ## cavité : le long, en profondeur, en travers
 var op := "appendicectomie"
 var bowl_color := Color(0.55, 0.2, 0.17)
-var breathe_amp := 0.006
+var breathe_amp := 0.006  ## soulèvement du thorax à chaque inspiration (m)
+var breath_rate := 14.0  ## respirations par minute
+var breath_b := 0.0  ## 0 = expiration, 1 = fin d'inspiration
+var _breath_t := 0.0
 var hole_limit := 1.0  ## profondeur maximale de la plaie ouverte (drain : la peau seule avant la dissection)
 var drape_mat: ShaderMaterial
 
@@ -62,6 +65,8 @@ var incision_progress: float: set = set_incision_progress, get = get_incision_pr
 var _press := [Vector4.ZERO, Vector4.ZERO]
 var _press_set := [false, false]
 var bleb := Vector4.ZERO  ## x, z, rayon, hauteur
+var abscess := Vector4.ZERO  ## abcès : x, z, rayon, hauteur du dôme
+var abscess_red := 0.0  ## rougeur inflammatoire
 var bleb_pale := 0.0
 
 # ---- Badigeon
@@ -929,7 +934,7 @@ func fill_iodine() -> void:
 
 func incision_point(t: float) -> Vector3:
 	var p := INC_A.lerp(INC_B, t)
-	return Vector3(p.x, body_height(p.x, p.y), p.y)
+	return Vector3(p.x, body_height(p.x, p.y) + breath_offset(p.x, p.y), p.y)
 
 
 ## Paramètre t (0..1) du point de l'incision le plus proche de p, et distance horizontale.
@@ -993,7 +998,7 @@ func edge_open(u: float, side: float) -> float:
 func edge_point(u: float, side: float, outward := 0.0) -> Vector3:
 	var d := edge_open(u, side) + outward
 	var p := center + dir3 * u + perp3 * side * d
-	return Vector3(p.x, body_height(p.x, p.z), p.z)
+	return Vector3(p.x, body_height(p.x, p.z) + breath_offset(p.x, p.z), p.z)
 
 
 ## Profondeur autorisée sous la peau en p si p est dans la plaie ouverte (0 sinon).
@@ -1040,6 +1045,31 @@ func set_breathe(v: float) -> void:
 		drape_mat.set_shader_parameter("breathe", v)
 
 
+## Zone du thorax qui se soulève en respirant (même formule que les shaders).
+static func chest_mask(x: float, z: float) -> float:
+	return (1.0 - smoothstep(-0.25, -0.05, x)) * smoothstep(-0.7, -0.5, x) * (1.0 - smoothstep(0.12, 0.3, absf(z)))
+
+
+## Hauteur ajoutée en ce moment : respiration et gonflement d'un abcès.
+func breath_offset(x: float, z: float) -> float:
+	var h := breathe_amp * breath_b * chest_mask(x, z)
+	if abscess.w > 0.0:
+		var d := Vector2(x - abscess.x, z - abscess.y).length() / abscess.z
+		if d < 1.0:
+			h += abscess.w * (1.0 - d * d) * (1.0 - d * d)
+	return h
+
+
+## Point de la peau qui suit la respiration.
+func live(p: Vector3) -> Vector3:
+	return p + Vector3.UP * breath_offset(p.x, p.z)
+
+
+## Point posé sur la peau (relief, respiration, abcès compris) à la verticale de p.
+func on_skin(p: Vector3) -> Vector3:
+	return Vector3(p.x, body_height(p.x, p.z) + breath_offset(p.x, p.z), p.z)
+
+
 func set_stitched(v: float) -> void:
 	for m in [skin_mat, zone_mat]:
 		m.set_shader_parameter("stitched", v)
@@ -1056,6 +1086,10 @@ static func _spring(x: float, v: float, target: float, k: float, zeta: float, dt
 
 func _process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
+	_breath_t += delta * breath_rate / 60.0
+	breath_b = 0.5 - 0.5 * cos(TAU * _breath_t)
+	if drape_mat:
+		drape_mat.set_shader_parameter("breath_b", breath_b)
 	# Bords de la plaie : ressorts (suivent l'instrument qui tire, se détendent quand on lâche)
 	var tl := maxf(rest_open, maxf(held_l, drive_l))
 	var tr := maxf(rest_open, maxf(held_r, drive_r))
@@ -1092,10 +1126,13 @@ func _process(delta: float) -> void:
 		m.set_shader_parameter("press_a", _press[0])
 		m.set_shader_parameter("press_b", _press[1])
 		m.set_shader_parameter("bleb", bleb)
+		m.set_shader_parameter("breath_now", breathe_amp * breath_b)
+		m.set_shader_parameter("abscess", abscess)
 	for m in [skin_mat, zone_mat]:
 		m.set_shader_parameter("bleed", Vector2(bleed0, bleed1))
 		m.set_shader_parameter("iodine_wet", _iodine_wet)
 		m.set_shader_parameter("bleb_pale", bleb_pale)
+		m.set_shader_parameter("abscess_red", abscess_red)
 		m.set_shader_parameter("show_guide", 0.0 if cut0 <= 0.01 and cut1 >= 0.99 else 1.0)
 
 

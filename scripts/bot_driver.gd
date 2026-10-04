@@ -150,19 +150,26 @@ func do_step() -> void:
 			# Anesthésie locale : on attend qu'elle agisse avant de couper
 			while proc.anesthesia_ready_at > 0 and Time.get_ticks_msec() < proc.anesthesia_ready_at + 200:
 				await _frames(5)
-			var t0 := patient.cut1 if patient.has_cut() else 0.0
-			await tip_to(_above(patient.incision_point(t0), 0.006), 16)
-			await tip_to(patient.incision_point(t0) - Vector3.UP * 0.004, 10)
+			# Une incision commencée au milieu se prolonge des deux côtés
 			var n := int(clampf(patient.INC_A.distance_to(patient.INC_B) / 0.0015, 40, 220))
-			for i in n + 1:
-				await tip_to(patient.incision_point(lerpf(t0, 1.0, float(i) / n)) - Vector3.UP * 0.004, 2)
-				if i == n / 2 and OS.get_cmdline_user_args().has("--debug"):
-					print("DEBUG incision ", debug_state())
-				if proc.step != si:
-					break
-			if proc.step == si:
-				await tip_to(patient.incision_point(1.0) - Vector3.UP * 0.004, 16)
-			await tip_to(_above(patient.incision_point(1.0), 0.02), 6)
+			var spans := [[0.0, 1.0]]
+			if patient.has_cut():
+				spans = [[patient.cut0, 0.0], [patient.cut1, 1.0]]
+			for span in spans:
+				var a: float = span[0]
+				var b: float = span[1]
+				if absf(b - a) < 0.005 or proc.step != si:
+					continue
+				await tip_to(_above(patient.incision_point(a), 0.006), 16)
+				await tip_to(patient.incision_point(a) - Vector3.UP * 0.004, 10)
+				var k := maxi(8, int(n * absf(b - a)))
+				for i in k + 1:
+					await tip_to(patient.incision_point(lerpf(a, b, float(i) / k)) - Vector3.UP * 0.004, 2)
+					if proc.step != si:
+						break
+				if proc.step == si:
+					await tip_to(patient.incision_point(b) - Vector3.UP * 0.004, 12)
+				await tip_to(_above(patient.incision_point(b), 0.02), 6)
 		"inject":
 			var p: Vector3 = s["target"].call()
 			want_axis = (-skin_normal(p) * 0.7 + Vector3.DOWN * 0.3).normalized()
@@ -170,11 +177,11 @@ func do_step() -> void:
 			await tip_to(_above(p, 0.01), 16)
 			await tip_to(p - Vector3.UP * 0.006, 12)
 			squeeze(1.0)
-			for i in int((1.0 / 0.24 + 1.0) * 90):
+			for i in int((1.0 / 0.24 + 4.0) * 90):
 				await tip_to(p - Vector3.UP * 0.006, 1)
 				if i % 60 == 0 and OS.get_cmdline_user_args().has("--debug"):
 					print("DEBUG inject ", debug_state(), " inj=", proc.st.get("inj", 0.0), " in=", proc.st.get("in", false))
-				if proc.st.get("inj", 0.0) >= 0.99:
+				if proc.st.get("inj", 0.0) >= 0.99 or (held_inst() != null and held_inst().volume <= 0.01):
 					break
 			squeeze(0.0)
 			await _frames(4)
@@ -286,9 +293,10 @@ func do_step() -> void:
 			var pairs: Array = s["pairs"].call()
 			for k in range(proc.st.get("k", 0), pairs.size()):
 				var pair: Array = s["pairs"].call()[k]
+				var dz := 0.0 if s.get("free", false) else 0.004
 				await tip_to(_above(pair[0], 0.008), 14)
-				await tip_to(pair[0] - Vector3.UP * 0.004, 10)
-				await tip_to(pair[1] - Vector3.UP * 0.003, 14)
+				await tip_to(pair[0] - Vector3.UP * dz, 10)
+				await tip_to(pair[1] - Vector3.UP * dz * 0.75, 14)
 				await tip_to(_above(pair[1], 0.012), 6)
 				if proc.step != si:
 					break
@@ -296,6 +304,15 @@ func do_step() -> void:
 			await tip_to(s["target"].call(), 16)
 			for i in int((s.get("duration", 1.5) + 2.0) * 90):
 				await tip_to(s["target"].call(), 1)
+				if proc.step != si:
+					break
+		"selfretract":
+			squeeze(1.0)
+			await tip_to(_above(patient.center, 0.01), 14)
+			await tip_to(patient.center - Vector3.UP * 0.014, 12)
+			for i in 90:
+				squeeze(maxf(0.0, 1.0 - i / 40.0))
+				await tip_to(patient.center - Vector3.UP * 0.014, 1)
 				if proc.step != si:
 					break
 		"place":

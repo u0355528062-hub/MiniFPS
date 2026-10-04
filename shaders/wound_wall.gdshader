@@ -67,7 +67,10 @@ void fragment() {
 	float w_per = smoothstep(0.86, 0.9, d);
 	float w_der = 1.0 - smoothstep(0.04, 0.09, d);
 	vec3 col = dermis * w_der + fat * w_fat + fascia * w_fas + musc * w_mus + perit * w_per;
-	vec2 nt = fat_n * w_fat * 0.9 + mus_n * w_mus * 0.7 + mus_n * w_fas * 0.25;
+	// Lobules de graisse moins réguliers : deux échelles mélangées
+	float lob = texture(fat_albedo, uv / 0.071 + vec2(0.37, 0.11)).g;
+	col = mix(col, col * (0.85 + 0.3 * lob), w_fat);
+	vec2 nt = fat_n * w_fat * 0.45 + mus_n * w_mus * 0.6 + mus_n * w_fas * 0.2;
 
 	// Coulures de sang verticales qui s'accumulent vers le fond
 	float drip = texture(blood_tex, vec2(UV.x / 0.035 + UV2.x * 0.37, d * 0.12)).r;
@@ -77,7 +80,7 @@ void fragment() {
 	ALBEDO = col * 0.85;
 	ROUGHNESS = mix(0.32, 0.12, blood);
 	SPECULAR = 0.4;
-	CLEARCOAT = 0.4 * smoothstep(0.1, 0.4, d);
+	CLEARCOAT = 0.25 * smoothstep(0.3, 0.6, d);
 	CLEARCOAT_ROUGHNESS = 0.08;
 	NORMAL_MAP = vec3(nt * 0.5 + 0.5, 1.0);
 	NORMAL_MAP_DEPTH = 1.0;

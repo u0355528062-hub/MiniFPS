@@ -14,6 +14,8 @@ func _init() -> void:
 	intro_text = "Lucas, 24 ans : appendicite aiguë confirmée au scanner. Il est endormi et installé. Tu vas faire l'appendicectomie, étape par étape. Tout se fait avec de vrais gestes : la lame coupe quand elle touche la peau, la pince serre quand tu serres les doigts."
 	with_dish = true
 	summary = "Appendice retiré, ligature en place, peau suturée."
+	header = "BLOC 2  ·  APPENDICECTOMIE  ·  VOIE DE McBURNEY"
+	scan_text = "SCANNER ABDOMINAL\nAppendice épaissi (11 mm)\ninfiltration de la graisse"
 	catalog = [
 		["mikulicz", "Pince à badigeon", "pince_mikulicz", 0.0, 0.0],
 		["bistouri", "Bistouri lame 15", "manche_bistouri", 90.0, 0.0],

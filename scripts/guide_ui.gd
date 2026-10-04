@@ -16,6 +16,7 @@ var font: Font
 var bold: FontVariation
 var _step_rows: Array[Label] = []
 var _step_icons: Array[Label] = []
+var _head: Label
 var _step_no: Label
 var _title: Label
 var _text: Label
@@ -85,8 +86,8 @@ func _build() -> void:
 	bg.add_theme_stylebox_override("panel", _box(Color(0.025, 0.055, 0.07, 0.95), 34, Color(ACCENT, 0.45), 3))
 	add_child(bg)
 	# Bandeau supérieur
-	var head := _label("BLOC 2  ·  APPENDICECTOMIE  ·  VOIE DE McBURNEY", 26, ACCENT, bold)
-	head.position = Vector2(44, 30)
+	_head = _label("BLOC 2", 26, ACCENT, bold)
+	_head.position = Vector2(44, 30)
 	_timer = _label("00:00", 30, TEXT, bold)
 	_timer.position = Vector2(W - 330, 26)
 	_errors = _label("Erreurs : 0", 26, DIM)
@@ -174,6 +175,11 @@ func _build() -> void:
 	_end_stats.label_settings.line_spacing = 10
 
 
+func set_header(text: String) -> void:
+	_head.text = text
+	dirty = true
+
+
 func set_steps(titles: Array) -> void:
 	for l in _step_rows:
 		l.queue_free()
@@ -205,6 +211,12 @@ func show_step(index: int, total: int, title: String, text: String, inst_label: 
 		_step_rows[i].label_settings.font = bold if cur else font
 	_step_no.text = "ÉTAPE %d / %d" % [index + 1, total] if index >= 0 else "PRÉPARATION"
 	_title.text = title
+	# Titre long : on réduit la police pour qu'il tienne sur une ligne
+	var fs := 66
+	var w := bold.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	if w > 890.0:
+		fs = maxi(42, int(fs * 890.0 / w))
+	_title.label_settings.font_size = fs
 	_text.text = text
 	_inst_card.visible = inst_label != ""
 	_inst_name.text = inst_label

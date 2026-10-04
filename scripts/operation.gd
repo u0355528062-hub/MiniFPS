@@ -4,8 +4,8 @@ extends RefCounted
 ## Chaque étape est d'un type de geste générique et physique (voir Procedure) : paint, incise,
 ## inject, retract, spread, lift, ligate, cut, carry, suture, insert, hold, place.
 
-## Opérations proposées dans le menu (la laparotomie y entrera quand elle sera terminée)
-const ALL := ["appendicectomie", "drain"]
+## Opérations proposées dans le menu
+const ALL := ["appendicectomie", "drain", "laparotomie", "abces"]
 
 var id := ""
 var name := ""
@@ -13,6 +13,9 @@ var tagline := ""
 var intro_title := "Bienvenue au bloc"
 var intro_text := ""
 var summary := ""  ## phrase de l'écran de fin
+var header := "BLOC 2"  ## bandeau du panneau
+var scan_text := ""  ## négatoscope (imagerie du patient)
+var breath_rate := 14.0  ## respirations par minute
 var surgeon_spot := Vector3(0.12, 0.0, 0.6)
 var tray_pos := Vector3(0.62, 0.0, 0.56)
 var with_dish := false
@@ -34,6 +37,8 @@ static func create(op_id: String) -> Operation:
 			return OpDrain.new()
 		"laparotomie":
 			return OpLaparo.new()
+		"abces":
+			return OpAbces.new()
 		_:
 			return OpAppendix.new()
 

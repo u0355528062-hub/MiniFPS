@@ -41,8 +41,8 @@ static func _zone_depth(p: Vector3, tag: String) -> float:
 static func surface(p: Vector3) -> float:
 	if patient and p.x > -0.62 and p.x < 1.15 and absf(p.z) < 0.6:
 		if patient.in_window(p.x, p.z):
-			return Patient.body_height(p.x, p.z)
-		return Patient._drape_height(p.x, p.z)
+			return Patient.body_height(p.x, p.z) + patient.breath_offset(p.x, p.z)
+		return Patient._drape_height(p.x, p.z) + patient.breath_offset(p.x, p.z)
 	var m := InstrumentTray.MAYO_POS
 	if absf(p.x - m.x) < 0.26 and absf(p.z - m.z) < 0.22:
 		return InstrumentTray.TRAY_Y + 0.003
@@ -82,5 +82,5 @@ static func solve(inst: Instrument, xf: Transform3D) -> Transform3D:
 	out.origin.y += push
 	inst.correction = push
 	var tip := out * inst.tip_local
-	inst.tip_depth = Patient.body_height(tip.x, tip.z) - tip.y if is_skin(tip) else -1.0
+	inst.tip_depth = Patient.body_height(tip.x, tip.z) + patient.breath_offset(tip.x, tip.z) - tip.y if is_skin(tip) else -1.0
 	return out

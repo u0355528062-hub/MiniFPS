@@ -23,6 +23,9 @@ func _init() -> void:
 	surgeon_spot = Vector3(-0.40, 0.0, 0.62)
 	tray_pos = Vector3(0.12, 0.0, 0.58)
 	summary = "Poumon ré-expansé : l'oxygène est remonté à 98 %. Drain fixé et branché au bocal."
+	header = "DÉCHOCAGE  ·  DRAIN THORACIQUE  ·  5e ESPACE INTERCOSTAL"
+	scan_text = "RADIO THORAX\nPneumothorax droit compressif\npoumon droit rétracté, médiastin dévié"
+	breath_rate = 30.0
 	vitals = {"hr": 128.0, "spo2": 84.0, "sys": 96, "dia": 58}
 	catalog = [
 		["mikulicz", "Pince à badigeon", "pince_mikulicz", 0.0, 0.0],
@@ -47,7 +50,7 @@ func configure_patient(p: Patient) -> void:
 	p.WOUND_DEPTH = 0.035
 	p.bowl_radii = Vector3(0.025, 0.03, 0.02)
 	p.bowl_color = Color(0.48, 0.12, 0.1)
-	p.breathe_amp = 0.014
+	p.breathe_amp = 0.009
 	p.hole_limit = 0.006  # sous la peau : muscles intercostaux à écarter à la pince
 
 
@@ -134,7 +137,7 @@ func define_steps() -> void:
 			"title": "Anesthésie locale",
 			"text": "Pique l'aiguille dans la peau sur le repère (entre deux côtes). Relâche un peu le pouce, puis serre-le contre l'index pour pousser le piston : le liquide baisse et un bouton gonfle sous la peau. Injecte tout, puis retire l'aiguille.",
 			"label": "Pique ici", "wait": 10.0,
-			"target": func() -> Vector3: return c + Vector3.UP * 0.0005,
+			"target": func() -> Vector3: return patient.on_skin(c) + Vector3.UP * 0.0005,
 			"done_msg": "Produit injecté : attends qu'il agisse"},
 		{"id": "incision", "kind": "incise", "list": "Incision", "inst": "bistouri",
 			"title": "Incise le long de la côte",
@@ -144,13 +147,13 @@ func define_steps() -> void:
 			"title": "Passe au-dessus de la côte",
 			"text": "Enfonce la pince de Kelly fermée dans l'incision. Ouvre-la (écarte le pouce) pour écarter les muscles, referme, pousse plus loin... jusqu'à la plèvre : l'air s'échappera.",
 			"label": "Entre ici", "depth": 0.032, "axis": axis,
-			"target": func() -> Vector3: return c,
+			"target": func() -> Vector3: return patient.on_skin(c),
 			"done": _pleura_open, "done_msg": "Pschhh ! L'air s'échappe"},
 		{"id": "drain", "kind": "insert", "list": "Pose du drain", "inst": "drain",
 			"title": "Pose le drain",
 			"text": "Glisse le bout du drain dans le trou et pousse-le de 9 cm vers l'intérieur du thorax. Le moniteur va remonter.",
 			"label": "Drain ici", "depth": 0.09, "axis": _drain_dir(),
-			"target": func() -> Vector3: return c,
+			"target": func() -> Vector3: return patient.on_skin(c),
 			"done": _drain_in, "done_msg": "Drain en place, branché au bocal"},
 		{"id": "fixation", "kind": "suture", "list": "Fixation", "inst": "porte_aiguille",
 			"title": "Fixe le drain",
@@ -218,7 +221,9 @@ func _drain_in(hand: SurgeonHand, instant: bool) -> void:
 	monitor.target_rate = 96.0
 	monitor.sys = 112
 	monitor.dia = 70
-	patient.set_breathe(0.006)
+	patient.set_breathe(0.004)
+	patient.breath_rate = 18.0
+	monitor.resp_rate = 18.0
 	# Tubulure du bout du drain jusqu'au bocal
 	var outer := _drain_pose() * Vector3(0, 0, -0.17)
 	var pts := MeshUtil.bezier(outer, outer + Vector3(0.0, -0.05, 0.12), bocal_water + Vector3(0, 0.45, 0.0), bocal_water + Vector3(0, 0.2, 0), 30)

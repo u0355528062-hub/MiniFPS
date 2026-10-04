@@ -4,6 +4,7 @@ extends Node3D
 ## pression artérielle, fréquence respiratoire, température. Bip à chaque QRS.
 
 var heart_rate := 84.0
+var resp_rate := 14.0
 var target_rate := 84.0
 var spo2 := 99.0
 var target_spo2 := -1.0  ## si >= 0, la SpO2 évolue doucement vers cette valeur
@@ -137,7 +138,8 @@ class MonitorScreen:
 		var cap := PackedVector2Array()
 		for i in 120:
 			var x := 16.0 + i * w / 120.0
-			var ph := fmod(_resp - (120 - i) * 0.033 + 100.0, 4.0)
+			var period := 60.0 / maxf(monitor.resp_rate, 4.0)
+			var ph := fmod(_resp - (120 - i) * 0.033 + 100.0, period) / period * 4.0
 			var y := 470.0 - (60.0 if ph > 1.6 and ph < 3.4 else 0.0) * clampf(minf(ph - 1.6, 3.4 - ph) * 8.0, 0.0, 1.0)
 			cap.append(Vector2(x, y))
 		draw_polyline(cap, Color(1.0, 0.85, 0.2), 2.0, true)
@@ -151,7 +153,7 @@ class MonitorScreen:
 		draw_string(font, Vector2(x0, 300), str(int(monitor.spo2)), HORIZONTAL_ALIGNMENT_LEFT, -1, 72, Color(0.3, 0.85, 1.0))
 		draw_string(font, Vector2(x0, 344), "PNI mmHg", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.4, 0.4))
 		draw_string(font, Vector2(x0, 384), "%d/%d" % [monitor.sys, monitor.dia], HORIZONTAL_ALIGNMENT_LEFT, -1, 38, Color(1, 0.4, 0.4))
-		draw_string(font, Vector2(x0, 430), "FR 14   T° 37,9", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
+		draw_string(font, Vector2(x0, 430), "FR %d   T° 37,9" % int(round(monitor.resp_rate)), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
 		draw_string(font, Vector2(x0, 478), "EtCO2 36", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
 
 	func _trace(buf: PackedFloat32Array, r: Rect2, c: Color, amp: float) -> void:

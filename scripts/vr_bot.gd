@@ -387,3 +387,7 @@ func run() -> void:
 func debug_state() -> String:
 	var t := active.tip()
 	return "source=%d tenu=%s tip=%s brut=%s prof=%.4f peau=%.3f cut=[%.2f %.2f] serrage=%.2f ouverture=%.2f/%.2f st=%s" % [active.source, held_id(), t, active.raw_tip(), active.held.tip_depth if active.held else 0.0, Patient.body_height(t.x, t.z), patient.cut0, patient.cut1, active.squeeze_value(), patient.open_l, patient.open_r, proc.st.keys()]
+
+
+func held_inst() -> Instrument:
+	return active.held

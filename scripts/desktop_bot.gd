@@ -93,7 +93,9 @@ func tip_to(p: Vector3, frames_n := 12) -> void:
 	var at := hand.assist_target
 	if at != Vector3.INF and Vector2(p.x - at.x, p.z - at.z).length() < 0.012:
 		surf = at.y
-	hand.lift = clampf(p.y - surf, -0.12, 0.25)
+	if on_patient:
+		surf += patient.breath_offset(p.x, p.z)
+	hand.lift = clampf(p.y - surf - DesktopHand.HOVER, -0.12, 0.25)
 	if frames_n > 4:
 		await _settle()
 	else:
@@ -111,3 +113,7 @@ func held_id() -> String:
 func debug_state() -> String:
 	var tip := hand.tip()
 	return "tenu=%s tip=%s peau=%.3f prof=%.4f lift=%.3f auto=%.3f appui=%.3f cut=[%.2f %.2f] souris=%s st=%s" % [held_id(), tip, Patient.body_height(tip.x, tip.z), hand.held.tip_depth if hand.held else 0.0, hand.lift, hand.auto_lift, hand.depth, patient.cut0, patient.cut1, hand.sim_mouse, proc.st.keys()]
+
+
+func held_inst() -> Instrument:
+	return hand.held

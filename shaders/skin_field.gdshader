@@ -22,6 +22,7 @@ uniform float show_guide = 1.0;
 uniform float stitched = 0.0;
 uniform float iodine_wet = 1.0;
 uniform float bleb_pale = 0.0; // blanchiment de la peau quand l'anesthésie agit
+uniform float abscess_red = 0.0; // rougeur de l'abcès (peau tendue, luisante, pointe jaunâtre)
 uniform vec2 win_min = vec2(0.0, -0.02);
 uniform vec2 win_max = vec2(0.25, 0.22);
 uniform vec3 skin_tint : source_color = vec3(0.78, 0.72, 0.68);
@@ -91,6 +92,17 @@ void fragment() {
 	float pale = clamp(wheal * (0.45 + bleb_pale * 0.6), 0.0, 1.0);
 	col = mix(col, col * vec3(1.12, 1.06, 1.02) + vec3(0.07, 0.06, 0.05), pale);
 	rough = mix(rough, 0.35, wheal * 0.6);
+
+	// Abcès : peau rouge violacée, tendue et luisante, pointe jaunâtre au sommet
+	if (abscess.w > 0.0) {
+		float da = length(p - abscess.xy) / abscess.z;
+		float inflam = (1.0 - smoothstep(0.35, 1.45, da)) * abscess_red;
+		float tip_pus = (1.0 - smoothstep(0.0, 0.28, da)) * abscess_red * step(0.002, abscess.w);
+		col = mix(col, col * vec3(1.25, 0.55, 0.5) + vec3(0.08, 0.0, 0.01), inflam * 0.8);
+		col = mix(col, vec3(0.78, 0.64, 0.32), tip_pus * 0.55);
+		rough = mix(rough, 0.28, inflam * 0.7);
+		spec = mix(spec, 0.2, inflam);
+	}
 
 	// Tracé au feutre (violet de gentiane), seulement là où la peau n'est pas encore incisée
 	float cut_on = step(cut.x, along) * step(along, cut.y) * step(cut.x, cut.y);

@@ -10,6 +10,8 @@ static func build(kind: String) -> Node3D:
 			return _suction()
 		"gosset":
 			return _gosset_closed()
+		"meche":
+			return _meche()
 	return Node3D.new()
 
 
@@ -147,4 +149,39 @@ static func gosset_open(center: Vector3, _along: Vector3, perp: Vector3, width: 
 		valve.scale = Vector3(1, 1, 1)
 		root.add_child(valve)
 		MeshUtil.box_instance(root, Vector3(0.004, 0.035, 0.06), Vector3(x - side * 0.006, -0.025, 0), steel, "Lame")
+	return root
+
+
+## Porte-mèche : fine tige (stylet boutonné) et mèche de gaze imbibée au bout, qu'on laisse dans la
+## cavité pour qu'elle continue de drainer. La gaze est un nœud nommé « Gaze ».
+static func _meche() -> Node3D:
+	var root := Node3D.new()
+	var steel := MeshUtil.mat(Color(0.85, 0.87, 0.9), 0.22, 1.0)
+	var rod := MeshUtil.cylinder_instance(root, 0.0016, 0.15, Vector3(0, 0, -0.02), steel, "Stylet")
+	rod.rotation_degrees.x = 90
+	var knob := MeshInstance3D.new()
+	var s := SphereMesh.new()
+	s.radius = 0.0045
+	s.height = 0.009
+	knob.mesh = s
+	knob.material_override = steel
+	knob.position = Vector3(0, 0, -0.095)
+	root.add_child(knob)
+	# Gaze : ruban plissé, un peu imbibé de sérum
+	var gauze := Node3D.new()
+	gauze.name = "Gaze"
+	root.add_child(gauze)
+	var pts := PackedVector3Array()
+	for i in 14:
+		var t := float(i) / 13.0
+		pts.append(Vector3(0.0025 * sin(t * 18.0), 0.002 * cos(t * 13.0), 0.055 - t * 0.075))
+	var rr := PackedFloat32Array()
+	rr.resize(pts.size())
+	rr.fill(0.0032)
+	var g := MeshInstance3D.new()
+	g.mesh = MeshUtil.tube(pts, rr, 8)
+	var gm := MeshUtil.mat(Color(0.95, 0.94, 0.9), 0.85)
+	gm.normal_enabled = false
+	g.material_override = gm
+	gauze.add_child(g)
 	return root
