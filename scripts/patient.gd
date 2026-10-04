@@ -6,14 +6,16 @@ extends Node3D
 
 const TABLE_TOP := 0.95
 ## Incision de McBurney (coordonnées monde x, z)
-const INC_A := Vector2(0.136, 0.075)
-const INC_B := Vector2(0.104, 0.125)
+const INC_A := Vector2(0.1389, 0.0705)
+const INC_B := Vector2(0.1011, 0.1295)
 const PATCH_MIN := Vector2(-0.03, -0.05)
 const PATCH_SIZE := Vector2(0.31, 0.30)
 const WINDOW_MIN := Vector2(0.0, -0.02)
 const WINDOW_MAX := Vector2(0.25, 0.22)
 const MASK_RES := 64
-const WOUND_DEPTH := 0.045
+const WOUND_DEPTH := 0.05
+## Pointe de l'appendice dans le fichier anatomie_appendice.glb (origine = base)
+const ANAT_TIP := Vector3(0.0089, -0.0287, -0.0467)
 
 var skin_mat: ShaderMaterial
 var iodine_img: Image
@@ -27,6 +29,15 @@ var center: Vector3  # centre de l'incision, sur la peau
 
 var wall_mesh := ArrayMesh.new()
 var appendix_mesh := ArrayMesh.new()
+var appendix_node: MeshInstance3D
+var meso: MeshInstance3D
+var _anat_xf := Transform3D.IDENTITY
+var _app_index := PackedInt32Array()
+var _app_s := PackedFloat32Array()
+var _app_local := PackedVector3Array()
+var _app_nlocal := PackedVector3Array()
+var _rest_line := PackedVector3Array()
+var _rest_frames: Array[Basis] = []
 var appendix_base: Vector3
 var appendix_tip: Vector3
 var appendix_rest_tip: Vector3
@@ -62,18 +73,24 @@ static func body_height(x: float, z: float) -> float:
 	return TABLE_TOP + maxf(torso, legs)
 
 
+static func _smax(a: float, b: float, k := 0.025) -> float:
+	var h := clampf(0.5 + 0.5 * (a - b) / k, 0.0, 1.0)
+	return lerpf(b, a, h) + k * h * (1.0 - h)
+
+
 static func _drape_height(x: float, z: float) -> float:
 	var edge := 0.30
 	var az := absf(z)
 	var bridge := TABLE_TOP + _torso_thickness(x) * _shape(az / (_torso_width(x) * 1.4)) * 0.9
 	var legs_bridge := TABLE_TOP + 0.125 * smoothstep(0.2, 0.36, x) * _shape(az / 0.26) * 0.95 * (1.0 - smoothstep(1.0, 1.1, x))
-	var top := maxf(maxf(body_height(x, minf(az, edge) * signf(z)) + 0.006, bridge), legs_bridge)
-	top = maxf(top, TABLE_TOP + 0.012)
+	# Le tissu ne suit pas les arêtes du corps : union lissée de toutes les formes
+	var top := _smax(_smax(body_height(x, minf(az, edge) * signf(z)) + 0.006, bridge), legs_bridge)
+	top = _smax(top, TABLE_TOP + 0.012)
 	# Plis légers
 	top += 0.003 * sin(x * 37.0 + z * 11.0) * sin(z * 23.0 - x * 7.0)
 	if az > edge:
 		var e := az - edge
-		var y_edge := maxf(maxf(body_height(x, edge * signf(z)) + 0.006, TABLE_TOP + 0.012), maxf(bridge, legs_bridge))
+		var y_edge := _smax(_smax(body_height(x, edge * signf(z)) + 0.006, TABLE_TOP + 0.012), _smax(bridge, legs_bridge))
 		top = y_edge - e * e * 30.0 - e * 1.2
 		top += 0.01 * sin(x * 21.0) * smoothstep(0.0, 0.2, e)
 	if x > 1.08:
@@ -94,7 +111,6 @@ func build() -> void:
 	_build_head()
 	_build_skin()
 	_build_cavity()
-	_build_appendix()
 	set_opening(0.0)
 
 
@@ -216,7 +232,7 @@ func _build_cavity() -> void:
 	walls.material_override = wm
 	add_child(walls)
 
-	# Fond de la cavité : coque retournée, rouge sombre humide
+	# Fond de la cavité péritonéale : coque retournée, rose sombre humide
 	var bowl := MeshInstance3D.new()
 	bowl.name = "Cavite"
 	var sp := SphereMesh.new()
@@ -224,103 +240,211 @@ func _build_cavity() -> void:
 	sp.height = 2.0
 	sp.flip_faces = true
 	bowl.mesh = sp
-	bowl.material_override = _tissue(Color(0.42, 0.12, 0.1), 0.3, 0.9)
-	bowl.basis = Basis(dir3 * 0.075, Vector3.UP * 0.05, perp3 * 0.06)
-	bowl.position = center - Vector3.UP * 0.05
+	bowl.material_override = _tissue(Color(0.55, 0.2, 0.17), 0.15, 0.9)
+	bowl.material_override.set_shader_parameter("clip_y", center.y - 0.012)
+	bowl.basis = Basis(dir3 * 0.1, Vector3.UP * 0.075, perp3 * 0.08)
+	bowl.position = center - Vector3.UP * 0.075
 	add_child(bowl)
 
-	var d := center.y
-	# Cæcum : gros tube rosé avec bosselures (haustrations)
-	var pts := PackedVector3Array()
-	var rad := PackedFloat32Array()
-	for i in 13:
-		var t := float(i) / 12.0
-		pts.append(Vector3(center.x + 0.08 - 0.16 * t, d - 0.068 + 0.004 * sin(t * 9.0), center.z + 0.012 - 0.01 * t))
-		rad.append(0.024 * (1.0 + 0.08 * sin(t * 40.0)))
-	var cecum := MeshInstance3D.new()
-	cecum.name = "Caecum"
-	cecum.mesh = MeshUtil.tube(pts, rad, 18)
-	cecum.material_override = _tissue(Color(0.82, 0.56, 0.48), 0.1, 0.5)
-	add_child(cecum)
-
-	# Anses grêles
-	var bowel_mat := _tissue(Color(0.86, 0.52, 0.46), 0.0, 0.7)
-	var loops := [
-		[Vector3(-0.05, -0.062, -0.035), Vector3(0.0, -0.05, -0.06), Vector3(0.04, -0.05, -0.01), Vector3(0.07, -0.064, -0.04)],
-		[Vector3(-0.07, -0.07, 0.03), Vector3(-0.03, -0.055, 0.05), Vector3(0.0, -0.058, 0.0), Vector3(-0.04, -0.07, -0.02)],
-	]
-	for l in loops:
-		var lp := MeshUtil.bezier(center + l[0], center + l[1], center + l[2], center + l[3], 18)
-		var lr := PackedFloat32Array()
-		lr.resize(lp.size())
-		lr.fill(0.0115)
-		var lm := MeshInstance3D.new()
-		lm.mesh = MeshUtil.tube(lp, lr, 14)
-		lm.material_override = bowel_mat
-		add_child(lm)
-	# Franges graisseuses
-	var fat := _tissue(Color(0.95, 0.78, 0.38), 0.0, 0.2)
-	for f in [Vector3(0.03, -0.052, 0.025), Vector3(-0.025, -0.055, 0.03), Vector3(0.045, -0.058, -0.02)]:
-		var fm := MeshInstance3D.new()
-		var fs := SphereMesh.new()
-		fs.radius = 0.009
-		fs.height = 0.014
-		fm.mesh = fs
-		fm.material_override = fat
-		fm.position = center + f
-		add_child(fm)
+	# Organes réels (Z-Anatomy) : origine du fichier = base de l'appendice
+	appendix_base = center + dir3 * 0.022 - Vector3.UP * 0.046 + perp3 * 0.002
+	var scene: PackedScene = load("res://assets/models/anatomie_appendice.glb")
+	var anat: Node3D = scene.instantiate()
+	anat.name = "Anatomie"
+	add_child(anat)
+	# Oriente le groupe pour que l'appendice repose sous la plaie, vers l'autre extrémité de l'incision
+	var want := (-dir3 + perp3 * 0.15 - Vector3.UP * 0.12).normalized()
+	var q := Quaternion(ANAT_TIP.normalized(), want)
+	anat.global_transform = Transform3D(Basis(q), appendix_base)
+	_anat_xf = anat.global_transform
+	var looks := {
+		"Ascending_colon": _tissue(Color(0.84, 0.58, 0.5), 0.12, 0.65),
+		"Free_taenia": _tissue(Color(0.92, 0.84, 0.74), 0.0, 0.2),
+		"Jejunum": _tissue(Color(0.88, 0.54, 0.48), 0.0, 0.7),
+		"Meso-appendix": _tissue(Color(0.95, 0.78, 0.42), 0.25, 0.8),
+		"Ileal_branch_of_ileocolic_artery": _tissue(Color(0.62, 0.06, 0.07), 0.0, 0.0),
+		"Colic_branch_of_ileocolic_artery": _tissue(Color(0.62, 0.06, 0.07), 0.0, 0.0),
+	}
+	for mi in _meshes_in(anat):
+		var key := String(mi.name)
+		if key.begins_with("Vermiform"):
+			_init_appendix(mi)
+			mi.visible = false
+			continue
+		var mat: ShaderMaterial = looks.get(key, _tissue(Color(0.85, 0.55, 0.48)))
+		mat.set_shader_parameter("clip_y", center.y - 0.012)
+		mi.material_override = mat
+		if key == "Meso-appendix":
+			meso = mi
 
 
-func _build_appendix() -> void:
-	appendix_base = center + dir3 * 0.012 - Vector3.UP * 0.046 + perp3 * 0.002
-	appendix_rest_tip = appendix_base - dir3 * 0.042 + perp3 * 0.01 - Vector3.UP * 0.004
+func _meshes_in(n: Node) -> Array[MeshInstance3D]:
+	var out: Array[MeshInstance3D] = []
+	if n is MeshInstance3D:
+		out.append(n)
+	for c in n.get_children():
+		out.append_array(_meshes_in(c))
+	return out
+
+
+# ---------------------------------------------------------------- Appendice (maillage réel déformable)
+
+func _init_appendix(src: MeshInstance3D) -> void:
+	var arr := src.mesh.surface_get_arrays(0)
+	var xf := src.global_transform
+	var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+	var norms: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+	_app_index = arr[Mesh.ARRAY_INDEX]
+	appendix_rest_tip = _anat_xf * ANAT_TIP
 	appendix_tip = appendix_rest_tip
+	var axis := appendix_rest_tip - appendix_base
+	var alen := axis.length()
+	# Ligne médiane au repos : centroïdes par tranches le long de l'axe base -> pointe
+	var bins := 14
+	var sums: Array[Vector3] = []
+	var counts: Array[int] = []
+	sums.resize(bins)
+	counts.resize(bins)
+	for i in bins:
+		sums[i] = Vector3.ZERO
+		counts[i] = 0
+	var world := PackedVector3Array()
+	world.resize(verts.size())
+	_app_s.resize(verts.size())
+	for i in verts.size():
+		var w := xf * verts[i]
+		world[i] = w
+		var s := clampf((w - appendix_base).dot(axis) / (alen * alen), 0.0, 1.0)
+		_app_s[i] = s
+		var b := mini(int(s * bins), bins - 1)
+		sums[b] += w
+		counts[b] += 1
+	_rest_line = PackedVector3Array([appendix_base])
+	for i in bins:
+		if counts[i] > 0:
+			_rest_line.append(sums[i] / counts[i])
+	_rest_line.append(appendix_rest_tip)
+	_rest_frames = _frames(_rest_line)
+	# Coordonnées locales de chaque sommet dans le repère de la ligne médiane
+	_app_local.resize(verts.size())
+	_app_nlocal.resize(verts.size())
+	var nb := xf.basis.inverse().transposed()
+	for i in verts.size():
+		var f := _frame_at(_rest_line, _rest_frames, _app_s[i])
+		var c: Vector3 = f[0]
+		var bas: Basis = f[1]
+		_app_local[i] = bas.transposed() * (world[i] - c)
+		_app_nlocal[i] = bas.transposed() * (nb * norms[i]).normalized()
 	var mi := MeshInstance3D.new()
 	mi.name = "Appendice"
 	mi.mesh = appendix_mesh
 	mi.material_override = _tissue(Color(0.78, 0.38, 0.32), 1.0, 0.9)
+	mi.material_override.set_shader_parameter("clip_y", center.y - 0.008)
 	add_child(mi)
+	appendix_node = mi
 	_update_appendix()
 
 
-# ---------------------------------------------------------------- Appendice
+## Repères (tangente, normale, binormale) par transport parallèle le long d'une polyligne.
+static func _frames(line: PackedVector3Array) -> Array[Basis]:
+	var out: Array[Basis] = []
+	var n := line.size()
+	var t0 := (line[1] - line[0]).normalized()
+	var nrm := t0.cross(Vector3.UP)
+	if nrm.length() < 0.01:
+		nrm = t0.cross(Vector3.RIGHT)
+	nrm = nrm.normalized()
+	for i in n:
+		var t: Vector3
+		if i == 0:
+			t = (line[1] - line[0]).normalized()
+		elif i == n - 1:
+			t = (line[n - 1] - line[n - 2]).normalized()
+		else:
+			t = (line[i + 1] - line[i - 1]).normalized()
+		nrm = (nrm - t * nrm.dot(t)).normalized()
+		out.append(Basis(nrm, t.cross(nrm), t))
+	return out
 
-func appendix_curve(count := 16) -> PackedVector3Array:
-	var span := appendix_tip - appendix_base
-	var p1 := appendix_base + Vector3.UP * 0.014 + span * 0.15
-	var p2 := appendix_tip + Vector3.UP * 0.008 - span * 0.3
-	return MeshUtil.bezier(appendix_base, p1, p2, appendix_tip, count)
+
+## Point et repère interpolés au paramètre s (0..1) le long de la polyligne.
+static func _frame_at(line: PackedVector3Array, frames: Array[Basis], s: float) -> Array:
+	var f := s * (line.size() - 1)
+	var i := clampi(int(f), 0, line.size() - 2)
+	var k := f - i
+	var c := line[i].lerp(line[i + 1], k)
+	var q := Quaternion(frames[i].orthonormalized()).slerp(Quaternion(frames[i + 1].orthonormalized()), k)
+	return [c, Basis(q)]
+
+
+func _current_line() -> PackedVector3Array:
+	# La ligne au repos est entraînée vers la nouvelle pointe, davantage vers l'extrémité
+	var delta := appendix_tip - appendix_rest_tip
+	var out := PackedVector3Array()
+	for i in _rest_line.size():
+		var s := float(i) / (_rest_line.size() - 1)
+		var w := pow(s, 1.6)
+		var lift := Vector3.UP * delta.length() * 0.35 * sin(PI * s) * smoothstep(0.0, 0.03, delta.length())
+		out.append(_rest_line[i] + delta * w + lift)
+	return out
 
 
 func appendix_point(t: float) -> Vector3:
-	var span := appendix_tip - appendix_base
-	var p1 := appendix_base + Vector3.UP * 0.014 + span * 0.15
-	var p2 := appendix_tip + Vector3.UP * 0.008 - span * 0.3
-	var u := 1.0 - t
-	return appendix_base * u * u * u + p1 * 3.0 * u * u * t + p2 * 3.0 * u * t * t + appendix_tip * t * t * t
-
-
-static func _appendix_radius(t: float) -> float:
-	return lerpf(0.0042, 0.0068, smoothstep(0.0, 0.6, t)) - 0.0008 * smoothstep(0.85, 1.0, t)
+	var line := _current_line()
+	return _frame_at(line, _frames(line), t)[0]
 
 
 func set_appendix_tip(p: Vector3) -> void:
 	var off := p - appendix_base
-	if off.length() > 0.085:
-		off = off.normalized() * 0.085
+	if off.length() > 0.075:
+		off = off.normalized() * 0.075
 	appendix_tip = appendix_base + off
 	_update_appendix()
 
 
+func _deformed(s_min: float, s_max: float, origin := Vector3.ZERO) -> ArrayMesh:
+	var line := _current_line()
+	var frames := _frames(line)
+	var v := PackedVector3Array()
+	var n := PackedVector3Array()
+	v.resize(_app_local.size())
+	n.resize(_app_local.size())
+	for i in _app_local.size():
+		var f := _frame_at(line, frames, _app_s[i])
+		var bas: Basis = f[1]
+		v[i] = f[0] + bas * _app_local[i] - origin
+		n[i] = bas * _app_nlocal[i]
+	var idx := PackedInt32Array()
+	for k in range(0, _app_index.size(), 3):
+		var a := _app_index[k]
+		var b := _app_index[k + 1]
+		var c := _app_index[k + 2]
+		var smax := maxf(_app_s[a], maxf(_app_s[b], _app_s[c]))
+		var smin := minf(_app_s[a], minf(_app_s[b], _app_s[c]))
+		if smin >= s_min and smax <= s_max:
+			idx.append_array([a, b, c])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = v
+	arrays[Mesh.ARRAY_NORMAL] = n
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return m
+
+
 func _update_appendix() -> void:
-	var pts := PackedVector3Array()
-	var rad := PackedFloat32Array()
-	var t_end := 0.3 if appendix_cut else 1.0
-	for i in 16:
-		var t := t_end * i / 15.0
-		pts.append(appendix_point(t))
-		rad.append(_appendix_radius(t))
-	MeshUtil.tube(pts, rad, 14, false, true, appendix_mesh)
+	if _app_local.is_empty():
+		return
+	var m := _deformed(0.0, 0.3 if appendix_cut else 1.0)
+	appendix_mesh.clear_surfaces()
+	appendix_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, m.surface_get_arrays(0))
+	# Le méso suit la base, on l'efface quand l'appendice est extériorisé
+	var moved := appendix_tip.distance_to(appendix_rest_tip) > 0.01
+	if meso:
+		meso.visible = not moved
+	if appendix_node:
+		appendix_node.material_override.set_shader_parameter("clip_y", 100.0 if moved else center.y - 0.008)
 
 
 ## Pose le fil de ligature à la base de l'appendice.
@@ -329,20 +453,19 @@ func ligate() -> void:
 		return
 	ligature = MeshInstance3D.new()
 	var tm := TorusMesh.new()
-	tm.inner_radius = 0.0034
-	tm.outer_radius = 0.0052
+	tm.inner_radius = 0.0036
+	tm.outer_radius = 0.0054
 	tm.rings = 24
 	tm.ring_segments = 8
 	ligature.mesh = tm
 	ligature.material_override = MeshUtil.mat(Color(0.92, 0.9, 0.82), 0.6)
 	add_child(ligature)
 	var p := appendix_point(0.18)
-	var tan := (appendix_point(0.2) - appendix_point(0.16)).normalized()
-	var side := tan.cross(Vector3.FORWARD).normalized()
+	var tan := (appendix_point(0.22) - appendix_point(0.14)).normalized()
+	var side := tan.cross(Vector3.UP).normalized()
 	if side.length() < 0.1:
 		side = tan.cross(Vector3.RIGHT).normalized()
 	ligature.global_transform = Transform3D(Basis(side, tan, side.cross(tan)), p)
-	# Deux brins coupés courts
 	for s in [-1.0, 1.0]:
 		var end := MeshInstance3D.new()
 		var cm := CylinderMesh.new()
@@ -363,16 +486,26 @@ func cut() -> Node3D:
 	add_child(piece)
 	var origin := appendix_point(0.65)
 	piece.global_position = origin
-	var pts := PackedVector3Array()
-	var rad := PackedFloat32Array()
-	for i in 14:
-		var t := lerpf(0.33, 1.0, i / 13.0)
-		pts.append(appendix_point(t) - origin)
-		rad.append(_appendix_radius(t))
 	var mi := MeshInstance3D.new()
-	mi.mesh = MeshUtil.tube(pts, rad, 14, true, true)
-	mi.material_override = _tissue(Color(0.78, 0.38, 0.32), 1.0, 0.9)
+	mi.mesh = _deformed(0.33, 1.0, origin)
+	mi.material_override = appendix_node.material_override
 	piece.add_child(mi)
+	# Tranches de section rouge sombre
+	var raw := _tissue(Color(0.5, 0.06, 0.06), 0.5, 0.0)
+	for t in [0.3, 0.33]:
+		var cap := MeshInstance3D.new()
+		var cs := SphereMesh.new()
+		cs.radius = 0.0055
+		cs.height = 0.004
+		cap.mesh = cs
+		cap.material_override = raw
+		var at := appendix_point(t)
+		var tan := (appendix_point(t + 0.02) - appendix_point(t - 0.02)).normalized()
+		if t < 0.31:
+			add_child(cap)
+		else:
+			piece.add_child(cap)
+		cap.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, tan)), at)
 	appendix_cut = true
 	_update_appendix()
 	return piece
@@ -457,7 +590,7 @@ func _rebuild_walls() -> void:
 	if opening <= 0.01:
 		return
 	var half_len := INC_A.distance_to(INC_B) * 0.5 + 0.004
-	var half_w := opening * 0.03
+	var half_w := opening * 0.018
 	var k := 48
 	var levels := 6
 	var st := SurfaceTool.new()

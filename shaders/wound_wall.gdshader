@@ -12,9 +12,9 @@ void vertex() {
 
 void fragment() {
 	float d = UV.y; // 0 = surface, 1 = fond
-	float n = bb_fbm(wpos * 300.0);
+	float n = bb_fbm(wpos * 120.0);
 	vec3 skin = vec3(0.70, 0.30, 0.26);
-	vec3 fat = vec3(0.93, 0.78, 0.40) * (0.85 + 0.3 * bb_noise(wpos * 700.0));
+	vec3 fat = vec3(1.0, 0.86, 0.48) * (0.9 + 0.15 * bb_noise(wpos * 220.0));
 	vec3 fascia = vec3(0.90, 0.86, 0.80);
 	vec3 muscle = vec3(0.55, 0.10, 0.10) * (0.8 + 0.4 * bb_noise(vec3(wpos.x * 900.0, wpos.y * 120.0, wpos.z * 900.0)));
 	vec3 perit = vec3(0.80, 0.45, 0.42);
@@ -30,5 +30,5 @@ void fragment() {
 	SPECULAR = 0.55;
 	CLEARCOAT = 0.6;
 	CLEARCOAT_ROUGHNESS = 0.1;
-	NORMAL = bb_bump(NORMAL, wpos, 220.0, 0.002, VIEW_MATRIX);
+	NORMAL = bb_bump(NORMAL, wpos, 110.0, 0.0012, VIEW_MATRIX);
 }

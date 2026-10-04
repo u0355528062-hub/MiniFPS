@@ -8,7 +8,8 @@ uniform vec3 vessel_color : source_color = vec3(0.45, 0.05, 0.08);
 uniform float vessel_amount = 0.6;
 uniform float inflamed = 0.0;
 uniform float wetness = 0.85;
-uniform float bump_freq = 140.0;
+uniform float bump_freq = 90.0;
+uniform float clip_y = 100.0; // rien n'est dessiné au-dessus (organes sous la peau)
 
 varying vec3 wpos;
 
@@ -17,6 +18,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (wpos.y > clip_y) {
+		discard;
+	}
 	float n = bb_fbm(wpos * 60.0);
 	vec3 col = base_color * (0.85 + 0.3 * n);
 	// Vaisseaux : lignes fines sinueuses
@@ -33,7 +37,8 @@ void fragment() {
 	SPECULAR = 0.6;
 	CLEARCOAT = wetness * 0.8;
 	CLEARCOAT_ROUGHNESS = 0.08;
-	NORMAL = bb_bump(NORMAL, wpos, bump_freq, 0.0025, VIEW_MATRIX);
+	NORMAL = bb_bump(NORMAL, wpos, bump_freq, 0.0012, VIEW_MATRIX);
+	SSS_STRENGTH = 0.6;
 	BACKLIGHT = base_color * 0.35;
 	RIM = 0.25;
 	RIM_TINT = 0.6;

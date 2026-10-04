@@ -14,7 +14,9 @@ uniform float incision_progress = 0.0;
 uniform float show_guide = 1.0;
 uniform float opening = 0.0;
 uniform float stitched = 0.0;
-uniform vec3 skin_color : source_color = vec3(0.86, 0.66, 0.55);
+uniform vec2 win_min = vec2(0.0, -0.02);
+uniform vec2 win_max = vec2(0.25, 0.22);
+uniform vec3 skin_color : source_color = vec3(0.78, 0.56, 0.45);
 
 varying vec3 wpos;
 
@@ -36,19 +38,19 @@ void fragment() {
 
 	// Plaie ouverte : ellipse le long de l'incision
 	float half_len = len * 0.5 + 0.004;
-	float half_w = max(opening, 0.0001) * 0.03;
+	float half_w = max(opening, 0.0001) * 0.018;
 	float ell = (u * u) / (half_len * half_len) + (v * v) / (half_w * half_w);
 	if (opening > 0.01 && ell < 1.0) {
 		discard;
 	}
 
 	// Peau : variations, rougeurs, pores
-	float n = bb_fbm(wpos * 180.0);
-	float blotch = bb_fbm(wpos * 22.0);
-	vec3 col = skin_color * (0.92 + 0.12 * n);
+	float n = bb_fbm(wpos * 60.0);
+	float blotch = bb_fbm(wpos * 14.0);
+	vec3 col = skin_color * (0.94 + 0.08 * n);
 	col = mix(col, col * vec3(1.06, 0.88, 0.86), smoothstep(0.45, 0.75, blotch) * 0.5);
-	float rough = 0.55 + 0.1 * n;
-	float spec = 0.35;
+	float rough = 0.7 + 0.06 * n;
+	float spec = 0.06;
 
 	// Badigeon antiseptique (povidone iodée)
 	vec2 muv = (p - patch_min) / patch_size;
@@ -56,8 +58,8 @@ void fragment() {
 	float streak = bb_fbm(vec3(p * 90.0, 1.0));
 	vec3 iod_col = mix(vec3(0.42, 0.16, 0.04), vec3(0.62, 0.30, 0.08), streak);
 	col = mix(col, iod_col, iod * 0.92);
-	rough = mix(rough, 0.18, iod);
-	spec = mix(spec, 0.6, iod);
+	rough = mix(rough, 0.45, iod);
+	spec = mix(spec, 0.1, iod);
 
 	// Tracé au feutre chirurgical (pointillés)
 	float dash = step(0.5, fract(t * 9.0));
@@ -78,9 +80,14 @@ void fragment() {
 		rough = mix(rough, 0.15, rim);
 	}
 
+	// Ombre douce au bord de la fenêtre du champ
+	vec2 wd = min(p - win_min, win_max - p);
+	float edge = min(wd.x, wd.y);
+	col *= mix(0.55, 1.0, smoothstep(0.0, 0.014, edge));
+
 	ALBEDO = col;
 	ROUGHNESS = rough;
 	SPECULAR = spec;
-	NORMAL = bb_bump(NORMAL, wpos, 260.0, 0.0015, VIEW_MATRIX);
+	NORMAL = bb_bump(NORMAL, wpos, 90.0, 0.0008, VIEW_MATRIX);
 	BACKLIGHT = vec3(0.35, 0.08, 0.05) * 0.4;
 }

@@ -147,11 +147,13 @@ func _lights() -> void:
 	lam.rotation_degrees = Vector3(-90, 0, 0)
 	lam.spot_angle = 38
 	lam.spot_range = 4.0
-	lam.light_energy = 1.5
+	lam.light_energy = 1.1
 	lam.light_color = Color(0.95, 0.98, 1.0)
 	lam.shadow_enabled = true
 	lam.light_size = 0.6
 	lam.shadow_blur = 1.5
+	lam.shadow_bias = 0.08
+	lam.shadow_normal_bias = 2.5
 	add_child(lam)
 
 	# Éclairage général de la salle
@@ -161,7 +163,7 @@ func _lights() -> void:
 		l.rotation_degrees = Vector3(-90, 0, 0)
 		l.spot_angle = 75
 		l.spot_range = 4.0
-		l.light_energy = 1.1
+		l.light_energy = 0.9
 		l.light_color = Color(0.96, 0.98, 1.0)
 		add_child(l)
 
@@ -170,13 +172,15 @@ func _lights() -> void:
 	scialytique_light.name = "Scialytique"
 	add_child(scialytique_light)
 	scialytique_light.look_at_from_position(Vector3(0.05, 1.95, 0.3), Vector3(0.12, 1.1, 0.1))
-	scialytique_light.spot_angle = 16
+	scialytique_light.spot_angle = 20
 	scialytique_light.spot_angle_attenuation = 0.6
 	scialytique_light.spot_range = 3.0
-	scialytique_light.light_energy = 14.0
+	scialytique_light.light_energy = 2.2
 	scialytique_light.light_color = Color(1.0, 0.97, 0.93)
 	scialytique_light.shadow_enabled = true
 	scialytique_light.light_size = 0.25
+	scialytique_light.shadow_bias = 0.08
+	scialytique_light.shadow_normal_bias = 2.5
 	scialytique_light.light_specular = 0.6
 	var second := SpotLight3D.new()
 	second.name = "Scialytique2"
@@ -185,7 +189,7 @@ func _lights() -> void:
 	second.look_at_from_position(second.position, Vector3(0.12, 1.1, 0.1))
 	second.spot_angle = 18
 	second.spot_range = 3.0
-	second.light_energy = 6.0
+	second.light_energy = 0.9
 	second.light_color = Color(0.98, 0.98, 1.0)
 	second.shadow_enabled = false
 
@@ -216,7 +220,10 @@ func _furniture() -> void:
 	_place("tabouret", Vector3(1.0, 0, 1.1))
 	_place("lavabo", Vector3(1.4, 0, SIZE_Z / 2 - 0.45), 180)
 	_place("paravent", Vector3(2.9, 0, 0.2), 90)
-	_place("scialytique", Vector3(0.1, HEIGHT - 1.3, 0.1), 0)
+	var lamp := _place("scialytique", Vector3(0.1, HEIGHT - 1.3, 0.1), 0)
+	# La coupole ne doit pas faire d'ombre à sa propre lumière
+	for mi in lamp.find_children("*", "GeometryInstance3D", true, false):
+		(mi as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_anesthesia_station()
 
 
@@ -251,4 +258,5 @@ func _environment_probe() -> void:
 	probe.ambient_mode = ReflectionProbe.AMBIENT_COLOR
 	probe.ambient_color = Color(0.55, 0.62, 0.64)
 	probe.ambient_color_energy = 0.5
+	probe.intensity = 0.45
 	add_child(probe)

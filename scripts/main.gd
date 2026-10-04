@@ -28,11 +28,17 @@ func _ready() -> void:
 	tray.name = "Instruments"
 	add_child(tray)
 	tray.build()
+	if args.has("hide"):
+		for n in args["hide"].split(","):
+			var node := find_child(n, true, false)
+			if node:
+				node.visible = false
 	if args.has("open"):
 		patient.fill_iodine()
 		patient.incision_progress = 1.0
 		patient.opening = float(args["open"])
-		patient.set_appendix_tip(patient.appendix_base + Vector3(-0.02, 0.07, 0.01))
+		if args.has("lift"):
+			patient.set_appendix_tip(patient.appendix_base + Vector3(-0.01, 0.07, 0.01))
 	if args.has("shot"):
 		_take_shot()
 
@@ -53,9 +59,9 @@ func _build_environment() -> void:
 	e.ssao_intensity = 1.6
 	e.ssao_detail = 0.6
 	e.glow_enabled = true
-	e.glow_intensity = 0.35
-	e.glow_bloom = 0.04
-	e.glow_hdr_threshold = 1.5
+	e.glow_intensity = 0.2
+	e.glow_bloom = 0.0
+	e.glow_hdr_threshold = 2.5
 	e.adjustment_enabled = true
 	e.adjustment_contrast = 1.06
 	e.adjustment_saturation = 1.04
