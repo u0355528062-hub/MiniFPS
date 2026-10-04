@@ -119,6 +119,12 @@ func _ready() -> void:
 
 	if args.has("step"):
 		procedure.skip_to(int(args["step"]))
+	if args.has("hide"):
+		# Captures « écorché » : masque des éléments par nom (Peau, Champs, Cavite...)
+		await get_tree().process_frame
+		for n in args["hide"].split(","):
+			for node in find_children(n, "", true, false):
+				(node as Node3D).visible = false
 	if args.has("nolabels"):
 		procedure.show_markers = false
 	if args.has("vrmock") and args.has("hold"):

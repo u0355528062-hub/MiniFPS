@@ -186,15 +186,10 @@ func _build_head() -> void:
 	bust.name = "Tete"
 	bust.position = Vector3(-0.71, TABLE_TOP + 0.004, 0.0)
 	add_child(bust)
-	var skin := StandardMaterial3D.new()
-	skin.albedo_texture = Tex.get_tex_any("res://assets/textures/head_albedo.jpg")
-	skin.normal_enabled = true
-	skin.normal_texture = Tex.get_tex_any("res://assets/textures/head_normal.jpg")
-	skin.normal_scale = 0.8
-	skin.roughness = 0.62
-	skin.subsurf_scatter_enabled = true
-	skin.subsurf_scatter_strength = 0.35
-	skin.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	var skin := ShaderMaterial.new()
+	skin.shader = preload("res://shaders/head_skin.gdshader")
+	skin.set_shader_parameter("albedo_tex", Tex.get_tex_any("res://assets/textures/head_albedo.jpg"))
+	skin.set_shader_parameter("normal_tex", Tex.get_tex_any("res://assets/textures/head_normal.jpg"))
 	var nose := bust.global_position + Vector3.UP * 0.2
 	for mi in _meshes_in(bust):
 		mi.material_override = skin
@@ -211,24 +206,7 @@ func _build_head() -> void:
 	for side in [-1.0, 1.0]:
 		var tape := MeshUtil.box_instance(self, Vector3(0.028, 0.002, 0.02), nose + Vector3(-0.042, -0.018, 0.033 * side), white, "Pansement")
 		tape.rotation_degrees = Vector3(12.0 * side, 0, -18)
-	# Sonde d'intubation : de la bouche vers le respirateur
-	var mouth := nose + Vector3(0.045, -0.022, 0.0)
-	var tube_pts := MeshUtil.bezier(mouth, mouth + Vector3(0.0, 0.07, 0.0), mouth + Vector3(-0.2, 0.14, -0.15), Vector3(-1.2, 1.12, -0.32), 40)
-	var tr := PackedFloat32Array()
-	tr.resize(tube_pts.size())
-	tr.fill(0.0065)
-	var tube := MeshInstance3D.new()
-	tube.name = "SondeIntubation"
-	tube.mesh = MeshUtil.tube(tube_pts, tr, 12)
-	var plastic := StandardMaterial3D.new()
-	plastic.albedo_color = Color(0.85, 0.92, 0.95, 0.45)
-	plastic.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	plastic.roughness = 0.12
-	plastic.metallic_specular = 0.8
-	tube.material_override = plastic
-	add_child(tube)
-	MeshUtil.box_instance(self, Vector3(0.016, 0.003, 0.07), mouth + Vector3(0.0, 0.004, 0.0), white, "Sparadrap")
-	MeshUtil.cylinder_instance(self, 0.011, 0.03, mouth + Vector3(0.0, 0.03, 0.0), MeshUtil.mat(Color(0.2, 0.45, 0.85), 0.3), "Raccord")
+	_build_airway(nose, white)
 	# Charlotte (bonnet) bleue sur le crâne
 	var cap := MeshInstance3D.new()
 	var cs := SphereMesh.new()
@@ -241,6 +219,107 @@ func _build_head() -> void:
 	cap.basis = Basis(Vector3(0, 0, 1), deg_to_rad(90)).scaled(Vector3(1, 1, 1))
 	cap.scale = Vector3(0.075, 0.1, 0.085)
 	add_child(cap)
+
+
+## Masque facial d'anesthésie transparent + harnais, circuit annelé vers le respirateur,
+## ligne de capnographie, électrodes ECG et perfusion.
+func _build_airway(nose: Vector3, white: Material) -> void:
+	var mouth := nose + Vector3(0.03, -0.012, 0.0)
+	var mask_c := mouth + Vector3(-0.004, 0.012, 0.0)
+	var clear := StandardMaterial3D.new()
+	clear.albedo_color = Color(0.82, 0.95, 0.92, 0.32)
+	clear.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	clear.roughness = 0.08
+	clear.metallic_specular = 0.9
+	clear.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Coque du masque (demi-ellipsoïde posé sur le nez et la bouche)
+	var shell := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 1.0
+	sm.height = 2.0
+	sm.is_hemisphere = true
+	sm.radial_segments = 32
+	shell.mesh = sm
+	shell.material_override = clear
+	shell.position = mask_c
+	shell.scale = Vector3(0.062, 0.04, 0.05)
+	shell.name = "MasqueO2"
+	add_child(shell)
+	# Coussin gonflable (bord du masque)
+	var cushion := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.85
+	tm.outer_radius = 1.0
+	tm.rings = 32
+	tm.ring_segments = 10
+	cushion.mesh = tm
+	var cush_mat := StandardMaterial3D.new()
+	cush_mat.albedo_color = Color(0.55, 0.75, 0.9, 0.55)
+	cush_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	cush_mat.roughness = 0.25
+	cushion.material_override = cush_mat
+	cushion.position = mask_c + Vector3(0, -0.002, 0)
+	cushion.scale = Vector3(0.064, 0.05, 0.052)
+	add_child(cushion)
+	# Coude et raccord
+	var elbow_mat := MeshUtil.mat(Color(0.25, 0.55, 0.85, 0.85), 0.3)
+	MeshUtil.cylinder_instance(self, 0.011, 0.03, mask_c + Vector3(0, 0.05, 0), elbow_mat, "Coude")
+	# Sangles du harnais : de chaque côté du masque vers l'arrière de la tête
+	for side in [-1.0, 1.0]:
+		var sp := MeshUtil.bezier(mask_c + Vector3(0.0, 0.0, 0.045 * side), mask_c + Vector3(-0.03, -0.02, 0.075 * side), mask_c + Vector3(-0.07, -0.07, 0.08 * side), mask_c + Vector3(-0.09, -0.11, 0.075 * side), 16)
+		var sr := PackedFloat32Array()
+		sr.resize(sp.size())
+		sr.fill(0.0035)
+		var strap := MeshInstance3D.new()
+		strap.mesh = MeshUtil.tube(sp, sr, 6)
+		strap.material_override = MeshUtil.mat(Color(0.1, 0.1, 0.11), 0.6)
+		add_child(strap)
+	# Circuit annelé (inspiration + expiration) jusqu'au respirateur
+	var ribbed := MeshUtil.mat(Color(0.75, 0.88, 0.95, 0.8), 0.3)
+	ribbed.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var start := mask_c + Vector3(0, 0.065, 0)
+	for k in 2:
+		var end := Vector3(-1.2, 1.05, -0.28 + k * 0.08)
+		var pts := MeshUtil.bezier(start, start + Vector3(-0.05, 0.12, 0.0), end + Vector3(0.35, 0.25, 0.05 * k), end, 70)
+		var rr := PackedFloat32Array()
+		for i in pts.size():
+			rr.append(0.011 + 0.0016 * sin(i * 2.6))
+		var tube := MeshInstance3D.new()
+		tube.mesh = MeshUtil.tube(pts, rr, 12)
+		tube.material_override = ribbed
+		tube.name = "Circuit"
+		add_child(tube)
+	# Ligne de capnographie (fine, jaune)
+	var cap_pts := MeshUtil.bezier(start, start + Vector3(0.02, 0.08, 0.04), Vector3(-1.0, 1.3, -0.2), Vector3(-1.3, 1.35, -0.3), 30)
+	var cr := PackedFloat32Array()
+	cr.resize(cap_pts.size())
+	cr.fill(0.0018)
+	var capno := MeshInstance3D.new()
+	capno.mesh = MeshUtil.tube(cap_pts, cr, 6)
+	capno.material_override = MeshUtil.mat(Color(0.95, 0.85, 0.3), 0.4)
+	add_child(capno)
+	# Câbles ECG : sortent de sous le champ (électrodes sur le thorax) vers le poste d'anesthésie
+	var cols := [Color(0.9, 0.15, 0.1), Color(0.95, 0.9, 0.2), Color(0.2, 0.7, 0.3)]
+	for i in 3:
+		var pz: float = [-0.2, 0.18, -0.1][i]
+		var pe := Vector3(-0.62, _drape_height(-0.62, pz) + 0.002, pz)
+		var wp := MeshUtil.bezier(pe, pe + Vector3(-0.08, 0.03, 0.0), Vector3(-1.0, 1.0, -0.3), Vector3(-1.2, 0.98, -0.32 + i * 0.03), 24)
+		var wr := PackedFloat32Array()
+		wr.resize(wp.size())
+		wr.fill(0.0016)
+		var wire := MeshInstance3D.new()
+		wire.mesh = MeshUtil.tube(wp, wr, 5)
+		wire.material_override = MeshUtil.mat(cols[i] * 0.8, 0.5)
+		add_child(wire)
+	# Perfusion : tubulure du pied à sérum vers le bras (sous le champ)
+	var iv := MeshUtil.bezier(Vector3(-1.05, 1.55, -0.55), Vector3(-1.0, 1.1, -0.55), Vector3(-0.7, 1.1, -0.45), Vector3(-0.5, 1.0, -0.33), 30)
+	var ir := PackedFloat32Array()
+	ir.resize(iv.size())
+	ir.fill(0.002)
+	var ivm := MeshInstance3D.new()
+	ivm.mesh = MeshUtil.tube(iv, ir, 6)
+	ivm.material_override = clear
+	add_child(ivm)
 
 
 func _build_skin() -> void:

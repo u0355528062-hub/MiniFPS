@@ -38,10 +38,10 @@ void fragment() {
 	float blood = smoothstep(0.52, 0.7, drip + d * 0.35) * 0.85;
 	col = mix(col, vec3(0.36, 0.02, 0.03), blood);
 
-	ALBEDO = col;
-	ROUGHNESS = mix(0.22, 0.08, blood);
-	SPECULAR = 0.55;
-	CLEARCOAT = 0.7;
+	ALBEDO = col * 0.85;
+	ROUGHNESS = mix(0.32, 0.12, blood);
+	SPECULAR = 0.4;
+	CLEARCOAT = 0.4 * smoothstep(0.1, 0.4, d);
 	CLEARCOAT_ROUGHNESS = 0.08;
 	NORMAL_MAP = vec3(nt * 0.5 + 0.5, 1.0);
 	NORMAL_MAP_DEPTH = 1.0;

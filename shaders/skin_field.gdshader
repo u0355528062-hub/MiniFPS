@@ -102,9 +102,9 @@ void fragment() {
 	if (opening > 0.01) {
 		float lip = 1.0 - smoothstep(1.0, 1.25, ell);
 		float rim = 1.0 - smoothstep(1.0, 1.08, ell);
-		col = mix(col, vec3(0.62, 0.3, 0.27), lip * 0.6);
+		col = mix(col, vec3(0.42, 0.14, 0.12), lip * 0.55);
 		col = mix(col, vec3(0.36, 0.03, 0.03), rim * (0.6 + 0.4 * drops));
-		rough = mix(rough, 0.3, lip);
+		rough = mix(rough, 0.45, lip);
 	}
 
 	// Cicatrice suturée : bourrelet légèrement rouge

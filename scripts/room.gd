@@ -135,10 +135,10 @@ func _ceiling_fixtures() -> void:
 	MeshUtil.box_instance(self, Vector3(2.6, 0.08, 2.0), Vector3(0, HEIGHT - 0.04, 0), frame, "FluxLaminaire")
 	for i in 2:
 		for j in 2:
-			MeshUtil.box_instance(self, Vector3(1.15, 0.01, 0.85), Vector3(-0.62 + i * 1.24, HEIGHT - 0.085, -0.46 + j * 0.92), MeshUtil.emissive(Color(0.96, 0.98, 1.0), 1.6), "Diffuseur")
+			MeshUtil.box_instance(self, Vector3(1.15, 0.01, 0.85), Vector3(-0.62 + i * 1.24, HEIGHT - 0.085, -0.46 + j * 0.92), MeshUtil.emissive(Color(0.96, 0.98, 1.0), 0.9), "Diffuseur")
 	# Dalles lumineuses de la salle
 	for p in [Vector3(-2.3, 0, -1.8), Vector3(2.3, 0, -1.8), Vector3(-2.3, 0, 1.8), Vector3(2.3, 0, 1.8)]:
-		MeshUtil.box_instance(self, Vector3(1.2, 0.03, 0.6), Vector3(p.x, HEIGHT - 0.02, p.z), MeshUtil.emissive(Color(0.97, 0.98, 1.0), 2.0), "Dalle")
+		MeshUtil.box_instance(self, Vector3(1.2, 0.03, 0.6), Vector3(p.x, HEIGHT - 0.02, p.z), MeshUtil.emissive(Color(0.97, 0.98, 1.0), 1.1), "Dalle")
 
 
 func _lights() -> void:
@@ -226,6 +226,16 @@ func _furniture() -> void:
 	# La coupole ne doit pas faire d'ombre à sa propre lumière
 	for mi in lamp.find_children("*", "GeometryInstance3D", true, false):
 		(mi as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Coupole moins éblouissante : inox satiné plutôt que blanc pur
+	for mi in lamp.find_children("*", "MeshInstance3D", true, false):
+		var m3 := mi as MeshInstance3D
+		for i in m3.mesh.get_surface_count():
+			var src := m3.mesh.surface_get_material(i) as StandardMaterial3D
+			if src:
+				var dup := src.duplicate() as StandardMaterial3D
+				dup.albedo_color = Color(0.62, 0.64, 0.66)
+				dup.roughness = 0.45
+				m3.set_surface_override_material(i, dup)
 	_anesthesia_station()
 
 
