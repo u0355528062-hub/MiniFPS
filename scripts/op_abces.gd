@@ -66,11 +66,11 @@ func _skin_normal(x: float, z: float) -> Vector3:
 func build_extras() -> void:
 	axis = -_skin_normal(SITE.x, SITE.y)
 	pus_mat = StandardMaterial3D.new()
-	pus_mat.albedo_color = Color(0.84, 0.78, 0.5, 0.93)
+	pus_mat.albedo_color = Color(0.7, 0.64, 0.36, 0.95)
 	pus_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	pus_mat.roughness = 0.32
+	pus_mat.roughness = 0.5
 	pus_mat.clearcoat_enabled = true
-	pus_mat.clearcoat = 0.35
+	pus_mat.clearcoat = 0.18
 	pus_mat.subsurf_scatter_enabled = false
 	pus_mat.rim_enabled = true
 	pus_mat.rim = 0.15
@@ -198,7 +198,7 @@ func _update_pus() -> void:
 		var down := Vector3(0, 0, 1)
 		pus.global_position = patient.on_skin(c + down * 0.0015 * amount) + Vector3.UP * 0.0008
 		pus.scale = Vector3(0.0105, 0.0016 + 0.0016 * amount, 0.003 + 0.004 * amount)
-		var p2 := patient.on_skin(c + down * (0.006 + 0.014 * amount)) + Vector3.UP * 0.0003
+		var p2 := patient.on_skin(c + down * (0.0035 + 0.012 * amount)) + Vector3.UP * 0.0003
 		streak.global_position = p2
 		streak.scale = Vector3(0.0035 + 0.003 * amount, 0.0009 * amount + 0.0003, 0.004 + 0.013 * amount)
 

@@ -22,8 +22,9 @@ func build(spot: Vector3) -> void:
 	_panel.name = "Boutons"
 	add_child(_panel)
 	# Devant le chirurgien, au-dessus du bord de la table, incliné vers lui
-	_panel.position = spot + Vector3(-0.16, 1.24, -0.34)
-	_panel.rotation = Vector3(deg_to_rad(-38.0), 0, 0)
+	# Assez haut et en avant pour qu'une main posée au repos ne touche rien
+	_panel.position = spot + Vector3(-0.14, 1.5, -0.4)
+	_panel.rotation = Vector3(deg_to_rad(-22.0), 0, 0)
 	# Bouton « Recentrer » toujours disponible, en haut à gauche (hors de la zone de travail)
 	_corner = Node3D.new()
 	_corner.name = "Recentrer"
@@ -43,7 +44,8 @@ func _add_button(parent: Node3D, text: String, action: String, pos: Vector3, wid
 	cap.mesh = bm
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.05, 0.16, 0.19) if not selected else Color(0.07, 0.36, 0.36)
-	mat.roughness = 0.4
+	mat.roughness = 0.85
+	mat.metallic_specular = 0.15
 	mat.emission_enabled = true
 	mat.emission = GuideUI.ACCENT
 	mat.emission_energy_multiplier = 0.15 if selected else 0.03
@@ -61,7 +63,7 @@ func _add_button(parent: Node3D, text: String, action: String, pos: Vector3, wid
 	lbl.width = width / 0.0007
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(lbl)
-	_buttons.append({"root": root, "cap": cap, "mat": mat, "action": action, "w": width, "armed": true, "push": 0.0})
+	_buttons.append({"root": root, "cap": cap, "mat": mat, "action": action, "w": width, "armed": true, "push": 0.0, "front": false})
 
 
 func _clear_panel() -> void:
@@ -103,13 +105,16 @@ func _process(delta: float) -> void:
 			if absf(q.x) < b["w"] * 0.5 + 0.008 and absf(q.y) < H * 0.5 + 0.008:
 				if q.z < 0.012 and q.z > -0.03:
 					touching = true
-				elif q.z < 0.06 and q.z >= 0.012:
+				elif q.z < 0.08 and q.z >= 0.012:
 					hover = true
+		# Un appui compte seulement si le doigt arrive par l'avant du bouton (pas en glissant dessous)
+		var came_from_front: bool = b["front"]
+		b["front"] = hover or (touching and came_from_front)
 		var mat: StandardMaterial3D = b["mat"]
 		mat.emission_energy_multiplier = 0.5 if touching else (0.22 if hover else (0.15 if mat.albedo_color.g > 0.3 else 0.03))
 		b["push"] = move_toward(b["push"], 1.0 if touching else 0.0, delta * 12.0)
 		(b["cap"] as MeshInstance3D).position.z = -0.006 * b["push"]
-		if touching and b["armed"] and _cool <= 0.0:
+		if touching and came_from_front and b["armed"] and _cool <= 0.0:
 			b["armed"] = false
 			_cool = 0.6
 			Sfx.play("pose", root.global_position, -6.0, 1.5)

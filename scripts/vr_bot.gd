@@ -178,14 +178,20 @@ func poke(action: String) -> bool:
 	for b in tm._buttons:
 		if b["action"] == action and is_instance_valid(b["root"]):
 			var root: Node3D = b["root"]
+			# Approche par l'avant du bouton (sans frôler les autres), puis appui
+			var front := root.global_transform * Vector3(0, 0, 0.07)
 			var target := root.global_transform * Vector3(0, 0, 0.004)
 			_aim(R, R.controller.global_position)
 			await _frames(2)
+			R.controller.global_position += front - R.fingertip()
+			await _frames(3)
 			for i in 30:
 				var err: Vector3 = target - R.fingertip()
 				R.controller.global_position += err * 0.5
 				await _frames(1)
 			await _frames(4)
+			R.controller.global_position += front - R.fingertip()
+			await _frames(3)
 			_aim(R, _home(R))
 			await _frames(6)
 			return true

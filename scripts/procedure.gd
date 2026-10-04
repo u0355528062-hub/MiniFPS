@@ -54,6 +54,7 @@ var _wrong_counted := false
 var _hint_cd := 0.0
 var _finished_at := 0
 var _thread: MeshInstance3D
+var _hover_label: Label3D
 var _drops: Array[Dictionary] = []
 
 
@@ -74,6 +75,18 @@ func setup() -> void:
 	menu_index = Operation.ALL.find(op.id)
 	Contact.patient = patient
 	Contact.clear_zones()
+	# Nom de l'instrument que la main s'apprête à prendre (casque)
+	_hover_label = Label3D.new()
+	_hover_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_hover_label.no_depth_test = true
+	_hover_label.render_priority = 12
+	_hover_label.font = load("res://assets/fonts/Inter.ttf")
+	_hover_label.font_size = 36
+	_hover_label.outline_size = 8
+	_hover_label.pixel_size = 0.00045
+	_hover_label.outline_modulate = Color(0, 0, 0, 0.75)
+	_hover_label.visible = false
+	add_child(_hover_label)
 	if start_at_intro:
 		start_at_intro = false
 		_show_intro()
@@ -112,7 +125,7 @@ func _show_menu() -> void:
 	for i in entries.size():
 		lines += ("▶  " if i == menu_index else "     ") + "%d.  %s\n" % [i + 1, entries[i][0]]
 	lines += "\n" + entries[menu_index][1] + "\n\n"
-	lines += "Touche un bouton du doigt (ou pince main droite pour changer, main gauche pour valider)." if is_vr else "Flèches haut / bas (ou 1-%d) pour choisir, ESPACE pour valider." % entries.size()
+	lines += "Touche une opération du bout du doigt." if is_vr else "Flèches haut / bas (ou 1-%d) pour choisir, ESPACE pour valider." % entries.size()
 	for ui in uis:
 		ui.set_steps([])
 		ui.show_step(-2, 0, "Choisis ton opération", lines, "", _hint())
@@ -333,6 +346,16 @@ func _process(delta: float) -> void:
 		if mode == 0 and inst.id == req and not is_held and running and not inst.parked:
 			mode = 1
 		inst.set_highlight(0 if is_held else mode)
+	if is_vr and _hover_label:
+		var shown: Instrument = null
+		for h in hands:
+			if h.hovered and h.held == null:
+				shown = h.hovered
+		_hover_label.visible = shown != null
+		if shown:
+			_hover_label.text = shown.label
+			_hover_label.modulate = GuideUI.ACCENT if shown.id == req else Color(0.92, 0.96, 1.0)
+			_hover_label.global_position = shown.grip_global() + Vector3.UP * 0.05
 
 	_update_falling(delta)
 	if not running or step < 0 or step >= steps.size():
@@ -597,6 +620,12 @@ func _tick_incise(s: Dictionary, _delta: float) -> void:
 		if patient.has_cut() and (t < patient.cut0 - jump or t > patient.cut1 + jump):
 			continue
 		var before := patient.incision_progress
+		if not st.has("bloody"):
+			st["bloody"] = true
+			var bm: StandardMaterial3D = h.held.get_meta("blade_mat", null)
+			if bm:
+				var tw := create_tween()
+				tw.tween_property(bm, "albedo_color", Color(0.62, 0.22, 0.2), 2.0)
 		patient.extend_cut(t)
 		speed = maxf(speed, last.distance_to(p) / maxf(_delta, 0.001))
 		patient.rest_open = 0.14 * patient.incision_progress

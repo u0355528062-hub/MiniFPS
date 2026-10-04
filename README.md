@@ -1,8 +1,9 @@
-# Bloc VR — Appendicectomie
+# Bloc VR — Chirurgie en réalité virtuelle
 
-Prototype de chirurgie en réalité virtuelle (Godot 4.7). Tu fais une appendicectomie complète par
-voie de McBurney, en 9 étapes très guidées : un panneau te dit quoi faire, l'instrument à prendre
-brille sur la table, un anneau lumineux montre où agir.
+Simulateur de chirurgie en réalité virtuelle (Godot 4.7), jouable aux mains nues. Quatre opérations
+guidées : appendicectomie, drain thoracique, laparotomie pour plaie au couteau, drainage d'abcès.
+Un panneau te dit quoi faire, l'instrument à prendre brille sur la table (son nom s'affiche quand ta
+main s'en approche), un anneau lumineux montre où agir.
 
 Ça marche **avec le Quest 3 en Air Link / Quest Link**, ou **sans casque** à la souris et au clavier.
 
@@ -86,7 +87,14 @@ retard fait trembler la vue). Pour Air Link, préfère un Wi-Fi 5/6 GHz proche, 
   piston, le bouton gonfle et blanchit : il faut **attendre qu'elle agisse**, sinon le patient sent la
   lame), incision le long de la côte, dissection à la pince de Kelly (pousser, ouvrir, pousser...)
   jusqu'à la plèvre, pose du drain (l'oxygène remonte, bulles dans le bocal, le tuyau s'embue),
-  fixation par 3 points.
+  fixation par 3 points. Le thorax respire sous tes mains.
+- **Laparotomie** (10 étapes) : plaie au couteau, ventre plein de sang. Grande incision médiane,
+  écarteur de Gosset qu'on ouvre en écartant les doigts, aspiration du sang à la canule, anse
+  d'intestin perforée sortie à la pince, clampée, recousue, lavage au sérum, fermeture de
+  l'aponévrose puis de la peau.
+- **Drainage d'abcès** (6 étapes) : abcès rouge, gonflé et tendu. Désinfection, anesthésie locale
+  (attendre), incision au sommet (le pus sort et coule), logettes cassées à la Kelly, lavage au
+  sérum à la seringue, mèche de gaze laissée dans la cavité.
 
 ## Les 9 étapes de l'appendicectomie
 
@@ -120,7 +128,7 @@ Après `--` sur la ligne de commande :
 - `--restarttest` : vérifie que « recommencer » en fin de partie fonctionne.
 - `--handtest` : partie complète **aux mains nues** (faux suivi des mains : 26 articulations par main,
   pincement et poing), menu compris. `--chaos=vr --hands` : chaos aux mains nues.
-- `--op=drain` : choisit l'opération pour les tests.
+- `--op=drain`, `--op=laparotomie`, `--op=abces` : choisit l'opération pour les tests.
 - `--perf` : affiche le temps de calcul par image à chaque étape.
 - `--pose=id --vrmock [--handmock] --tipat=x,y,z --sq=0..1 --shot=...` : capture d'une main qui tient un instrument.
 

@@ -219,6 +219,8 @@ func show_step(index: int, total: int, title: String, text: String, inst_label: 
 	_title.label_settings.font_size = fs
 	_text.text = text
 	_inst_card.visible = inst_label != ""
+	# Sans carte d'instrument (menu, accueil), le texte peut descendre plus bas
+	_text.size = Vector2(900, 210 if inst_label != "" else 420)
 	_inst_name.text = inst_label
 	_hint.text = hint
 	set_progress(0.0, "")

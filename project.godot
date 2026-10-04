@@ -4,8 +4,8 @@ config_version=5
 
 [application]
 
-config/name="Bloc VR — Appendicectomie"
-config/description="Prototype de chirurgie en VR : appendicectomie guidée, jouable avec un casque (Quest Link / Air Link) ou au clavier et à la souris."
+config/name="Bloc VR"
+config/description="Chirurgie en VR : appendicectomie, drain thoracique, laparotomie, drainage d'abcès ; casque (Quest Link / Air Link, mains nues) ou clavier et souris."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
