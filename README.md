@@ -31,17 +31,20 @@ brille sur la table, un anneau lumineux montre où agir.
 
 ## Commandes
 
-### Casque SANS manettes (mains nues)
+Tout se fait avec de **vrais gestes** : la lame coupe quand elle entre dans la peau, la compresse
+badigeonne là où elle frotte, l'écarteur étire le bord qu'il accroche (et le bord se détend si on
+lâche), les ciseaux et les pinces s'ouvrent et se ferment avec tes doigts, le piston de la seringue
+avance quand tu serres. Les instruments ne traversent ni la peau ni les objets.
 
-Le jeu suit tes vraies mains (suivi des mains du Quest 3). Pose les manettes et regarde tes mains :
-elles apparaissent en gants bleus.
+### Casque SANS manettes (mains nues) — recommandé
 
 | Geste | Action |
 |---|---|
-| **Fermer le poing** (majeur, annulaire, auriculaire repliés) | prendre l'instrument près de ta main ou visé par le rayon / le reposer |
-| **Pincer pouce + index** | agir : badigeonner, inciser, poser, piquer, saisir… (garde le pincement pour les gestes longs) |
-| **Pincer main gauche** | valider dans le menu, commencer, revenir au menu à la fin |
-| **Pincer main droite** (menu) | changer d'opération |
+| **Pincer pouce + index** près d'un instrument | le prendre : il se tient entre le pouce et l'index, comme un crayon |
+| **Serrer / desserrer le pouce** contre l'index | fermer / ouvrir les ciseaux et les pinces, pousser le piston de la seringue (relâche d'abord, puis serre) |
+| **Ouvrir grand la main** (doigts tendus) | lâcher l'instrument : il retourne sur la table |
+| Pincer en visant de loin | un rayon discret attrape l'instrument visé |
+| **Toucher un bouton du bout de l'index** | menu : choisir l'opération, Commencer, Recommencer, Recentrer |
 
 Si tes mains n'apparaissent pas :
 1. dans le casque : **Paramètres → Mouvements → Suivi des mains** activé ;
@@ -52,25 +55,21 @@ Si tes mains n'apparaissent pas :
 
 | Bouton | Action |
 |---|---|
-| **Grip** (bouton sous le majeur) | prendre l'instrument près de ta main **ou** visé avec le rayon / le reposer |
-| **Gâchette** (index) | agir : badigeonner, inciser, poser, saisir, ligaturer, couper, suturer |
+| **Grip** | prendre l'instrument près de ta main ou visé par le rayon / le reposer |
+| **Gâchette** | serrer (mâchoires, piston) |
 | **A** ou **X** | commencer / recommencer |
 | **B** ou **Y** | te replacer face au patient |
-| Stick gauche | te déplacer doucement |
-| Stick droit | tourner par crans |
+| Stick gauche / droit | te déplacer / tourner par crans |
 
-Tu peux tenir un instrument dans chaque main, et passer un instrument d'une main à l'autre.
-
-**Hauteur automatique** : au lancement (et à chaque appui sur B / Y), le jeu place tes yeux à
-1,62 m face au patient. La table est donc à la bonne hauteur que tu sois grand, petit, debout ou
-**assis**. Si tu te sens mal placé, appuie simplement sur **B**.
+**Fluidité** : la résolution s'ajuste toute seule pour garder la cadence du casque (une image en
+retard fait trembler la vue). Pour Air Link, préfère un Wi-Fi 5/6 GHz proche, ou le câble Link.
 
 ### Souris et clavier
 
 | Touche | Action |
 |---|---|
 | **Clic gauche** | prendre l'instrument visé |
-| **Clic gauche maintenu** | agir |
+| **Clic gauche maintenu** | appuyer (la lame, l'aiguille, le drain s'enfoncent) et serrer (mâchoires, piston) |
 | **Molette** | lever / baisser l'instrument |
 | **R** ou **clic droit bref** | reposer l'instrument |
 | **1 à 8** | prendre directement un instrument |
@@ -83,21 +82,23 @@ Tu peux tenir un instrument dans chaque main, et passer un instrument d'une main
 ## Opérations
 
 - **Appendicectomie** (9 étapes, ci-dessous).
-- **Drain thoracique** (6 étapes) : désinfection du flanc, anesthésie locale, incision le long de la
-  côte, dissection jusqu'à la plèvre (l'air s'échappe), pose du drain (l'oxygène remonte sur le
-  moniteur, bulles dans le bocal), fixation par 3 points.
+- **Drain thoracique** (6 étapes) : désinfection du flanc, anesthésie locale (on pique, on pousse le
+  piston, le bouton gonfle et blanchit : il faut **attendre qu'elle agisse**, sinon le patient sent la
+  lame), incision le long de la côte, dissection à la pince de Kelly (pousser, ouvrir, pousser...)
+  jusqu'à la plèvre, pose du drain (l'oxygène remonte, bulles dans le bocal, le tuyau s'embue),
+  fixation par 3 points.
 
 ## Les 9 étapes de l'appendicectomie
 
-1. **Désinfection** — pince à badigeon, frotter la peau jusqu'à 100 %.
-2. **Incision** — bistouri, suivre le pointillé violet de « DÉPART » à « ARRIVÉE ».
-3. **Écarteur 1** — Langenbeck sur le repère.
-4. **Écarteur 2** — Roux sur l'autre bord ; la plaie s'ouvre.
-5. **Sortir l'appendice** — pince De Bakey, saisir la pointe et la soulever.
-6. **Ligature** — Overholt + fil à la base.
-7. **Section** — ciseaux au-dessus de la ligature.
-8. **Retrait** — déposer l'appendice dans le haricot.
-9. **Suture** — porte-aiguille, 4 points.
+1. **Désinfection** — frotter la compresse de la pince à badigeon sur toute la zone.
+2. **Incision** — poser la lame sur « DÉPART », appuyer, la glisser jusqu'à « ARRIVÉE ».
+3. **Écarteur 1** — accrocher un bord avec le Langenbeck et tirer ; tenu bien ouvert, l'aide le prend.
+4. **Écarteur 2** — même geste avec le Roux sur l'autre bord.
+5. **Sortir l'appendice** — mors de la pince De Bakey autour de la pointe, serrer, soulever.
+6. **Ligature** — serrer l'Overholt sur le fil à la base, puis tirer pour serrer le nœud.
+7. **Section** — ouvrir les ciseaux autour de l'appendice, les refermer.
+8. **Retrait** — saisir l'appendice, le lâcher au-dessus du haricot (il tombe vraiment).
+9. **Suture** — pour chaque point : piquer à l'entrée, ressortir sur l'autre bord ; 4 points.
 
 Fin : temps, erreurs et étoiles. Prendre le mauvais instrument compte une erreur (une fois par étape).
 
@@ -120,6 +121,8 @@ Après `--` sur la ligne de commande :
 - `--handtest` : partie complète **aux mains nues** (faux suivi des mains : 26 articulations par main,
   pincement et poing), menu compris. `--chaos=vr --hands` : chaos aux mains nues.
 - `--op=drain` : choisit l'opération pour les tests.
+- `--perf` : affiche le temps de calcul par image à chaque étape.
+- `--pose=id --vrmock [--handmock] --tipat=x,y,z --sq=0..1 --shot=...` : capture d'une main qui tient un instrument.
 
 ---
 

@@ -163,7 +163,7 @@ func _ready() -> void:
 				(node as Node3D).visible = false
 	if args.has("nolabels"):
 		procedure.show_markers = false
-	if args.has("handmock"):
+	if args.has("handmock") and not args.has("pose"):
 		# Capture : mains nues simulées (faux suivi des mains) au lieu des manettes
 		var hm := VRBot.new()
 		add_child(hm)
@@ -175,6 +175,20 @@ func _ready() -> void:
 	if args.has("vrmock") and args.has("hold"):
 		var h: SurgeonHand = vr_rig.hands[1]
 		h.take(tray.instruments[args["hold"]])
+	if args.has("pose"):
+		# Capture : une main (nue avec --handmock) tient un instrument, pointe en --tipat, serrage --sq
+		var pb := VRBot.new()
+		add_child(pb)
+		pb.setup(vr_rig, procedure, patient, tray)
+		if args.has("handmock"):
+			pb.enable_hands()
+		await get_tree().process_frame
+		await pb.grab_with(pb.R, tray.instruments[args["pose"]])
+		var tp: PackedFloat64Array = args.get("tipat", "0.12,1.16,0.1").split_floats(",")
+		pb.squeeze(float(args.get("sq", "1")))
+		await pb.tip_to(Vector3(tp[0], tp[1], tp[2]), 40)
+		_take_shot()
+		return
 	if args.has("vrtest"):
 		var vb := VRBot.new()
 		add_child(vb)
@@ -274,7 +288,6 @@ func _touch_menu(spot: Vector3) -> void:
 ## avant tout. Une image en retard fait trembler toute la vue dans le casque.
 func _vr_performance(xr: XRInterface) -> void:
 	env.environment.ssao_enabled = false
-	env.environment.adjustment_enabled = false
 	RenderingServer.sub_surface_scattering_set_quality(RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_DISABLED)
 	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW)
 	RenderingServer.positional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW)

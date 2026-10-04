@@ -465,12 +465,21 @@ func _zone_mesh() -> ArrayMesh:
 			for i in nu:
 				var a := base + j * (nu + 1) + i
 				var c := a + nu + 1
-				st.add_index(a)
-				st.add_index(a + 1)
-				st.add_index(c)
-				st.add_index(a + 1)
-				st.add_index(c + 1)
-				st.add_index(c)
+				# Faces dans le sens de Godot (horaire vu de dessus) pour les deux nappes
+				if side > 0.0:
+					st.add_index(a)
+					st.add_index(a + 1)
+					st.add_index(c)
+					st.add_index(a + 1)
+					st.add_index(c + 1)
+					st.add_index(c)
+				else:
+					st.add_index(a)
+					st.add_index(c)
+					st.add_index(a + 1)
+					st.add_index(a + 1)
+					st.add_index(c)
+					st.add_index(c + 1)
 		base += (nu + 1) * (nv + 1)
 	st.generate_normals()
 	var m := st.commit()

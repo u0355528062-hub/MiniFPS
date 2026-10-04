@@ -132,7 +132,7 @@ func define_steps() -> void:
 			"label": "Zone à désinfecter", "ring": 2.5, "done_msg": "Flanc désinfecté"},
 		{"id": "anesthesie", "kind": "inject", "list": "Anesthésie locale", "inst": "seringue",
 			"title": "Anesthésie locale",
-			"text": "Pique l'aiguille dans la peau sur le repère (entre deux côtes). Serre le pouce contre l'index pour pousser le piston : le liquide baisse et un bouton gonfle sous la peau. Injecte tout, puis retire l'aiguille.",
+			"text": "Pique l'aiguille dans la peau sur le repère (entre deux côtes). Relâche un peu le pouce, puis serre-le contre l'index pour pousser le piston : le liquide baisse et un bouton gonfle sous la peau. Injecte tout, puis retire l'aiguille.",
 			"label": "Pique ici", "wait": 10.0,
 			"target": func() -> Vector3: return c + Vector3.UP * 0.0005,
 			"done_msg": "Produit injecté : attends qu'il agisse"},

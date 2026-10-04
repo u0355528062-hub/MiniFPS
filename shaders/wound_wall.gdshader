@@ -45,9 +45,13 @@ void vertex() {
 }
 
 void fragment() {
+	// La normale est déjà tournée vers l'intérieur de la plaie : on annule l'inversion des faces arrière
+	if (!FRONT_FACING) {
+		NORMAL = -NORMAL;
+	}
 	float d = UV.y;
 	vec2 uv = vec2(UV.x, d * depth_m); // en mètres
-	vec3 fat = texture(fat_albedo, uv / 0.03).rgb * 0.78;
+	vec3 fat = mix(texture(fat_albedo, uv / 0.03).rgb, vec3(0.78, 0.62, 0.36), 0.35) * 0.72;
 	vec2 fat_n = texture(fat_normal, uv / 0.03).xy * 2.0 - 1.0;
 	float fib = texture(muscle, vec2(uv.x / 0.03, uv.y / 0.012)).r;
 	vec2 mus_n = texture(muscle_normal, vec2(uv.x / 0.03, uv.y / 0.012)).xy * 2.0 - 1.0;
@@ -66,9 +70,9 @@ void fragment() {
 	vec2 nt = fat_n * w_fat * 0.9 + mus_n * w_mus * 0.7 + mus_n * w_fas * 0.25;
 
 	// Coulures de sang verticales qui s'accumulent vers le fond
-	float drip = texture(blood_tex, vec2(UV.x / 0.02 + UV2.x * 0.37, d * 0.15)).r;
-	float blood = smoothstep(0.52, 0.7, drip + d * 0.35) * 0.85;
-	col = mix(col, vec3(0.36, 0.02, 0.03), blood);
+	float drip = texture(blood_tex, vec2(UV.x / 0.035 + UV2.x * 0.37, d * 0.12)).r;
+	float blood = smoothstep(0.55, 0.8, drip + d * 0.3) * 0.6;
+	col = mix(col, vec3(0.30, 0.02, 0.025), blood);
 
 	ALBEDO = col * 0.85;
 	ROUGHNESS = mix(0.32, 0.12, blood);
