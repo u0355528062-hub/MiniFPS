@@ -48,6 +48,7 @@ func build(hand: DesktopHand, instruments: Array[Instrument]) -> void:
 		l.text = "%d\n%s" % [i + 1, SHORT.get(inst.id, inst.label)]
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.add_theme_font_size_override("font_size", 14)
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		p.add_child(l)
 		bar.add_child(p)
 		_slots.append(p)
@@ -56,6 +57,7 @@ func build(hand: DesktopHand, instruments: Array[Instrument]) -> void:
 	var help := Label.new()
 	help.text = "Clic : prendre · Clic maintenu : agir · Molette : lever/baisser · R / clic droit : reposer · Clic droit glissé : regarder · ZQSD : bouger · Espace : continuer"
 	help.add_theme_font_size_override("font_size", 14)
+	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	help.modulate = Color(1, 1, 1, 0.75)
 	help.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	help.position = Vector2(-520, -22)

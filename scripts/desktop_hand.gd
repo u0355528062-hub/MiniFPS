@@ -8,6 +8,7 @@ var swallow_click := false  ## le clic qui a pris l'instrument ne déclenche pas
 var lift := 0.0
 var auto_lift := 0.0  ## levée automatique demandée par la procédure (appendice tenu)
 var _tip := Vector3.ZERO
+var sim_mouse := Vector2(-1, -1)  ## test robot : position de souris imposée
 
 
 func trigger_value() -> float:
@@ -24,16 +25,16 @@ func _aim_point(mouse: Vector2) -> Vector3:
 	var dir := camera.project_ray_normal(mouse)
 	var p := from
 	var step := 0.004
-	for i in 700:
+	for i in 225:  # 90 cm : portée de bras
 		p += dir * step
 		if p.x > -0.64 and p.x < 1.1 and absf(p.z) < 0.3:
 			if p.y <= Patient.body_height(p.x, p.z):
 				return p
 		elif p.y <= InstrumentTray.TRAY_Y + 0.01:
 			return p
-	# Aucun contact : plan horizontal à hauteur du champ
+	# Aucun contact : plan horizontal à hauteur du champ, à portée de bras au maximum
 	var t := (Patient.TABLE_TOP + 0.2 - from.y) / dir.y if absf(dir.y) > 0.001 else 1.0
-	return from + dir * maxf(t, 0.1)
+	return from + dir * clampf(t, 0.25, 0.9)
 
 
 func _process(delta: float) -> void:
@@ -41,7 +42,7 @@ func _process(delta: float) -> void:
 		return
 	global_position = camera.global_position
 	_update_edges()
-	var mouse := get_viewport().get_mouse_position()
+	var mouse := sim_mouse if sim_mouse.x >= 0.0 else get_viewport().get_mouse_position()
 
 	# Survol d'un instrument (projection écran) quand la main est vide
 	var best: Instrument = null

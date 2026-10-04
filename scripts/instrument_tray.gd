@@ -160,14 +160,22 @@ func _thread_loop() -> Node3D:
 func _build_dish() -> void:
 	var base := Vector3(-0.28, 0.0, 0.62)
 	var top_y := 0.98
-	var brushed := MeshUtil.mat(Color(0.62, 0.64, 0.66), 0.38, 0.9)
+	var brushed := MeshUtil.mat(Color(0.55, 0.57, 0.6), 0.45, 0.85)
 	MeshUtil.cylinder_instance(self, 0.012, top_y, base + Vector3(0, top_y * 0.5, 0), brushed, "PiedGueridon")
 	var foot := MeshUtil.cylinder_instance(self, 0.16, 0.02, base + Vector3(0, 0.03, 0), brushed, "SocleGueridon")
 	(foot.mesh as CylinderMesh).top_radius = 0.12
 	var plate := MeshUtil.cylinder_instance(self, 0.17, 0.012, base + Vector3(0, top_y, 0), brushed, "PlateauGueridon")
 	(plate.mesh as CylinderMesh).radial_segments = 48
-	var rim := MeshUtil.cylinder_instance(self, 0.172, 0.02, base + Vector3(0, top_y + 0.012, 0), brushed, "RebordGueridon")
-	(rim.mesh as CylinderMesh).top_radius = 0.175
+	# Rebord : anneau fin autour du plateau
+	var rim := MeshInstance3D.new()
+	var tor := TorusMesh.new()
+	tor.inner_radius = 0.166
+	tor.outer_radius = 0.176
+	tor.rings = 48
+	rim.mesh = tor
+	rim.material_override = brushed
+	rim.position = base + Vector3(0, top_y + 0.008, 0)
+	add_child(rim)
 	# Petit champ stérile sur le plateau
 	var cloth := MeshUtil.cylinder_instance(self, 0.16, 0.002, base + Vector3(0, top_y + 0.008, 0), Tex.drape(Color(0.2, 0.4, 0.5)), "ChampGueridon")
 	(cloth.mesh as CylinderMesh).radial_segments = 40

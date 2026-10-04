@@ -48,6 +48,7 @@ var step := -1  # -1 = accueil, STEPS.size() = terminé
 var elapsed := 0.0
 var errors := 0
 var running := false
+static var restarts := 0
 var show_markers := true  ## faux pour les captures « propres »
 
 var marker: TargetMarker
@@ -116,6 +117,7 @@ func on_continue() -> void:
 		running = true
 		_enter_step(0)
 	elif step >= STEPS.size():
+		restarts += 1
 		get_tree().reload_current_scene()
 
 

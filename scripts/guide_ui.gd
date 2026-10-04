@@ -40,11 +40,21 @@ var _target_progress := 0.0
 
 func _init() -> void:
 	size = Vector2(W, H)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	font = load("res://assets/fonts/Inter.ttf")
 	bold = FontVariation.new()
 	bold.base_font = font
 	bold.variation_embolden = 0.9
 	_build()
+	_ignore_mouse(self)
+
+
+## L'interface ne doit jamais avaler les clics (ils servent à opérer en mode écran).
+func _ignore_mouse(n: Node) -> void:
+	for c in n.get_children():
+		if c is Control:
+			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_ignore_mouse(c)
 
 
 static func _box(bg: Color, radius := 22, border := Color(0, 0, 0, 0), bw := 0) -> StyleBoxFlat:
@@ -185,6 +195,8 @@ func set_steps(titles: Array) -> void:
 		icon.position = Vector2(62, y - 2)
 		var row := _label(titles[i], 27, DIM)
 		row.position = Vector2(104, y)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_step_icons.append(icon)
 		_step_rows.append(row)
 

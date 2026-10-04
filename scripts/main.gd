@@ -24,6 +24,10 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "1"
+	# Tests robots : cadence réaliste (90 images/s comme un casque)
+	for t in ["autotest", "vrtest", "desktest", "chaos", "restarttest"]:
+		if args.has(t):
+			Engine.max_fps = 90
 	var sfx := Sfx.new()
 	sfx.name = "Sons"
 	add_child(sfx)
@@ -81,7 +85,7 @@ func _ready() -> void:
 		procedure.hands.append_array(vr_rig.hands)
 		vr_rig.position = VRRig.SURGEON_SPOT
 		vr_rig.continue_pressed.connect(procedure.on_continue)
-	elif args.has("vrmock") or args.has("vrtest"):
+	elif args.has("vrmock") or args.has("vrtest") or args.get("chaos", "") == "vr":
 		# Capture de contrôle du rendu VR sans casque : manettes placées à la main
 		vr_rig = VRRig.new()
 		vr_rig.sim = true
@@ -138,10 +142,52 @@ func _ready() -> void:
 		get_tree().quit()
 	if args.has("vrtest"):
 		var vb := VRBot.new()
-		vb.rig = vr_rig
 		add_child(vb)
-		await vb.run(procedure, patient, tray)
+		vb.setup(vr_rig, procedure, patient, tray)
+		await vb.run()
 		if not args.has("shot"):
+			get_tree().quit()
+	if args.has("chaos"):
+		var ct := ChaosTest.new()
+		ct.proc = procedure
+		ct.patient = patient
+		ct.tray = tray
+		add_child(ct)
+		if args["chaos"] == "vr":
+			ct.vr_bot = VRBot.new()
+			add_child(ct.vr_bot)
+			ct.vr_bot.setup(vr_rig, procedure, patient, tray)
+		else:
+			ct.desk_bot = DesktopBot.new()
+			add_child(ct.desk_bot)
+			ct.desk_bot.setup(desk_rig, procedure, patient, tray)
+		await ct.run(args["chaos"], int(args.get("seed", "1")))
+		get_tree().quit()
+	if args.has("desktest"):
+		# Partie complète à la souris / au clavier (événements simulés)
+		var db := DesktopBot.new()
+		add_child(db)
+		db.setup(desk_rig, procedure, patient, tray)
+		await get_tree().process_frame
+		db.key(KEY_SPACE)
+		await get_tree().create_timer(0.2).timeout
+		while procedure.step < Procedure.STEPS.size():
+			var s := procedure.step
+			await db.do_step()
+			if procedure.step == s:
+				break
+			print("DESKTEST étape réussie : ", Procedure.STEPS[s]["id"])
+		print("DESKTEST ", "OK" if db.ok and procedure.step >= Procedure.STEPS.size() else "ÉCHEC")
+		get_tree().quit()
+	if args.has("restarttest"):
+		# Recommencer en fin de partie recharge la scène sans erreur
+		if Procedure.restarts == 0:
+			procedure.skip_to(Procedure.STEPS.size())
+			await get_tree().process_frame
+			procedure.on_continue()
+		else:
+			await get_tree().create_timer(0.5).timeout
+			print("RESTART OK (étape ", procedure.step, ")")
 			get_tree().quit()
 	if args.has("autotest"):
 		var bot: AutoBot = procedure.hands[0]
