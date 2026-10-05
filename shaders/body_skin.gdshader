@@ -33,7 +33,7 @@ void vertex() {
 	float t = inside * smoothstep(0.0, 0.06, min(eb.x, eb.y));
 	t *= (1.0 - smoothstep(0.003, 0.008, abs(w.y - height_at(xz)))) * smoothstep(0.25, 0.5, n.y);
 	topw = t;
-	float hfac = smoothstep(table_top + 0.10, table_top + 0.30, w.y);
+	float hfac = smoothstep(table_top + chest_h.x, table_top + chest_h.y, w.y);
 	if (t > 0.0) {
 		// Sur le champ opératoire, la peau suit exactement le relief de la zone de l'incision
 		// (même hauteur et même normale) : aucune couture visible entre les deux maillages

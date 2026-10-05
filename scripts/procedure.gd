@@ -10,6 +10,8 @@ extends Node
 ##   spread  : la pince entre, ouvre ses mors pour écarter les tissus, va plus profond
 ##   insert  : le drain glisse dans le trajet jusqu'à la bonne profondeur
 ##   suture  : l'aiguille entre d'un côté, ressort de l'autre, le point se noue
+##   needle  : l'aiguille avance en aspirant (clic maintenu) jusqu'au retour (air, sang, liquide)
+##   withdraw: on retire l'aiguille, le cathéter souple reste en place
 
 signal finished(seconds: float, errors: int)
 signal step_changed(index: int)
@@ -62,6 +64,14 @@ func setup() -> void:
 	Contact.patient = patient
 	Contact.clear_zones()
 	_show_intro()
+
+
+func _exit_tree() -> void:
+	# Les étapes tiennent des lambdas qui référencent l'opération : on casse le cycle pour que
+	# l'opération soit libérée quand on change d'opération ou qu'on quitte.
+	if op:
+		op.steps = []
+		op.catalog = []
 
 
 func _ui_step(title: String, text: String, inst_label: String) -> void:
@@ -244,6 +254,8 @@ func _process(delta: float) -> void:
 		"spread": _tick_spread(s, delta)
 		"suture": _tick_suture(s, delta)
 		"insert": _tick_insert(s, delta)
+		"needle": _tick_needle(s, delta)
+		"withdraw": _tick_withdraw(s, delta)
 	if step >= 0 and step < steps.size() and current() == s:
 		_update_markers(s)
 	if not show_markers:
@@ -256,6 +268,7 @@ func _setup_hands(s: Dictionary) -> void:
 	var target := Vector3.INF
 	var mode := "press"
 	var pmax := 0.005
+	var speed := 0.045
 	var axis := Vector3.ZERO
 	match s["kind"]:
 		"mark":
@@ -282,12 +295,18 @@ func _setup_hands(s: Dictionary) -> void:
 			var pair := _suture_pair(s)
 			if not pair.is_empty():
 				target = pair[1] if st.get("phase", 0) == 1 else pair[0]
+		"needle", "withdraw":
+			mode = "hold"
+			pmax = s["max_depth"] + 0.01
+			speed = s.get("speed", 0.016)
+			target = s["target"].call()
+			axis = s["axis"]
 	for h in hands:
 		var ok: bool = h.held != null and h.held.id == s["inst"]
 		h.assist_target = target if ok else Vector3.INF
 		h.assist_axis = axis if ok else Vector3.ZERO
 		if h.has_method("set_press_mode"):
-			h.call("set_press_mode", mode, pmax)
+			h.call("set_press_mode", mode, pmax, speed)
 
 
 ## Zones où les instruments peuvent entrer pour ce geste.
@@ -315,6 +334,11 @@ func _update_zones(s: Dictionary) -> void:
 			if not pair.is_empty():
 				for p in pair:
 					Contact.add_zone(p, p, 0.01, 0.007, ["needle"])
+		"needle", "withdraw":
+			var p: Vector3 = s["target"].call()
+			var axis: Vector3 = s["axis"]
+			var dmax: float = s["max_depth"] + 0.012
+			Contact.add_zone(p, p + axis * dmax, 0.009, dmax, ["needle"])
 
 
 func _active_hands() -> Array[SurgeonHand]:
@@ -363,7 +387,7 @@ func _update_markers(s: Dictionary) -> void:
 			marker2.show_at(patient.incision_point(1.0) + Vector3.UP * 0.002, "ARRIVÉE", 0.55)
 		"inject":
 			marker.show_at(s["target"].call(), s.get("label", "Pique ici"), 0.8)
-		"spread", "insert":
+		"spread", "insert", "needle", "withdraw":
 			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 0.8))
 		"suture":
 			var pair := _suture_pair(s)
@@ -661,6 +685,85 @@ func _tick_insert(s: Dictionary, _delta: float) -> void:
 			_done(h, false)
 			_complete_step()
 			return
+
+
+## Aiguille montée sur une seringue : piquer sur le repère, avancer en aspirant (clic maintenu :
+## l'aiguille avance ET le piston est tiré) ; quand la pointe atteint la cible (plèvre, vaisseau,
+## péricarde), ce qu'elle contient remonte dans la seringue. Trop loin : blessure.
+func _tick_needle(s: Dictionary, _delta: float) -> void:
+	var entry: Vector3 = s["target"].call()
+	var axis: Vector3 = s["axis"]
+	var flash_d: float = s["flash_depth"]
+	var max_d: float = s["max_depth"]
+	for h in _active_hands():
+		var inst := h.held
+		var tipp := h.tip()
+		var d := tipp - entry
+		var along := d.dot(axis)
+		var lateral := (d - axis * along).length()
+		var asp := h.squeeze_value()
+		if inst.model.has_method("set_aspiration"):
+			inst.model.call("set_aspiration", move_toward(float(inst.model.get("aspiration")), asp, 0.08))
+		# Seule compte une aiguille plantée sur le repère, dans l'axe (pas en chemin depuis la table)
+		if lateral > 0.009:
+			if inst.tip_depth > 0.002 and _hint_cd <= 0.0:
+				_hint_cd = 2.5
+				_toast("Pique sur le repère.", false)
+			continue
+		if along < 0.0015 or inst.tip_depth < -0.002:
+			continue
+		if not st.get("in", false):
+			st["in"] = true
+			Sfx.play("pique", tipp, -10.0)
+			h.pulse(0.3, 0.03)
+			if s.has("on_skin"):
+				s["on_skin"].call(entry)
+		st["max_along"] = maxf(st.get("max_along", 0.0), along)
+		if along > max_d and not st.has("err_deep"):
+			if OS.get_cmdline_user_args().has("--debug"):
+				print("DEBUG trop profond : along=%.4f max=%.4f flash=%.4f tip=%s entry=%s axis=%s" % [along, max_d, flash_d, tipp, entry, axis])
+			_error(s.get("deep_msg", "Trop profond !"), "deep")
+			if s.has("on_too_deep"):
+				s["on_too_deep"].call()
+		if along >= flash_d - 0.0015 and asp > 0.5 and not st.get("flash", false):
+			st["flash"] = true
+			if inst.model.has_method("set_flash"):
+				inst.model.call("set_flash", s.get("flash", "air"))
+			h.pulse(0.5, 0.06)
+			if s.has("on_flash"):
+				s["on_flash"].call()
+			_done(h, false)
+			_complete_step(s.get("done_msg", ""))
+			return
+		if along >= flash_d + 0.004 and asp < 0.5 and _hint_cd <= 0.0:
+			_hint_cd = 3.0
+			_toast("Tire le piston en avançant (clic maintenu) : sinon tu ne sais pas où tu es.", false)
+		_caption("Profondeur : %d mm%s" % [int(along * 1000.0), "  ·  aspire en avançant" if asp < 0.5 else "  ·  aspiration"])
+
+
+## Retrait de l'aiguille : le cathéter souple reste en place (glissé sur l'aiguille).
+func _tick_withdraw(s: Dictionary, _delta: float) -> void:
+	var entry: Vector3 = s["target"].call()
+	var axis: Vector3 = s["axis"]
+	var any_held := false
+	for h in hands:
+		if h.held and h.held.id == s["inst"]:
+			any_held = true
+			var dd := h.tip() - entry
+			var along := dd.dot(axis)
+			var in_line := (dd - axis * along).length() < 0.012 and h.held.tip_depth > 0.0
+			if in_line and along > s["max_depth"] and not st.has("err_deep"):
+				if OS.get_cmdline_user_args().has("--debug"):
+					print("DEBUG retrait trop profond : along=%.4f max=%.4f tip=%s entry=%s" % [along, s["max_depth"], h.tip(), entry])
+				_error(s.get("deep_msg", "Trop profond !"), "deep")
+			_caption("Retire l'aiguille (molette vers le haut, ou R) : le cathéter reste en place")
+			if along < -0.002 or h.held.tip_depth < -0.001:
+				_done(h, false)
+				_complete_step()
+				return
+	if not any_held:
+		_done(null, false)
+		_complete_step()
 
 
 ## Saute directement à l'étape n (tests, captures) en appliquant les étapes précédentes.

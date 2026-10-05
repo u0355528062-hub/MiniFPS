@@ -19,6 +19,7 @@ uniform vec2 win_min = vec2(-0.085, -0.08);
 uniform vec2 win_max = vec2(0.085, 0.08);
 uniform vec3 skin_tint : source_color = vec3(0.95, 0.86, 0.82);
 uniform vec3 drape_col : source_color = vec3(0.17, 0.42, 0.53); // couleur du champ (bord adhésif)
+uniform float frame_on = 1.0; // 0 : pas de champ fenêtré (urgence), pas de bord adhésif
 uniform vec3 pen_mark = vec3(0.0); // x, z, visible : point marqué au feutre
 uniform float guide_on = 0.0; // le pointillé d'incision n'apparaît qu'une fois le point marqué
 
@@ -27,7 +28,7 @@ uniform float guide_on = 0.0; // le pointillé d'incision n'apparaît qu'une foi
 float drape_frame(vec2 p, vec3 wn) {
 	vec2 outw = max(win_min - p, p - win_max);
 	float eo = max(outw.x, outw.y);
-	return step(0.0, eo) * (1.0 - smoothstep(0.016, 0.02, eo)) * smoothstep(0.15, 0.35, wn.y);
+	return frame_on * step(0.0, eo) * (1.0 - smoothstep(0.016, 0.02, eo)) * smoothstep(0.15, 0.35, wn.y);
 }
 
 void apply_frame(float frame, vec2 p, vec3 wn, inout vec3 col, inout float rough, inout float spec, inout vec3 nw) {

@@ -19,6 +19,9 @@ uniform vec2 patch_size = vec2(0.3);
 uniform float breathe = 0.0; // amplitude (m) du soulèvement thoracique
 uniform float breath_b = 0.0; // phase de la respiration (0..1), donnée par le patient
 uniform float table_top = 0.80;
+uniform vec4 chest_x = vec4(-0.34, -0.16, 0.08, 0.2);
+uniform vec2 chest_z = vec2(0.1, 0.2);
+uniform vec2 chest_h = vec2(0.10, 0.30);
 
 varying vec3 wpos;
 varying vec3 wnorm;
@@ -26,8 +29,8 @@ varying vec3 wnorm;
 void vertex() {
 	vec3 w = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	// Respiration : le flanc (thorax) se soulève à chaque inspiration
-	float chest = smoothstep(-0.34, -0.16, w.x) * (1.0 - smoothstep(0.08, 0.2, w.x)) * (1.0 - smoothstep(0.1, 0.2, abs(w.z)));
-	chest *= smoothstep(table_top + 0.10, table_top + 0.30, w.y);
+	float chest = smoothstep(chest_x.x, chest_x.y, w.x) * (1.0 - smoothstep(chest_x.z, chest_x.w, w.x)) * (1.0 - smoothstep(chest_z.x, chest_z.y, abs(w.z)));
+	chest *= smoothstep(table_top + chest_h.x, table_top + chest_h.y, w.y);
 	VERTEX.y += breathe * chest * breath_b;
 	wpos = w;
 	wnorm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);

@@ -8,6 +8,8 @@ static func build(kind: String) -> Node3D:
 			return _drain()
 		"feutre":
 			return _feutre()
+		"cathlon":
+			return CathlonModel.new()
 	return Node3D.new()
 
 

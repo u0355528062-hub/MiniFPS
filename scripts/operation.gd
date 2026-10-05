@@ -4,8 +4,15 @@ extends RefCounted
 ## Chaque étape est d'un type de geste générique et physique (voir Procedure) : mark, paint,
 ## inject, incise, spread, insert, suture.
 
-## Opérations disponibles
-const ALL := ["drain"]
+## Opérations du menu, dans l'ordre. « ready » : jouable (les autres sont annoncées).
+const CATALOG := [
+	{"id": "drain", "name": "Drain thoracique", "tag": "Pneumothorax compressif : un drain entre deux côtes, en urgence.", "level": 2, "minutes": 6, "ready": true},
+	{"id": "exsufflation", "name": "Exsufflation à l'aiguille", "tag": "Pneumothorax suffocant : faire sortir l'air en quelques secondes.", "level": 1, "minutes": 3, "ready": true},
+	{"id": "pericardiocentese", "name": "Péricardiocentèse", "tag": "Tamponnade : vider le sang autour du cœur, sous échographie.", "level": 2, "minutes": 5, "ready": false},
+	{"id": "voie_centrale", "name": "Voie veineuse centrale", "tag": "Choc : un cathéter dans la veine sous-clavière (technique de Seldinger).", "level": 2, "minutes": 7, "ready": false},
+	{"id": "thoracotomie", "name": "Thoracotomie de sauvetage", "tag": "Arrêt cardiaque après une plaie : ouvrir le thorax, masser le cœur.", "level": 3, "minutes": 8, "ready": false},
+	{"id": "pontage", "name": "Pontage coronarien", "tag": "Infarctus : cœur arrêté sous machine, nouvelle artère sur l'IVA.", "level": 3, "minutes": 20, "ready": false},
+]
 
 var id := ""
 var name := ""
@@ -23,6 +30,17 @@ var with_dish := false
 var catalog: Array = []
 var vitals := {"hr": 84.0, "spo2": 99.0, "sys": 124, "dia": 76}
 var steps: Array = []
+## Position du patient (voir Patient.POSES) et place du joueur au début
+var pose := "lateral"
+var player_spawn := Vector3(0.2, 0.0, 1.05)
+var player_look := Vector3(0.0, 1.3, 0.0)
+## Briefing : patient, bandeau d'urgence, imagerie (texture + légende, ou texte si pas d'image)
+var patient_line := "Karim B., 31 ans — accident de moto"
+var urgency := "URGENCE VITALE"
+var imaging_tex := "res://assets/textures/radio_thorax.png"
+var imaging_caption := "Thorax de face · pneumothorax droit compressif"
+var imaging_side := "D"
+var imaging_text := ""
 
 var proc: Procedure
 var patient: Patient
@@ -33,16 +51,17 @@ var root: Node3D
 
 static func create(op_id: String) -> Operation:
 	match op_id:
+		"exsufflation":
+			return OpExsufflation.new()
 		_:
 			return OpDrain.new()
 
 
-static func menu_entries() -> Array:
-	var out := []
-	for k in ALL:
-		var o := create(k)
-		out.append([o.name, o.tagline])
-	return out
+static func is_ready(op_id: String) -> bool:
+	for e in CATALOG:
+		if e["id"] == op_id:
+			return e["ready"]
+	return false
 
 
 ## Réglages du patient avant sa construction (incision, fenêtre, plaie...).

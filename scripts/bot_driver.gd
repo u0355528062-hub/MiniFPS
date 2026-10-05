@@ -108,6 +108,8 @@ func run_all() -> void:
 	if not done:
 		fail("opération inachevée")
 	print(prefix, " ", "OK" if ok and done else "ÉCHEC", " — ", proc.op.name, " — erreurs : ", proc.errors)
+	for e in proc.error_log:
+		print(prefix, "   erreur : ", e)
 
 
 func check_tray() -> void:
@@ -132,7 +134,8 @@ func do_step() -> void:
 			var p: Vector3 = s["ideal"].call()
 			await tip_to(_above(p, 0.01), 14)
 			squeeze(1.0)
-			await tip_to(p - Vector3.UP * 0.003, 12)
+			# Appui franc : la peau monte et descend avec la respiration
+			await tip_to(p - Vector3.UP * 0.009, 12)
 			await _frames(6)
 			squeeze(0.0)
 			if OS.get_cmdline_user_args().has("--debug"):
@@ -218,6 +221,27 @@ func do_step() -> void:
 			await tip_to(entry - axis * 0.01, 14)
 			for i in 140:
 				await tip_to(entry + axis * depth * minf(1.15, (i + 1) / 100.0), 1)
+				if proc.step != si:
+					break
+		"needle":
+			var entry: Vector3 = s["target"].call()
+			var axis: Vector3 = s["axis"]
+			var fd: float = s["flash_depth"]
+			want_axis = axis
+			squeeze(0.0)
+			await tip_to(entry - axis * 0.01, 14)
+			squeeze(1.0)
+			for i in 200:
+				await tip_to(entry + axis * minf(fd + 0.003, (i + 1) * 0.0005), 1)
+				if proc.step != si:
+					break
+			squeeze(0.0)
+		"withdraw":
+			var entry: Vector3 = s["target"].call()
+			var axis: Vector3 = s["axis"]
+			want_axis = axis
+			for i in 80:
+				await tip_to(entry + axis * (0.03 - i * 0.001), 1)
 				if proc.step != si:
 					break
 		"suture":

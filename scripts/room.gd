@@ -10,7 +10,9 @@ const MODELS := "res://assets/models/"
 var room_shader: Shader = preload("res://shaders/room.gdshader")
 var scialytique_light: SpotLight3D
 var scan_label: Label3D
+var scan_film: MeshInstance3D
 var clock_label: Label3D
+var pose_id := "lateral"  ## position du patient (supports adaptés)
 var _clock_t := 0.0
 
 
@@ -23,7 +25,10 @@ func build() -> void:
 	_ceiling_fixtures()
 	_lights()
 	_furniture()
-	_patient_supports()
+	if pose_id == "lateral":
+		_patient_supports()
+	else:
+		_patient_supports_dos()
 	_environment_probe()
 	_colliders()
 
@@ -128,6 +133,7 @@ func _shell() -> void:
 	film.material_override = fm
 	film.position = Vector3(-0.28, 0, 0.042)
 	neg.add_child(film)
+	scan_film = film
 	var scan := Label3D.new()
 	scan_label = scan
 	scan.text = "RADIO THORAX\nPneumothorax droit"
@@ -475,3 +481,28 @@ func _process(delta: float) -> void:
 		_clock_t = 10.0
 		var t := Time.get_time_dict_from_system()
 		clock_label.text = "%02d:%02d" % [t.hour, t.minute]
+
+
+## Patient sur le dos : anneau de tête en gel sous l'occiput (la tête ne tombe pas en arrière) et
+## appuis de gel sous les mains et les avant-bras le long du corps.
+func _patient_supports_dos() -> void:
+	Patient.load_maps()
+	var gel := MeshUtil.mat(Color(0.16, 0.42, 0.62), 0.22)
+	gel.clearcoat_enabled = true
+	gel.clearcoat = 0.5
+	var lm := Patient.landmarks
+	if lm.has("occiput"):
+		var o := Patient.lm("occiput")
+		var h := maxf(0.01, o.y - Patient.TABLE_TOP)
+		var ring := MeshInstance3D.new()
+		ring.name = "AnneauTete"
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.035
+		tm.outer_radius = 0.085
+		tm.rings = 32
+		tm.ring_segments = 16
+		ring.mesh = tm
+		ring.material_override = gel
+		ring.scale = Vector3(1.0, h / 0.05, 1.0)
+		ring.position = Vector3(o.x, Patient.TABLE_TOP + h * 0.5, o.z)
+		add_child(ring)

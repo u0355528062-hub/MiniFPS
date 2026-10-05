@@ -24,6 +24,7 @@ var lift := 0.0
 var auto_lift := 0.0
 var press_mode := "press"
 var press_max := 0.006
+var press_speed := 0.045
 var depth := 0.0
 var on_patient := false  ## la pointe est posée sur le patient (sinon, instrument tenu devant soi)
 var aim_point := Vector3.ZERO
@@ -36,9 +37,10 @@ var _blend := 0.0
 var _hint := ""
 
 
-func set_press_mode(mode: String, pmax: float) -> void:
+func set_press_mode(mode: String, pmax: float, speed := 0.045) -> void:
 	press_mode = mode
 	press_max = pmax
+	press_speed = speed
 
 
 func squeeze_value() -> float:
@@ -181,7 +183,7 @@ func _process(delta: float) -> void:
 		var pressing := _clicking() and not swallow_click
 		on_patient = target_pt != Vector3.INF
 		if pressing and press_mode != "none" and on_patient:
-			depth = move_toward(depth, press_max, 0.045 * delta)
+			depth = move_toward(depth, press_max, press_speed * delta)
 		elif press_mode != "hold" or not on_patient:
 			depth = move_toward(depth, 0.0, 0.1 * delta)
 		var want: Transform3D

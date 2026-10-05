@@ -44,6 +44,7 @@ func _ready() -> void:
 	streams["loop_piston"] = _squeak()
 	streams["loop_fil"] = _loop_noise(4200.0, 0.18, 14, 17.0)
 	streams["loop_aspiration"] = _loop_noise(1600.0, 0.4, 15, 3.0)
+	streams["loop_sifflement"] = _loop_noise(6200.0, 0.4, 16, 29.0)
 	for i in 10:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 1.5

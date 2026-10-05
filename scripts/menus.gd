@@ -4,6 +4,7 @@ extends CanvasLayer
 ## options, bilan de fin (note, temps, erreurs, précision des gestes).
 
 signal play_pressed
+signal op_chosen(op_id: String)
 signal start_pressed
 signal resume_pressed
 signal restart_pressed
@@ -141,24 +142,24 @@ func _build_main() -> Control:
 	grad.stretch_mode = TextureRect.STRETCH_SCALE
 	grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.add_child(grad)
-	var col := UIKit.vbox(14)
-	col.position = Vector2(90, 150)
+	var col := UIKit.vbox(10)
+	col.position = Vector2(90, 70)
 	c.add_child(col)
 	var kicker := UIKit.label("SIMULATEUR CHIRURGICAL", 16, UIKit.ACCENT, true)
 	col.add_child(kicker)
-	var title := UIKit.label("BLOC  URGENCES", 82, UIKit.TEXT, true)
+	var title := UIKit.label("BLOC  URGENCES", 66, UIKit.TEXT, true)
 	title.add_theme_constant_override("outline_size", 0)
 	col.add_child(title)
-	var sub := UIKit.label(op.name.to_upper() + "  ·  " + op.tagline, 19, UIKit.TEXT_DIM)
-	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	sub.custom_minimum_size.x = 640
+	var sub := UIKit.label("Choisis une intervention", 19, UIKit.TEXT_DIM)
 	col.add_child(sub)
 	var sp := Control.new()
-	sp.custom_minimum_size.y = 40
+	sp.custom_minimum_size.y = 8
 	col.add_child(sp)
-	var b1 := UIKit.button("Prendre en charge le patient", 380)
-	b1.pressed.connect(func() -> void: play_pressed.emit())
-	col.add_child(b1)
+	for e in Operation.CATALOG:
+		col.add_child(_op_card(e))
+	var sp2 := Control.new()
+	sp2.custom_minimum_size.y = 12
+	col.add_child(sp2)
 	var b2 := UIKit.button("Options", 380)
 	b2.pressed.connect(func() -> void: open_options(func() -> void: show_main()))
 	col.add_child(b2)
@@ -170,6 +171,60 @@ func _build_main() -> Control:
 	foot.position = Vector2(90, -50)
 	c.add_child(foot)
 	return c
+
+
+## Carte d'une intervention : nom, résumé, difficulté et durée ; « bientôt » si pas encore jouable.
+func _op_card(e: Dictionary) -> Button:
+	var ready: bool = e["ready"]
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(660, 66)
+	b.focus_mode = Control.FOCUS_ALL
+	b.disabled = not ready
+	var cur: bool = e["id"] == op.id
+	var normal := UIKit.box(Color(0.03, 0.06, 0.075, 0.82), 10, UIKit.ACCENT_DIM if cur else Color(1, 1, 1, 0.07), 2 if cur else 1, 16)
+	var hover := UIKit.box(Color(0.05, 0.13, 0.14, 0.92), 10, UIKit.ACCENT, 2, 16)
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("focus", hover)
+	b.add_theme_stylebox_override("pressed", hover)
+	b.add_theme_stylebox_override("disabled", UIKit.box(Color(0.03, 0.05, 0.06, 0.55), 10, Color(1, 1, 1, 0.04), 1, 16))
+	var row := UIKit.hbox(16)
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 18
+	row.offset_right = -18
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(row)
+	var txt := UIKit.vbox(2)
+	txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	txt.alignment = BoxContainer.ALIGNMENT_CENTER
+	txt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(txt)
+	var t := UIKit.label(e["name"], 22, UIKit.TEXT if ready else UIKit.TEXT_DIM, true)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	txt.add_child(t)
+	var tg := UIKit.label(e["tag"], 14, UIKit.TEXT_DIM if ready else Color(1, 1, 1, 0.3))
+	tg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	txt.add_child(tg)
+	var right := UIKit.vbox(2)
+	right.alignment = BoxContainer.ALIGNMENT_CENTER
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(right)
+	var lvl: int = e["level"]
+	var dots := UIKit.label("●".repeat(lvl) + "○".repeat(3 - lvl), 15, UIKit.ACCENT if ready else Color(1, 1, 1, 0.25))
+	dots.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	dots.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	right.add_child(dots)
+	var info := UIKit.label(("~%d min" % e["minutes"]) if ready else "BIENTÔT", 13, UIKit.TEXT_DIM if ready else UIKit.WARN, not ready)
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	right.add_child(info)
+	if ready:
+		var op_id: String = e["id"]
+		b.mouse_entered.connect(func() -> void: Sfx.play("survol", Vector3.INF, -22.0, 1.6))
+		b.pressed.connect(func() -> void:
+			Sfx.play("clic", Vector3.INF, -12.0, 1.0)
+			op_chosen.emit(op_id))
+	return b
 
 
 func show_main() -> void:
@@ -187,7 +242,7 @@ func _build_briefing() -> Control:
 	p.add_child(v)
 	var head := UIKit.hbox(14)
 	v.add_child(head)
-	var tag := UIKit.label("URGENCE VITALE", 15, Color(0.05, 0.05, 0.05), true)
+	var tag := UIKit.label(op.urgency, 15, Color(0.05, 0.05, 0.05), true)
 	var tsb := UIKit.box(UIKit.BAD, 6, Color(0, 0, 0, 0), 0, 10)
 	tsb.shadow_size = 0
 	tsb.content_margin_top = 4
@@ -195,7 +250,7 @@ func _build_briefing() -> Control:
 	tag.add_theme_stylebox_override("normal", tsb)
 	head.add_child(tag)
 	head.add_child(UIKit.label(op.intro_title.to_upper() + "  ·  " + op.header.split("·")[1].strip_edges() if op.header.contains("·") else op.intro_title, 15, UIKit.TEXT_DIM, true))
-	v.add_child(UIKit.label("Karim B., 31 ans — accident de moto", 34, UIKit.TEXT, true))
+	v.add_child(UIKit.label(op.patient_line, 34, UIKit.TEXT, true))
 	var cols := UIKit.hbox(28)
 	v.add_child(cols)
 	var left := UIKit.vbox(12)
@@ -223,9 +278,18 @@ func _build_briefing() -> Control:
 		vit.add_child(UIKit.label(row[0], 17, UIKit.TEXT_DIM))
 		vit.add_child(UIKit.label(row[1], 19, row[2], true))
 	right.add_child(UIKit.label("IMAGERIE", 14, UIKit.ACCENT, true))
-	var xr := XRayCard.new()
-	xr.custom_minimum_size = Vector2(380, 300)
-	right.add_child(xr)
+	if op.imaging_tex != "":
+		var xr := XRayCard.new()
+		xr.tex = load(op.imaging_tex)
+		xr.caption = op.imaging_caption
+		xr.side = op.imaging_side
+		xr.custom_minimum_size = Vector2(380, 300)
+		right.add_child(xr)
+	else:
+		var no := UIKit.label(op.imaging_text, 16, UIKit.TEXT)
+		no.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		no.custom_minimum_size = Vector2(380, 0)
+		right.add_child(no)
 	var keys := UIKit.label("ZQSD marcher · Souris regarder · Clic prendre / appuyer · Clic droit précision · V vue anatomique · Échap pause", 14, UIKit.TEXT_DIM)
 	keys.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	keys.custom_minimum_size.x = 960
@@ -454,7 +518,9 @@ class GradeBadge:
 ## Radiographie du thorax de face (calculée sur l'atlas) : poumon droit rétracté, liseré pleural.
 class XRayCard:
 	extends Control
-	var tex: Texture2D = preload("res://assets/textures/radio_thorax.png")
+	var tex: Texture2D
+	var caption := ""
+	var side := "D"
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
@@ -464,5 +530,6 @@ class XRayCard:
 		var w := ts * k
 		draw_texture_rect(tex, Rect2((size - w) * 0.5, w), false)
 		var f := UIKit.font()
-		draw_string(f, Vector2((size.x - w.x) * 0.5 + 8, 22), "D", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.9))
-		draw_string(f, Vector2(8, size.y - 10), "Thorax de face · pneumothorax droit compressif", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.85))
+		if side != "":
+			draw_string(f, Vector2((size.x - w.x) * 0.5 + 8, 22), side, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.9))
+		draw_string(f, Vector2(8, size.y - 10), caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.85))

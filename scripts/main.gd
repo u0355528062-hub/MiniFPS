@@ -6,6 +6,7 @@ extends Node3D
 ##
 ## Arguments de ligne de commande (après « -- ») :
 ##   --play                 sauter le menu principal (directement au briefing)
+##   --op=id                opération (drain, exsufflation, pericardiocentese, voie_centrale…)
 ##   --step=N               sauter à l'étape N
 ##   --autotest             un robot fait toute l'opération (vérification)
 ##   --desktest             un robot joue avec la souris et le clavier simulés (vrai joueur)
@@ -15,6 +16,8 @@ extends Node3D
 ##   --cam=x,y,z --at=x,y,z   caméra libre pour la capture  --frames=N  --hold=id  --mode=0|1|2
 
 static var skip_menu := false
+## Opération choisie dans le menu (gardée au rechargement de la scène)
+static var selected_op := "drain"
 
 var room: OperatingRoom
 var patient: Patient
@@ -41,6 +44,10 @@ func _ready() -> void:
 		if args.has(t):
 			_testing = true
 			Engine.max_fps = 90
+	if args.has("op"):
+		selected_op = args["op"]
+	op = Operation.create(selected_op)
+	Patient.pose_id = op.pose
 	var sfx := Sfx.new()
 	sfx.name = "Sons"
 	sfx.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -48,9 +55,9 @@ func _ready() -> void:
 	_build_environment()
 	room = OperatingRoom.new()
 	room.name = "Salle"
+	room.pose_id = op.pose
 	add_child(room)
 	room.build()
-	op = Operation.create("drain")
 	patient = Patient.new()
 	patient.name = "Patient"
 	op.configure_patient(patient)
@@ -86,6 +93,10 @@ func _ready() -> void:
 	op.build_extras()
 	op.define_steps()
 	room.scan_label.text = op.scan_text
+	if op.imaging_tex != "":
+		(room.scan_film.material_override as StandardMaterial3D).albedo_texture = load(op.imaging_tex)
+	else:
+		room.scan_film.visible = false
 	patient.breath_rate = op.breath_rate
 	monitor.resp_rate = op.breath_rate
 
@@ -99,7 +110,7 @@ func _ready() -> void:
 		player = Player.new()
 		player.name = "Joueur"
 		add_child(player)
-		player.build(Vector3(0.2, 0.0, 1.05), Vector3(0.0, 1.3, 0.0))
+		player.build(op.player_spawn, op.player_look)
 		player.hand.patient = patient
 		player.hand.tray = tray
 		procedure.hands.append(player.hand)
@@ -124,6 +135,7 @@ func _ready() -> void:
 	add_child(menus)
 	menus.build(op)
 	menus.play_pressed.connect(_go_briefing)
+	menus.op_chosen.connect(_choose_op)
 	menus.start_pressed.connect(_start)
 	menus.resume_pressed.connect(_resume)
 	menus.restart_pressed.connect(_restart)
@@ -216,6 +228,18 @@ func _process(delta: float) -> void:
 		var c := Vector3(-0.25, 1.15, 0.0)
 		_menu_cam.global_position = c + Vector3(cos(a) * 2.6, 0.75 + 0.15 * sin(_menu_t * 1.7), sin(a) * 2.6)
 		_menu_cam.look_at(c + Vector3(0.1, 0.05, 0.0))
+
+
+## Une opération est choisie dans le menu : la même → briefing ; une autre → la scène est
+## reconstruite pour elle (patient, salle, instruments), directement au briefing.
+func _choose_op(op_id: String) -> void:
+	if op_id == op.id:
+		_go_briefing()
+		return
+	selected_op = op_id
+	skip_menu = true
+	await menus.fade(true, 0.35)
+	get_tree().reload_current_scene()
 
 
 func _go_briefing(instant := false) -> void:

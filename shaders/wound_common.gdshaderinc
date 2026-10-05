@@ -16,8 +16,13 @@ uniform vec4 bleb = vec4(0.0); // x, z, rayon, hauteur : bouton d'anesthésie
 uniform float breath_now = 0.0; // soulèvement actuel du thorax (m)
 
 // Thorax qui se soulève en respirant (patient couché sur le côté, tête vers +X)
+// Zone du thorax qui se soulève en respirant (dépend de la position du patient)
+uniform vec4 chest_x = vec4(-0.34, -0.16, 0.08, 0.2);
+uniform vec2 chest_z = vec2(0.1, 0.2);
+uniform vec2 chest_h = vec2(0.10, 0.30);
+
 float chest_mask(vec2 xz) {
-	return smoothstep(-0.34, -0.16, xz.x) * (1.0 - smoothstep(0.08, 0.2, xz.x)) * (1.0 - smoothstep(0.1, 0.2, abs(xz.y)));
+	return smoothstep(chest_x.x, chest_x.y, xz.x) * (1.0 - smoothstep(chest_x.z, chest_x.w, xz.x)) * (1.0 - smoothstep(chest_z.x, chest_z.y, abs(xz.y)));
 }
 
 vec2 inc_dir() {

@@ -1,8 +1,10 @@
 class_name Patient
 extends Node3D
-## Karim, 31 ans, accident de moto : pneumothorax droit compressif. Couché sur le côté gauche
-## (décubitus latéral), bras droit levé au-dessus de la tête : le flanc droit regarde le plafond.
-## Tête vers +X, pieds vers -X, ventre vers +Z (côté du joueur). Site du drain : X = Z = 0.
+## Le patient, dans l'une des deux positions (voir POSES) :
+##  - « lateral » : couché sur le côté gauche, bras droit levé au-dessus de la tête (drain) ; tête
+##    vers +X, ventre vers +Z (côté du joueur), site du drain en X = Z = 0 ;
+##  - « dos » : couché sur le dos, bras le long du corps ; tête vers +X, face antérieure vers le
+##    haut, côté gauche du patient vers +Z (côté du joueur), milieu du sternum en X = Z = 0.
 ##
 ## Anatomie réelle (atlas Z-Anatomy, CC BY-SA 4.0) : peau, côtes, cartilages, sternum, vertèbres,
 ## muscles du thorax, intercostaux, plèvre, poumons, cœur, gros vaisseaux, nerfs, diaphragme, foie.
@@ -20,9 +22,39 @@ const TABLE_MAX := Vector2(0.69, 0.30)
 const RIB6_TOP := -0.001  ## bord supérieur de la 6e côte (X) sur la ligne axillaire moyenne
 const RIB5_BOTTOM := 0.013  ## bord inférieur de la 5e côte
 const RIB_DIR := Vector2(-0.49, 0.87)  ## direction des côtes (X, Z) au site : vers l'avant et le bas
-const HILUM := Vector3(0.03, 1.165, -0.01)  ## hile du poumon droit (le poumon s'affaisse vers lui)
-const HEART_C := Vector3(0.015, 1.12, 0.03)
-const HIDDEN_IN_SKELETON := ["Muscles", "Plevre", "Intercostaux"]  ## masqués en vue squelette
+const HIDDEN_IN_SKELETON := ["Muscles", "Plevre", "Intercostaux", "Pericarde"]  ## masqués en vue squelette
+
+## Positions du patient : modèle, cartes de hauteur, repères mesurés sur l'atlas, zone du thorax qui
+## se soulève (chest_x : montée et descente le long du corps, chest_z : demi-largeur, chest_h :
+## hauteur au-dessus de la table), poumon affaissé et son hile, centre du cœur.
+const POSES := {
+	"lateral": {"glb": "res://assets/models/patient.glb", "skin_map": "res://assets/data/peau_hauteur.bin",
+		"drape_glb": "res://assets/models/champ.glb", "drape_map": "res://assets/data/champ_hauteur.bin",
+		"landmarks": "", "chest_x": Vector4(-0.34, -0.16, 0.08, 0.2), "chest_z": Vector2(0.1, 0.2),
+		"chest_h": Vector2(0.10, 0.30), "collapse": "PoumonD", "hilum": Vector3(0.03, 1.165, -0.01),
+		"heart": Vector3(0.015, 1.12, 0.03)},
+	"dos": {"glb": "res://assets/models/patient_dos.glb", "skin_map": "res://assets/data/peau_dos_hauteur.bin",
+		"drape_glb": "res://assets/models/drap_dos.glb", "drape_map": "res://assets/data/drap_dos_hauteur.bin",
+		"landmarks": "res://assets/data/patient_dos.json", "ribs": "res://assets/data/cotes_dos.bin",
+		"chest_x": Vector4(-0.36, -0.2, 0.08, 0.2),
+		"chest_z": Vector2(0.1, 0.2), "chest_h": Vector2(0.06, 0.16), "collapse": "PoumonG",
+		"hilum": Vector3(0.03, 0.95, 0.06), "heart": Vector3(-0.03, 0.95, 0.03)},
+}
+static var pose_id := "lateral"
+static var _maps_pose := ""
+static var HILUM := Vector3(0.03, 1.165, -0.01)  ## hile du poumon affaissé (il s'affaisse vers lui)
+static var HEART_C := Vector3(0.015, 1.12, 0.03)
+static var collapse_part := "PoumonD"
+static var CHEST_X := Vector4(-0.34, -0.16, 0.08, 0.2)
+static var CHEST_Z := Vector2(0.1, 0.2)
+static var CHEST_H := Vector2(0.10, 0.30)
+## Repères anatomiques de la position (sternum, côtes, vaisseaux…), en coordonnées du jeu
+static var landmarks := {}
+## Carte des côtes (patient sur le dos) : côte ou espace intercostal sous chaque point du thorax, et
+## profondeur peau -> plèvre perpendiculairement à la peau (grille de 2,5 mm, calculée dans Blender)
+static var _rib_codes := PackedByteArray()
+static var _rib_depth := PackedFloat32Array()
+static var _rib_grid := [0, 0, 0.0, 0.0, 0.0025]
 
 # ---- Cartes de hauteur (peau et champ), précalculées dans Blender (grille de 2,5 mm)
 static var _skin_h := PackedFloat32Array()
@@ -43,6 +75,7 @@ var WINDOW_MAX := Vector2(0.085, 0.08)
 var WOUND_DEPTH := 0.013  ## peau + graisse sous-cutanée (les muscles réels sont dessous)
 var wound_w := 0.006
 var paint_r := Vector2(0.06, 0.055)
+var paint_c := Vector2.INF  ## centre de la zone à badigeonner (INF : centre de l'incision)
 var breathe_amp := 0.009
 var breath_rate := 30.0
 var breath_b := 0.0
@@ -118,16 +151,93 @@ var heart_rate := 128.0
 var _beat_t := 0.0
 var stitches: Array[Node3D] = []
 var wound_light: OmniLight3D
-var props: PatientProps
+var props: Node3D  ## PatientProps (sur le côté) ou PatientPropsDos (sur le dos)
 
 
 # ---------------------------------------------------------------- Cartes de hauteur
 
 static func load_maps() -> void:
-	if _nx > 0:
+	if _maps_pose == pose_id:
 		return
-	_skin_h = _read_map("res://assets/data/peau_hauteur.bin")
-	_drape_h = _read_map("res://assets/data/champ_hauteur.bin")
+	_maps_pose = pose_id
+	var P: Dictionary = POSES[pose_id]
+	_skin_h = _read_map(P["skin_map"])
+	_drape_h = _read_map(P["drape_map"]) if ResourceLoader.exists(P["drape_map"]) or FileAccess.file_exists(P["drape_map"]) else PackedFloat32Array()
+	CHEST_X = P["chest_x"]
+	CHEST_Z = P["chest_z"]
+	CHEST_H = P["chest_h"]
+	collapse_part = P["collapse"]
+	HILUM = P["hilum"]
+	HEART_C = P["heart"]
+	landmarks = {}
+	_load_ribs(P.get("ribs", ""))
+	if P["landmarks"] != "":
+		var txt := FileAccess.get_file_as_string(P["landmarks"])
+		var data: Variant = JSON.parse_string(txt)
+		if data is Dictionary:
+			landmarks = data
+			if landmarks.has("heart_center"):
+				HEART_C = lm("heart_center")
+			if landmarks.has("hilum_L"):
+				HILUM = lm("hilum_L")
+		else:
+			push_error("Repères illisibles : " + P["landmarks"])
+
+
+static func _load_ribs(path: String) -> void:
+	_rib_codes = PackedByteArray()
+	_rib_depth = PackedFloat32Array()
+	if path == "" or not FileAccess.file_exists(path):
+		return
+	var bytes := FileAccess.get_file_as_bytes(path)
+	var nx := bytes.decode_s32(0)
+	var nz := bytes.decode_s32(4)
+	_rib_grid = [nx, nz, bytes.decode_float(8), bytes.decode_float(12), bytes.decode_float(16)]
+	_rib_codes = bytes.slice(24, 24 + nx * nz)
+	_rib_depth = bytes.slice(24 + nx * nz, 24 + nx * nz * 5).to_float32_array()
+
+
+static func _rib_index(x: float, z: float) -> int:
+	if _rib_codes.is_empty():
+		return -1
+	var i := int(round((x - _rib_grid[2]) / _rib_grid[4]))
+	var j := int(round((z - _rib_grid[3]) / _rib_grid[4]))
+	if i < 0 or j < 0 or i >= _rib_grid[0] or j >= _rib_grid[1]:
+		return -1
+	return j * int(_rib_grid[0]) + i
+
+
+## Sous le point (x, z) de la peau : n > 0 = sur la n-ième côte, -n = dans le n-ième espace
+## intercostal (entre les côtes n et n+1), 0 = hors du gril costal (ou inconnu).
+static func rib_code(x: float, z: float) -> int:
+	var k := _rib_index(x, z)
+	if k < 0:
+		return 0
+	var v := _rib_codes[k]
+	return v - 256 if v > 127 else v
+
+
+## Profondeur de la plèvre pariétale sous le point (perpendiculairement à la peau), -1 si inconnue.
+static func pleura_depth(x: float, z: float) -> float:
+	var k := _rib_index(x, z)
+	if k < 0:
+		return -1.0
+	return _rib_depth[k]
+
+
+## Repère anatomique (point) de la position courante.
+static func lm(key: String) -> Vector3:
+	var a: Array = landmarks.get(key, [0.0, 0.0, 0.0])
+	return Vector3(a[0], a[1], a[2])
+
+
+## Ligne centrale d'un vaisseau (points) de la position courante.
+static func lm_line(key: String) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var d: Dictionary = landmarks.get(key, {})
+	for a in d.get("points", []):
+		out.append(Vector3(a[0], a[1], a[2]))
+	return out
 
 
 static func _read_map(path: String) -> PackedFloat32Array:
@@ -212,7 +322,7 @@ func build() -> void:
 	_build_body()
 	_build_wound()
 	_build_drape()
-	props = PatientProps.new()
+	props = PatientProps.new() if pose_id == "lateral" else PatientPropsDos.new()
 	props.name = "Equipement"
 	add_child(props)
 	props.build()
@@ -227,17 +337,7 @@ func _build_skin_patch() -> void:
 	iodine_img = Image.create(MASK_RES, MASK_RES, false, Image.FORMAT_L8)
 	iodine_img.fill(Color.BLACK)
 	iodine_tex = ImageTexture.create_from_image(iodine_img)
-	_iod_target.resize(MASK_RES * MASK_RES)
-	_iod_total = 0
-	for j in MASK_RES:
-		for i in MASK_RES:
-			var x := PATCH_MIN.x + (i + 0.5) / MASK_RES * PATCH_SIZE.x
-			var z := PATCH_MIN.y + (j + 0.5) / MASK_RES * PATCH_SIZE.y
-			var q := Vector2(x - center.x, z - center.z)
-			var inside := (q.x * q.x) / (paint_r.x * paint_r.x) + (q.y * q.y) / (paint_r.y * paint_r.y) <= 1.0
-			_iod_target[j * MASK_RES + i] = 1 if inside else 0
-			if inside:
-				_iod_total += 1
+	_compute_paint_target()
 	var hmap := Image.create(HMAP_RES, HMAP_RES, false, Image.FORMAT_RF)
 	for j in HMAP_RES:
 		for i in HMAP_RES:
@@ -264,6 +364,7 @@ func _skin_material(sh: Shader) -> ShaderMaterial:
 	m.set_shader_parameter("iodine_mask", iodine_tex)
 	m.set_shader_parameter("win_min", WINDOW_MIN)
 	m.set_shader_parameter("win_max", WINDOW_MAX)
+	m.set_shader_parameter("frame_on", 1.0 if pose_id == "lateral" else 0.0)
 	m.set_shader_parameter("zone_u", zone_u)
 	m.set_shader_parameter("skin_albedo", _tex("skin_albedo"))
 	m.set_shader_parameter("skin_normal", _tex("skin_normal"))
@@ -275,6 +376,9 @@ func _skin_material(sh: Shader) -> ShaderMaterial:
 
 
 func _common_params(m: ShaderMaterial) -> void:
+	m.set_shader_parameter("chest_x", CHEST_X)
+	m.set_shader_parameter("chest_z", CHEST_Z)
+	m.set_shader_parameter("chest_h", CHEST_H)
 	m.set_shader_parameter("height_map", height_tex)
 	m.set_shader_parameter("patch_min", PATCH_MIN)
 	m.set_shader_parameter("patch_size", PATCH_SIZE)
@@ -335,7 +439,7 @@ func _zone_mesh() -> ArrayMesh:
 
 ## Corps réel : peau + anatomie, matériaux du jeu.
 func _build_body() -> void:
-	var scene: PackedScene = load("res://assets/models/patient.glb")
+	var scene: PackedScene = load(POSES[pose_id]["glb"])
 	body = scene.instantiate()
 	body.name = "Corps"
 	add_child(body)
@@ -403,6 +507,8 @@ func _anatomy_material(part: String, kind: String) -> ShaderMaterial:
 			p = {"base": Color(0.88, 0.78, 0.72), "alt": Color(0.80, 0.66, 0.62), "rough": 0.3, "wet": 0.7, "sss": 0.4, "scale": 40.0, "cuttable": 0.0}
 		"Fat":
 			p = {"base": Color(0.92, 0.78, 0.42), "alt": Color(0.84, 0.66, 0.30), "rough": 0.3, "wet": 0.7, "sss": 0.6, "scale": 40.0, "cuttable": 0.0}
+		"Pericardium":
+			p = {"base": Color(0.88, 0.82, 0.72), "alt": Color(0.92, 0.80, 0.50), "rough": 0.2, "wet": 0.9, "sss": 0.45, "fat": 0.6, "scale": 35.0, "vessel": 0.3, "cut": Color(0.55, 0.12, 0.1)}
 		_:
 			p = {"base": Color(0.7, 0.3, 0.28), "alt": Color(0.6, 0.25, 0.22), "rough": 0.35, "wet": 0.6, "sss": 0.3, "scale": 30.0}
 	m.set_shader_parameter("base_color", p["base"])
@@ -418,9 +524,9 @@ func _anatomy_material(part: String, kind: String) -> ShaderMaterial:
 	m.set_shader_parameter("cut_color", p.get("cut", Color(0.45, 0.06, 0.05)))
 	m.set_shader_parameter("cuttable", p.get("cuttable", 1.0))
 	m.set_shader_parameter("is_pleura", 1.0 if part == "Plevre" else 0.0)
-	if part == "PoumonD":
+	if part == collapse_part:
 		m.set_shader_parameter("hilum", HILUM)
-	if part == "Coeur":
+	if part in ["Coeur", "Coronaires", "Pericarde"]:
 		m.set_shader_parameter("beat_c", HEART_C)
 	return m
 
@@ -476,13 +582,24 @@ func _build_wound() -> void:
 	add_child(wound_light)
 
 
-## Champ stérile simulé (tissu tombé sur le patient), fenêtre collée autour du site.
+## Champ stérile simulé (tissu tombé sur le patient), fenêtre collée autour du site ; sur le dos,
+## drap qui couvre le bas du corps (pas de champ : urgence).
 func _build_drape() -> void:
-	var scene: PackedScene = load("res://assets/models/champ.glb")
+	var path: String = POSES[pose_id]["drape_glb"]
+	if not ResourceLoader.exists(path):
+		return
+	var scene: PackedScene = load(path)
 	drape = scene.instantiate()
 	drape.name = "Champs"
 	add_child(drape)
-	drape_mat = Tex.drape(Color(0.17, 0.42, 0.53), WINDOW_MIN, WINDOW_MAX, breathe_amp)
+	var windowed := pose_id == "lateral"
+	if windowed:
+		drape_mat = Tex.drape(Color(0.17, 0.42, 0.53), WINDOW_MIN, WINDOW_MAX, breathe_amp)
+	else:
+		drape_mat = Tex.drape(Color(0.80, 0.84, 0.86), Vector2.ZERO, Vector2.ZERO, breathe_amp)
+	drape_mat.set_shader_parameter("chest_x", CHEST_X)
+	drape_mat.set_shader_parameter("chest_z", CHEST_Z)
+	drape_mat.set_shader_parameter("chest_h", CHEST_H)
 	drape_mat.set_shader_parameter("height_map", height_tex)
 	drape_mat.set_shader_parameter("patch_min", PATCH_MIN)
 	drape_mat.set_shader_parameter("patch_size", PATCH_SIZE)
@@ -499,7 +616,8 @@ func set_view_mode(m: int) -> void:
 	skin_mesh.material_override = skin_mat if normal else ghost_mat
 	zone_mesh.visible = normal
 	walls.visible = normal
-	drape.visible = normal
+	if drape:
+		drape.visible = normal
 	for st in stitches:
 		st.visible = normal
 	for part in _mats_by_part:
@@ -538,12 +656,42 @@ func iodine_coverage() -> float:
 	return float(_iod_done) / maxf(1.0, _iod_total)
 
 
-func fill_iodine() -> void:
+func _paint_center() -> Vector2:
+	return paint_c if paint_c != Vector2.INF else Vector2(center.x, center.z)
+
+
+## Zone à badigeonner : ellipse de demi-axes paint_r autour du centre choisi.
+func _compute_paint_target() -> void:
+	var pc := _paint_center()
+	_iod_target.resize(MASK_RES * MASK_RES)
+	_iod_total = 0
+	_iod_done = 0
 	for j in MASK_RES:
 		for i in MASK_RES:
 			var x := PATCH_MIN.x + (i + 0.5) / MASK_RES * PATCH_SIZE.x
 			var z := PATCH_MIN.y + (j + 0.5) / MASK_RES * PATCH_SIZE.y
-			var q := Vector2(x - center.x, z - center.z)
+			var q := Vector2(x - pc.x, z - pc.y)
+			var inside := (q.x * q.x) / (paint_r.x * paint_r.x) + (q.y * q.y) / (paint_r.y * paint_r.y) <= 1.0
+			_iod_target[j * MASK_RES + i] = 1 if inside else 0
+			if inside:
+				_iod_total += 1
+				if iodine_img and iodine_img.get_pixel(i, j).r > 0.45:
+					_iod_done += 1
+
+
+## Déplace la zone à badigeonner (autour du point marqué, par exemple).
+func set_paint_center(c: Vector2) -> void:
+	paint_c = c
+	_compute_paint_target()
+
+
+func fill_iodine() -> void:
+	var pc := _paint_center()
+	for j in MASK_RES:
+		for i in MASK_RES:
+			var x := PATCH_MIN.x + (i + 0.5) / MASK_RES * PATCH_SIZE.x
+			var z := PATCH_MIN.y + (j + 0.5) / MASK_RES * PATCH_SIZE.y
+			var q := Vector2(x - pc.x, z - pc.y)
 			var e := (q.x * q.x) / (paint_r.x * paint_r.x) + (q.y * q.y) / (paint_r.y * paint_r.y)
 			if e > 1.25:
 				continue
@@ -663,7 +811,7 @@ func set_breathe(v: float) -> void:
 
 ## Zone du thorax qui se soulève en respirant (même formule que les shaders).
 static func chest_mask(x: float, z: float) -> float:
-	return smoothstep(-0.34, -0.16, x) * (1.0 - smoothstep(0.08, 0.2, x)) * (1.0 - smoothstep(0.1, 0.2, absf(z)))
+	return smoothstep(CHEST_X.x, CHEST_X.y, x) * (1.0 - smoothstep(CHEST_X.z, CHEST_X.w, x)) * (1.0 - smoothstep(CHEST_Z.x, CHEST_Z.y, absf(z)))
 
 
 func breath_offset(x: float, z: float) -> float:
@@ -694,6 +842,11 @@ func set_tract(entry: Vector3, dir: Vector3, depth: float, radius: float) -> voi
 ## Le poumon droit se regonfle (drain en place) : animation sur quelques secondes.
 func reexpand_lung() -> void:
 	_lung_target = 0.0
+
+
+## Affaissement visé du poumon (0 = regonflé) : il y va progressivement.
+func set_lung_target(v: float) -> void:
+	_lung_target = clampf(v, 0.0, 1.0)
 
 
 static func _spring(x: float, v: float, target: float, k: float, zeta: float, dt: float) -> Vector2:

@@ -10,7 +10,7 @@ signal grabbed(inst: Instrument)
 const GRIP := {
 	"bistouri": 0.56, "ciseaux": 0.42, "porte_aiguille": 0.42, "kelly": 0.44, "overholt": 0.44,
 	"mikulicz": 0.42, "debakey": 0.4, "langenbeck": 0.2, "roux": 0.24, "seringue": 0.3,
-	"drain": 0.3, "feutre": 0.35,
+	"drain": 0.3, "feutre": 0.35, "cathlon": 0.18,
 }
 ## Mâchoires : [type (1 = branches croisées, 2 = mors de pince), pivot z (modèle), angle max (°)]
 const JAWS := {
@@ -114,7 +114,7 @@ func build_samples() -> void:
 	match id:
 		"bistouri":
 			tag = "blade"
-		"seringue", "porte_aiguille":
+		"seringue", "porte_aiguille", "cathlon":
 			tag = "needle"
 		"drain":
 			tag = "tube"
@@ -128,6 +128,8 @@ func build_samples() -> void:
 		var p := tip_local.lerp(back_local, f)
 		var t := "body"
 		if id == "seringue" and f <= 0.25:
+			t = "needle"
+		elif id == "cathlon" and f <= 0.45:
 			t = "needle"
 		elif id == "drain" and f <= 0.45:
 			t = "tube"
