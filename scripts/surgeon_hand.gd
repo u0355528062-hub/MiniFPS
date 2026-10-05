@@ -26,6 +26,11 @@ func squeeze_value() -> float:
 	return 0.0
 
 
+## Clic (ou serrage) main vide : massage cardiaque, manivelle d'un écarteur posé.
+func pressing() -> bool:
+	return false
+
+
 func trigger_value() -> float:
 	return squeeze_value()
 

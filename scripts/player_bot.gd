@@ -84,7 +84,9 @@ func tip_to(p: Vector3, frames_n := 12) -> void:
 		surf = at.y
 	if y > 0.0:
 		surf += patient.breath_offset(p.x, p.z)
-	hand.lift = clampf(p.y - surf - PlayerHand.HOVER, -0.12, 0.25)
+	# Coupe au fond de la plaie : le clic maintenu enfonce la main ; on compense pour rester sur la ligne
+	var held_down := hand.depth if proc.current().get("kind", "") == "cutline" else 0.0
+	hand.lift = clampf(p.y - surf - PlayerHand.HOVER + held_down, -0.12, 0.25)
 	if frames_n > 4:
 		await _settle()
 	else:
@@ -93,6 +95,11 @@ func tip_to(p: Vector3, frames_n := 12) -> void:
 
 func squeeze(v: float) -> void:
 	hand.sim_click = 1 if v > 0.5 else 0
+
+
+func aim_hand(p: Vector3) -> void:
+	aim(p)
+	await _frames(1)
 
 
 func held_id() -> String:

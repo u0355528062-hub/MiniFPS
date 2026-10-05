@@ -22,7 +22,11 @@ const TABLE_MAX := Vector2(0.69, 0.30)
 const RIB6_TOP := -0.001  ## bord supérieur de la 6e côte (X) sur la ligne axillaire moyenne
 const RIB5_BOTTOM := 0.013  ## bord inférieur de la 5e côte
 const RIB_DIR := Vector2(-0.49, 0.87)  ## direction des côtes (X, Z) au site : vers l'avant et le bas
-const HIDDEN_IN_SKELETON := ["Muscles", "Plevre", "Intercostaux", "Pericarde"]  ## masqués en vue squelette
+const HIDDEN_IN_SKELETON := ["Muscles", "Plevre", "Intercostaux", "Pericarde"]
+## Tissus de la paroi thoracique (coupés et écartés dans l'ouverture d'une thoracotomie)
+const WALL_PARTS := ["Muscles", "Intercostaux", "Plevre", "Mammaires", "Nerfs", "Arteres", "Veines"]  ## ouverts par la thoracotomie
+## Repoussés par l'écarteur de thoracotomie (paroi et squelette)
+const SPREAD_PARTS := ["Muscles", "Intercostaux", "Plevre", "Mammaires", "Nerfs", "Arteres", "Veines", "Os", "CoteG5", "CoteG6"]
 
 ## Positions du patient : modèle, cartes de hauteur, repères mesurés sur l'atlas, zone du thorax qui
 ## se soulève (chest_x : montée et descente le long du corps, chest_z : demi-largeur, chest_h :
@@ -88,6 +92,20 @@ var belt := Vector4.ZERO  ## marque de la ceinture de sécurité (segment x0 z0 
 var antiseptic := "betadine"  ## "betadine" (brune) ou "chlorhexidine" (alcoolique colorée, rose orangé)
 var stab := Vector4.ZERO  ## plaie au couteau (x, z, angle, longueur), nulle = aucune
 var props_options := {}  ## équipement du patient (ex. {"collar": false})
+var zone_v_min := 0.0  ## largeur minimale de la zone de peau détaillée (grandes ouvertures)
+var wall_taper := 0.72  ## parois de la plaie en V (0 = droites : écarteur posé)
+## Thoracotomie : brèche le long de l'espace intercostal (points de la peau, part de l'écartement
+## en chaque point), portion coupée t0..t1, demi-largeur coupée, écartement au milieu, profondeur
+var ap_path := PackedVector3Array()
+var ap_h := PackedFloat32Array()
+var ap_t0 := 0.0
+var ap_t1 := 0.0
+var ap_w0 := 0.0
+var ap_spread := 0.0
+var ap_depth := 0.045
+var heart_squeeze := 0.0
+var beat_gain := 1.0  ## force des battements du cœur (0 : arrêt)
+var beat_now := 0.0  ## dilatation du cœur à cet instant (le shader la reçoit aussi)
 var skin_y := 1.29  ## hauteur de la peau au centre de l'incision
 
 var skin_mat: ShaderMaterial  ## peau du corps entier
@@ -355,7 +373,7 @@ func _build_skin_patch() -> void:
 			hmap.set_pixel(i, j, Color(body_height(x, z), 0, 0))
 	height_tex = ImageTexture.create_from_image(hmap)
 	zone_u = half_len + 0.022
-	zone_v = clampf(wound_w * 4.0, 0.02, 0.05)
+	zone_v = maxf(clampf(wound_w * 4.0, 0.02, 0.05), zone_v_min)
 	skin_mat = _skin_material(preload("res://shaders/body_skin.gdshader"))
 	zone_mat = _skin_material(preload("res://shaders/skin_field.gdshader"))
 	zone_mesh = MeshInstance3D.new()
@@ -509,7 +527,7 @@ func _anatomy_material(part: String, kind: String) -> ShaderMaterial:
 		"Pleura":
 			p = {"base": Color(0.90, 0.72, 0.68), "alt": Color(0.82, 0.62, 0.60), "rough": 0.12, "wet": 1.0, "sss": 0.5, "scale": 40.0, "vessel": 0.4, "cut": Color(0.6, 0.15, 0.14)}
 		"Heart":
-			p = {"base": Color(0.45, 0.08, 0.07), "alt": Color(0.86, 0.70, 0.36), "rough": 0.24, "wet": 0.9, "sss": 0.4, "fiber": 0.35, "scale": 30.0, "cuttable": 0.0, "fat": 1.0}
+			p = {"base": Color(0.45, 0.08, 0.07), "alt": Color(0.86, 0.70, 0.36), "rough": 0.24, "wet": 0.9, "sss": 0.4, "fiber": 0.35, "scale": 30.0, "cuttable": 0.0, "fat": 0.75, "alt_mix": 0.15}
 		"Artery":
 			p = {"base": Color(0.62, 0.07, 0.06), "alt": Color(0.75, 0.15, 0.12), "rough": 0.22, "wet": 0.8, "sss": 0.4, "scale": 60.0, "cuttable": 0.0}
 		"PulmArtery":
@@ -540,9 +558,31 @@ func _anatomy_material(part: String, kind: String) -> ShaderMaterial:
 	m.set_shader_parameter("spots", p.get("spots", 0.0))
 	m.set_shader_parameter("vessel_amount", p.get("vessel", 0.0))
 	m.set_shader_parameter("fat_grooves", p.get("fat", 0.0))
+	m.set_shader_parameter("alt_mix", p.get("alt_mix", 1.0))
 	m.set_shader_parameter("cut_color", p.get("cut", Color(0.45, 0.06, 0.05)))
 	m.set_shader_parameter("cuttable", p.get("cuttable", 1.0))
 	m.set_shader_parameter("is_pleura", 1.0 if part == "Plevre" else 0.0)
+	# Paroi du thorax : écartée dans l'ouverture d'une thoracotomie
+	# Brèche de thoracotomie : la paroi est ouverte (2 : plus profond, rien ne pend en travers)
+	var wall := 0.0
+	if part in ["Nerfs", "Arteres", "Veines", "Mammaires", "Os"]:
+		wall = 2.0
+	elif part in WALL_PARTS:
+		wall = 1.0
+	m.set_shader_parameter("wall_tissue", wall)
+	m.set_shader_parameter("spreadable", 1.0 if part in SPREAD_PARTS else 0.0)
+	if OS.get_cmdline_user_args().has("--debugparts"):
+		# Diagnostic : chaque structure d'une couleur franche, tranches (faces arrière) en cyan
+		var pal := {"Os": Color(1, 1, 1), "CoteG5": Color(1, 1, 0), "CoteG6": Color(1, 0.5, 0), "Muscles": Color(0.8, 0, 0),
+			"Intercostaux": Color(1, 0, 1), "Plevre": Color(0, 1, 0), "PoumonG": Color(0.3, 0.6, 1), "PoumonD": Color(0.2, 0.3, 1),
+			"Coeur": Color(0.5, 0, 0.1), "Pericarde": Color(0.6, 0.2, 1), "Nerfs": Color(1, 1, 0), "Diaphragme": Color(0.4, 0.3, 0.1),
+			"Arteres": Color(1, 0.3, 0.3), "Veines": Color(0, 0, 1), "Coronaires": Color(1, 0.6, 0), "Mammaires": Color(0, 0.5, 0),
+			"VeinesCentrales": Color(0, 0.8, 0.8), "ArteresSC": Color(0.6, 0, 0), "Aorte": Color(0.9, 0, 0.5), "ArteresPulm": Color(0.3, 0, 0.6),
+			"Trachee": Color(0.6, 0.6, 0.6), "Foie": Color(0.3, 0.15, 0.05)}
+		var c: Color = pal.get(part, Color(0.5, 0.5, 0.5))
+		m.set_shader_parameter("base_color", c)
+		m.set_shader_parameter("alt_color", c)
+		m.set_shader_parameter("cut_color", Color(0, 1, 1))
 	if part == collapse_part:
 		m.set_shader_parameter("hilum", HILUM)
 	if part in ["Coeur", "Coronaires", "Pericarde"]:
@@ -585,6 +625,7 @@ func _build_wound() -> void:
 		wall_mat.set_shader_parameter(t, _tex(t))
 	wall_mat.set_shader_parameter("blood_tex", _tex("blood"))
 	wall_mat.set_shader_parameter("depth_m", WOUND_DEPTH)
+	wall_mat.set_shader_parameter("taper", wall_taper)
 	_common_params(wall_mat)
 	walls.material_override = wall_mat
 	walls.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -868,6 +909,12 @@ func reexpand_lung() -> void:
 	_lung_target = 0.0
 
 
+## État de départ du poumon (0 = bien gonflé, 0,85 = pneumothorax), sans transition.
+func init_lung(v: float) -> void:
+	lung_collapse = v
+	_lung_target = v
+
+
 ## Affaissement visé du poumon (0 = regonflé) : il y va progressivement.
 func set_lung_target(v: float) -> void:
 	_lung_target = clampf(v, 0.0, 1.0)
@@ -930,7 +977,8 @@ func _process(delta: float) -> void:
 	# Anatomie : poumon (affaissé, puis regonflé), cœur qui bat, trajet de dissection
 	lung_collapse = move_toward(lung_collapse, _lung_target, delta * 0.18)
 	_beat_t += delta * heart_rate / 60.0
-	var beat := pow(maxf(0.0, sin(TAU * _beat_t)), 6.0) * 0.035
+	var beat := pow(maxf(0.0, sin(TAU * _beat_t)), 6.0) * 0.035 * beat_gain
+	beat_now = beat
 	# La plaie révèle ce qui est dessous : rayon selon l'ouverture et le trajet creusé
 	var reveal := clampf(opening * wound_w * 1.6 + tract_r * 2.0, 0.0, 0.035) if has_cut() else 0.0
 	var tb := tract_a + tract_dir * tract_depth
@@ -959,10 +1007,118 @@ func _cull_anatomy(c: Vector3, axis: Vector3, reveal: float) -> void:
 		if view_mode == 2 and part in HIDDEN_IN_SKELETON:
 			show = false
 		elif view_mode == 0:
-			show = reveal > 0.0 and _cylinder_hits(_part_boxes[part], c, axis, reveal)
+			show = (reveal > 0.0 and _cylinder_hits(_part_boxes[part], c, axis, reveal)) or _aperture_hits(_part_boxes[part])
 		var mi: MeshInstance3D = _part_meshes[part]
 		if mi.visible != show:
 			mi.visible = show
+
+
+## La brèche de la thoracotomie (et ce qui est dessous, sur 20 cm) touche-t-elle la boîte ?
+func _aperture_hits(box: AABB) -> bool:
+	if ap_path.size() < 2 or ap_t1 <= ap_t0:
+		return false
+	var grown := box.grow(aperture_gap(0.5) * 1.2 + 0.05)
+	for i in 13:
+		var p := aperture_point(lerpf(ap_t0, ap_t1, i / 12.0))
+		for k in 21:
+			if grown.has_point(p + Vector3.DOWN * (k * 0.01)):
+				return true
+	return false
+
+
+## Thoracotomie : brèche le long du tracé `path` (points de la peau), `h` = part de l'écartement en
+## chaque point (0 aux bouts), coupée de t0 à t1, demi-largeur coupée w0, écartement `spread`.
+func set_aperture(path: PackedVector3Array, h: PackedFloat32Array, t0: float, t1: float, w0: float, spread: float, depth := 0.045) -> void:
+	ap_path = path
+	ap_h = h
+	ap_t0 = t0
+	ap_t1 = t1
+	ap_w0 = w0
+	ap_spread = spread
+	ap_depth = depth
+	var n := mini(path.size(), 10)
+	var pts := PackedVector4Array()
+	pts.resize(10)
+	var slopes := PackedVector2Array()
+	slopes.resize(10)
+	var e := 0.01
+	for i in n:
+		pts[i] = Vector4(path[i].x, path[i].y, path[i].z, h[i])
+		var x := path[i].x
+		var z := path[i].z
+		slopes[i] = Vector2((body_height(x + e, z) - body_height(x - e, z)) / (2.0 * e), (body_height(x, z + e) - body_height(x, z - e)) / (2.0 * e))
+	for m in anatomy_mats:
+		m.set_shader_parameter("ap_pts", pts)
+		m.set_shader_parameter("ap_slope", slopes)
+		m.set_shader_parameter("ap_n", n)
+		m.set_shader_parameter("ap_t0", t0)
+		m.set_shader_parameter("ap_t1", t1)
+		m.set_shader_parameter("ap_w0", w0)
+		m.set_shader_parameter("ap_spread", spread)
+		m.set_shader_parameter("ap_depth", depth)
+	# La paroi repoussée sort de la boîte de ses maillages : marge de visibilité
+	for part in SPREAD_PARTS:
+		var mi: MeshInstance3D = _part_meshes.get(part)
+		if mi:
+			mi.extra_cull_margin = 0.06 if spread > 0.0 else 0.0
+
+
+## Point du tracé de la brèche (t de 0 à 1, à intervalles égaux entre les points).
+func aperture_point(t: float) -> Vector3:
+	if ap_path.size() < 2:
+		return Vector3.ZERO
+	var f := clampf(t, 0.0, 1.0) * (ap_path.size() - 1)
+	var i := mini(int(f), ap_path.size() - 2)
+	return ap_path[i].lerp(ap_path[i + 1], f - i)
+
+
+## Demi-largeur ouverte de la brèche en t.
+func aperture_gap(t: float) -> float:
+	if ap_h.size() < 2:
+		return 0.0
+	var f := clampf(t, 0.0, 1.0) * (ap_h.size() - 1)
+	var i := mini(int(f), ap_h.size() - 2)
+	return ap_w0 + ap_spread * lerpf(ap_h[i], ap_h[i + 1], f - i)
+
+
+## Hémothorax : du sang stagne au fond de la cavité ouverte (0..1).
+func set_cavity_blood(v: float) -> void:
+	for m in anatomy_mats:
+		m.set_shader_parameter("cavity_blood", v)
+
+
+## Péricarde : distendu par le sang (tense 0..1), fenêtre ouverte le long de a → b (demi-largeur w).
+func set_pericardium(tense_v: float, a := Vector3.ZERO, b := Vector3.ZERO, w := 0.0) -> void:
+	for m in _mats_by_part.get("Pericarde", []):
+		m.set_shader_parameter("tense", tense_v)
+		m.set_shader_parameter("pc_a", a)
+		m.set_shader_parameter("pc_b", b)
+		m.set_shader_parameter("pc_w", w)
+
+
+var _wound_closed := 0.0
+
+
+func heart_wound_closed() -> float:
+	return _wound_closed
+
+
+## Plaie du cœur (centre, direction, demi-longueur), refermée de 0 à 1.
+func set_heart_wound(c: Vector3, dir: Vector3, half_len: float, closed: float) -> void:
+	_wound_closed = closed
+	for part in ["Coeur", "Coronaires"]:
+		for m in _mats_by_part.get(part, []):
+			m.set_shader_parameter("heart_wound", Vector4(c.x, c.y, c.z, half_len))
+			m.set_shader_parameter("heart_wound_dir", dir.normalized())
+			m.set_shader_parameter("heart_wound_closed", closed)
+
+
+## Le cœur comprimé entre les mains (massage interne), 0..1.
+func set_heart_squeeze(v: float) -> void:
+	heart_squeeze = v
+	for part in ["Coeur", "Coronaires", "Pericarde"]:
+		for m in _mats_by_part.get(part, []):
+			m.set_shader_parameter("squeeze", v)
 
 
 ## Le cylindre de la plaie (rayon r, sur 45 cm de profondeur) touche-t-il la boîte ?

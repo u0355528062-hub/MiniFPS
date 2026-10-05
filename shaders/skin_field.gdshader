@@ -42,6 +42,12 @@ void fragment() {
 	vec3 nw;
 	skin_shade(rest3, wn, rest3.xz, 1.0, edge_d, open_here, col, rough, spec, nw);
 	skin_marks(rest3, wn, rest3.xz, col, rough, nw);
+	if (!FRONT_FACING) {
+		// Vue de l'intérieur (par la plaie) : tissu sombre, pas de la peau
+		col = vec3(0.2, 0.045, 0.04);
+		rough = 0.45;
+		spec = 0.3;
+	}
 	ALBEDO = col;
 	ROUGHNESS = rough;
 	SPECULAR = spec;

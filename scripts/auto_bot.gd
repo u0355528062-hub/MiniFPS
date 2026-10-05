@@ -11,6 +11,10 @@ func squeeze_value() -> float:
 	return bot_squeeze
 
 
+func pressing() -> bool:
+	return held == null and bot_squeeze > 0.5
+
+
 func raw_tip() -> Vector3:
 	return bot_tip if held else global_position
 

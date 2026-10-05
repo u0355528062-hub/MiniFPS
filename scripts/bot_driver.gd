@@ -82,6 +82,11 @@ func lift_clear() -> void:
 	pass
 
 
+## Main vide : regarder / poser la main sur `p` (manivelle, massage).
+func aim_hand(_p: Vector3) -> void:
+	pass
+
+
 func _above(p: Vector3, h := 0.012) -> Vector3:
 	return p + Vector3.UP * h
 
@@ -125,9 +130,10 @@ func do_step() -> void:
 	await cleanup()
 	var s: Dictionary = proc.steps[si]
 	want_axis = Vector3.ZERO
-	await take(s["inst"])
-	if held_id() != s["inst"]:
-		fail("impossible de prendre %s" % s["inst"])
+	if s["inst"] != "":
+		await take(s["inst"])
+		if held_id() != s["inst"]:
+			fail("impossible de prendre %s" % s["inst"])
 	await lift_clear()
 	match s["kind"]:
 		"mark":
@@ -281,6 +287,45 @@ func do_step() -> void:
 			want_axis = axis
 			for i in 80:
 				await tip_to(entry + axis * (0.03 - i * 0.001), 1)
+				if proc.step != si:
+					break
+		"cutline":
+			# Ciseaux au fond de la plaie, clic maintenu, d'un bout à l'autre de la ligne
+			var path := proc.cut_path(s)
+			squeeze(0.0)
+			await tip_to(_above(path[0], 0.04), 14)
+			await tip_to(path[0], 14)
+			squeeze(1.0)
+			for i in 260:
+				var t := minf(1.0, i / 180.0)
+				await tip_to(Procedure.path_point(proc.cut_path(s), t), 2)
+				if proc.step != si:
+					break
+			squeeze(0.0)
+			await tip_to(_above(path[path.size() - 1], 0.05), 8)
+		"crank":
+			# Présenter l'écarteur dans l'incision, serrer : il se pose ; puis tourner la manivelle
+			var tgt: Vector3 = s["target"].call()
+			squeeze(0.0)
+			await tip_to(_above(tgt, 0.05), 16)
+			await tip_to(tgt, 14)
+			squeeze(1.0)
+			for i in 1400:
+				await _frames(1)
+				if held_inst() == null:
+					await aim_hand(tgt)
+				if proc.step != si:
+					break
+			squeeze(0.0)
+		"pump":
+			# Mains nues : compressions rythmées sur le cœur (≈ 100 par minute)
+			var tgt: Vector3 = s["target"].call()
+			await aim_hand(tgt)
+			for i in 90:
+				squeeze(1.0)
+				await _wait(0.28)
+				squeeze(0.0)
+				await _wait(0.3)
 				if proc.step != si:
 					break
 		"suture":

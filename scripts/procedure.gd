@@ -16,6 +16,9 @@ extends Node
 ##   aspirate: l'aiguille dans le liquide, on tire le piston (clic maintenu) : la seringue se remplit
 ##   thread  : on pousse un guide ou un cathéter souple dans un vaisseau (clic maintenu), longueur
 ##             affichée en centimètres ; trop loin, il touche le cœur
+##   cutline : les ciseaux suivent une ligne au fond de la plaie (muscles, plèvre, péricarde)
+##   crank   : un écarteur posé dans la plaie, on tourne sa manivelle (clic maintenu)
+##   pump    : massage cardiaque à mains nues, clics rythmés sur le cœur
 
 signal finished(seconds: float, errors: int)
 signal step_changed(index: int)
@@ -134,8 +137,8 @@ func _enter_step(i: int) -> void:
 		_finish()
 		return
 	var s: Dictionary = steps[step]
-	var inst: Instrument = tray.instruments[s["inst"]]
-	_ui_step(s["title"], s["text"], inst.label)
+	var inst: Instrument = tray.instruments.get(s["inst"])
+	_ui_step(s["title"], s["text"], inst.label if inst else "Mains nues")
 	_caption("")
 	if s["kind"] == "inject":
 		inst.set_volume(1.0)
@@ -267,6 +270,9 @@ func _process(delta: float) -> void:
 		"probe": _tick_probe(s, delta)
 		"aspirate": _tick_aspirate(s, delta)
 		"thread": _tick_thread(s, delta)
+		"cutline": _tick_cutline(s, delta)
+		"crank": _tick_crank(s, delta)
+		"pump": _tick_pump(s, delta)
 	if step >= 0 and step < steps.size() and current() == s:
 		_update_markers(s)
 	if not show_markers:
@@ -330,6 +336,14 @@ func _setup_hands(s: Dictionary) -> void:
 			speed = 0.0
 			target = s["target"].call()
 			axis = s["axis"]
+		"cutline":
+			# Clic maintenu : les ciseaux descendent au fond de la plaie, jusqu'à la ligne à couper
+			mode = "hold"
+			pmax = s.get("depth", 0.02) + 0.003
+			speed = 0.03
+		"crank":
+			mode = "none"
+			target = s["target"].call()
 	for h in hands:
 		var ok: bool = h.held != null and h.held.id == s["inst"]
 		h.assist_target = target if ok else Vector3.INF
@@ -362,12 +376,26 @@ func _update_zones(s: Dictionary) -> void:
 			var pair := _suture_pair(s)
 			if not pair.is_empty():
 				for p in pair:
-					Contact.add_zone(p, p, 0.01, 0.007, ["needle"])
+					Contact.add_zone(p, p, 0.01, s.get("zone_depth", 0.007), ["needle"])
+		"cutline":
+			# Les ciseaux descendent au fond de la plaie le long de la ligne à couper
+			var path := cut_path(s)
+			for i in path.size() - 1:
+				Contact.add_zone(path[i], path[i + 1], s.get("tol", 0.012) + 0.008, s.get("depth", 0.02) + 0.03, ["any"])
+		"crank":
+			var p: Vector3 = s["target"].call()
+			Contact.add_zone(p, p, s.get("near", 0.04) + 0.03, 0.08, ["any"])
 		"needle", "withdraw", "aspirate":
 			var p: Vector3 = s["target"].call()
 			var axis: Vector3 = s["axis"]
 			var dmax: float = s["max_depth"] + 0.012
 			Contact.add_zone(p, p + axis * dmax, 0.009, dmax, ["needle"])
+	# Thorax ouvert (thoracotomie) : tout l'instrument peut entrer entre les côtes écartées
+	if patient.ap_spread > 0.004 and patient.ap_path.size() > 1:
+		for i in 8:
+			var ta := lerpf(patient.ap_t0, patient.ap_t1, i / 8.0)
+			var tb := lerpf(patient.ap_t0, patient.ap_t1, (i + 1) / 8.0)
+			Contact.add_zone(patient.aperture_point(ta), patient.aperture_point(tb), patient.aperture_gap((ta + tb) * 0.5) * 0.95, patient.ap_depth + 0.06, ["any"])
 
 
 func _active_hands() -> Array[SurgeonHand]:
@@ -416,8 +444,15 @@ func _update_markers(s: Dictionary) -> void:
 			marker2.show_at(patient.incision_point(1.0) + Vector3.UP * 0.002, "ARRIVÉE", 0.55)
 		"inject":
 			marker.show_at(s["target"].call(), s.get("label", "Pique ici"), 0.8)
-		"spread", "insert", "needle", "withdraw", "aspirate", "probe", "thread":
+		"spread", "insert", "needle", "withdraw", "aspirate", "probe", "thread", "crank":
 			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 0.8))
+		"cutline":
+			var path := cut_path(s)
+			var t0: float = st.get("t0", -1.0)
+			marker.show_at(path[0] if t0 < 0.0 else path_point(path, st.get("t1", 0.0)), s.get("label", "DÉPART"), 0.6)
+			marker2.show_at(path[path.size() - 1], "ARRIVÉE", 0.5)
+		"pump":
+			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 1.2))
 		"suture":
 			var pair := _suture_pair(s)
 			if not pair.is_empty():
@@ -891,6 +926,151 @@ func _tick_thread(s: Dictionary, delta: float) -> void:
 			_done(h, false)
 			_complete_step(s.get("done_msg", ""))
 			return
+
+
+## Ciseaux au fond de la plaie : la pointe suit la ligne a → b (à moins de « tol » m), là où elle
+## passe les tissus sont coupés ; la portion parcourue (t0..t1) est rapportée à « on_progress ».
+## Ligne à couper (étape « cutline ») : « path » (polyligne) ou segment « a » → « b ».
+func cut_path(s: Dictionary) -> PackedVector3Array:
+	if s.has("path"):
+		return s["path"].call()
+	return PackedVector3Array([s["a"].call(), s["b"].call()])
+
+
+## Point d'une polyligne en t (0..1, à intervalles égaux entre les points).
+static func path_point(path: PackedVector3Array, t: float) -> Vector3:
+	var f := clampf(t, 0.0, 1.0) * (path.size() - 1)
+	var i := mini(int(f), path.size() - 2)
+	return path[i].lerp(path[i + 1], f - i)
+
+
+## Point de la polyligne le plus proche de p : [t (0..1), distance].
+static func path_nearest(path: PackedVector3Array, p: Vector3) -> Array:
+	var best := INF
+	var best_t := 0.0
+	for i in path.size() - 1:
+		var ab := path[i + 1] - path[i]
+		var k := clampf((p - path[i]).dot(ab) / maxf(ab.length_squared(), 1e-12), 0.0, 1.0)
+		var d := p.distance_to(path[i] + ab * k)
+		if d < best:
+			best = d
+			best_t = (i + k) / (path.size() - 1)
+	return [best_t, best]
+
+
+func _tick_cutline(s: Dictionary, _delta: float) -> void:
+	var path := cut_path(s)
+	for h in _active_hands():
+		var tipp := h.tip()
+		var near := path_nearest(path, tipp)
+		var t: float = near[0]
+		var dist: float = near[1]
+		if dist > s.get("tol", 0.012):
+			_caption(s.get("hint", "Place la pointe des ciseaux sur la ligne"))
+			continue
+		var cutting: bool = h.squeeze_value() > 0.5 or s.get("auto", false)
+		if not cutting:
+			_caption("Maintiens le clic pour couper en avançant")
+			continue
+		var t0: float = st.get("t0", -1.0)
+		var t1: float = st.get("t1", -1.0)
+		if t0 < 0.0:
+			t0 = t
+			t1 = t
+		# On coupe en continu : la portion grandit seulement près des bords déjà coupés
+		if t < t0 and t > t0 - 0.12:
+			t0 = t
+		if t > t1 and t < t1 + 0.12:
+			t1 = t
+		st["t0"] = t0
+		st["t1"] = t1
+		Sfx.loop("ciseaux_coupe", tipp, 0.4)
+		if s.has("on_progress"):
+			s["on_progress"].call(t0, t1)
+		_caption("%s : %d %%" % [s.get("what", "Coupé"), int((t1 - t0) * 100.0)])
+		if t1 - t0 >= s.get("need", 0.9):
+			_done(h, false)
+			_complete_step(s.get("done_msg", ""))
+			return
+
+
+## Écarteur : on le présente à l'endroit voulu (« target »), clic maintenu : il se pose, puis la
+## manivelle tourne (la main reste sur la manivelle, clic maintenu) ; « on_progress » de 0 à 1.
+func _tick_crank(s: Dictionary, delta: float) -> void:
+	var tgt: Vector3 = s["target"].call()
+	var inst: Instrument = tray.instruments[s["inst"]]
+	var prog: float = st.get("p", 0.0)
+	for h in hands:
+		var on_it := false
+		if h.held == inst:
+			if h.tip().distance_to(tgt) > s.get("near", 0.04):
+				_caption(s.get("hint", "Présente l'écarteur dans l'incision"))
+				continue
+			if h.squeeze_value() > 0.5:
+				on_it = true
+				if s.has("on_seat"):
+					s["on_seat"].call(h)
+		elif inst.parked and h.held == null and h.pressing():
+			# Le joueur doit viser l'écarteur (la manivelle) pour la tourner
+			on_it = not (h is PlayerHand) or _flat((h as PlayerHand).aim_point, tgt) < s.get("near", 0.04) * 2.2
+		if on_it:
+			prog = minf(1.0, prog + delta / s.get("seconds", 6.0))
+			st["p"] = prog
+			Sfx.loop("ecarte", tgt, 0.5)
+			if s.has("on_progress"):
+				s["on_progress"].call(prog)
+			_caption("%s : %d %%" % [s.get("what", "Écartement"), int(prog * 100.0)])
+			if prog >= 1.0:
+				_done(h, false)
+				_complete_step(s.get("done_msg", ""))
+				return
+		elif inst.parked:
+			_caption("Maintiens le clic sur la manivelle : %d %%" % int(prog * 100.0))
+
+
+## Massage cardiaque : clics rythmés (main vide) en visant le cœur ; « need » compressions à un
+## rythme de 80 à 140 par minute.
+func _tick_pump(s: Dictionary, delta: float) -> void:
+	var tgt: Vector3 = s["target"].call()
+	var any := false
+	for h in hands:
+		if h.held != null:
+			_caption("Pose l'instrument (touche R) : on masse à mains nues")
+			continue
+		if h is PlayerHand:
+			var aim: Vector3 = (h as PlayerHand).aim_point
+			if Vector2(aim.x - tgt.x, aim.z - tgt.z).length() > s.get("near", 0.08):
+				continue
+		var down := h.pressing()
+		var was: bool = st.get("down_%d" % h.slot, false)
+		st["down_%d" % h.slot] = down
+		any = any or down
+		if down and not was:
+			var now := Time.get_ticks_msec() / 1000.0
+			var last: float = st.get("last", -10.0)
+			st["last"] = now
+			var n: int = st.get("n", 0) + 1
+			st["n"] = n
+			var dt := now - last
+			if dt < 3.0:
+				var rate := 60.0 / maxf(dt, 0.05)
+				st["rate"] = lerpf(st.get("rate", rate), rate, 0.35)
+			if s.has("on_compress"):
+				s["on_compress"].call(n)
+	var sq: float = st.get("sq", 0.0)
+	sq = move_toward(sq, 1.0 if any else 0.0, delta * 9.0)
+	st["sq"] = sq
+	if s.has("on_squeeze"):
+		s["on_squeeze"].call(sq)
+	var n2: int = st.get("n", 0)
+	var r: float = st.get("rate", 0.0)
+	var advice := ""
+	if n2 >= 2:
+		advice = "  ·  plus vite !" if r < 80.0 else ("  ·  moins vite" if r > 140.0 else "  ·  bon rythme")
+	_caption("Compressions : %d / %d  ·  %d par minute%s" % [n2, s.get("need", 30), int(r), advice])
+	if n2 >= s.get("need", 30) and r >= 80.0 and r <= 140.0:
+		_done(null, false)
+		_complete_step(s.get("done_msg", ""))
 
 
 ## Saute directement à l'étape n (tests, captures) en appliquant les étapes précédentes.

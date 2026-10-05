@@ -22,7 +22,10 @@ func build() -> void:
 		return
 	if options.get("collar", true):
 		_collar()
-	_o2_mask()
+	if options.get("intubated", false):
+		_intubation()
+	else:
+		_o2_mask()
 	_spo2_clip()
 	_iv_line()
 	_ecg()
@@ -277,6 +280,38 @@ func _o2_mask() -> void:
 		_on(head_x + 0.06, -0.12, 0.004), _on(Patient.TABLE_MAX.x - 0.02, -0.1, 0.004),
 		Vector3(Patient.TABLE_MAX.x + 0.12, 0.55, -0.1), Vector3(1.25, 0.7, -0.12), Vector3(1.38, 1.12, -0.12)])
 	_cable(path, 0.05, 0.0035, tmat, "TuyauO2", 2, 1, 0.025)
+
+
+## Patient intubé, ventilé : sonde d'intubation transparente qui sort à la commissure des lèvres,
+## fixée par un sparadrap, raccord coudé, filtre, tuyau annelé du respirateur.
+func _intubation() -> void:
+	var nose := Patient.lm("nose_tip")
+	var mx := nose.x - 0.03
+	var mz := -0.012
+	var my := Patient.body_height(mx, mz)
+	var mouth := Vector3(mx, my, mz)
+	var head := Vector3(1, 0, 0)
+	var up := Vector3.UP
+	var clear := _clear(Color(0.92, 0.96, 1.0, 0.55), 0.12)
+	var tube := MeshUtil.bezier(mouth - up * 0.012, mouth + up * 0.012, mouth + up * 0.035 + head * 0.004, mouth + up * 0.045 + head * 0.03, 18)
+	_tube(tube, 0.0048, clear, "SondeIntubation")
+	var line := PackedVector3Array()
+	for q in tube:
+		line.append(q + Vector3(0, 0, 0.0046))
+	_tube(line, 0.0006, _mat(Color(0.2, 0.4, 0.85), 0.4), "LigneOpaque")
+	# Sparadrap en travers de la lèvre supérieure
+	var tape := MeshUtil.box_instance(self, Vector3(0.014, 0.0015, 0.09), mouth + Vector3(0.004, 0.004, 0.012), _mat(Color(0.95, 0.94, 0.9), 0.85), "Sparadrap")
+	tape.rotation_degrees.z = 8.0
+	# Raccord coudé, filtre, tuyau du respirateur
+	var end := tube[tube.size() - 1]
+	var conn := MeshUtil.cylinder_instance(self, 0.0075, 0.016, end, _mat(Color(0.95, 0.95, 0.95), 0.4), "Raccord")
+	conn.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, head)), end + head * 0.008)
+	var filt := MeshUtil.cylinder_instance(self, 0.016, 0.03, end, _mat(Color(0.94, 0.95, 0.96), 0.35), "Filtre")
+	filt.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, head)), end + head * 0.032)
+	var hose_start := end + head * 0.05
+	var path := PackedVector3Array([hose_start, hose_start + head * 0.03, Cable.on_surface(Patient.TABLE_MAX.x - 0.04, -0.06, 0.012),
+		Vector3(Patient.TABLE_MAX.x + 0.12, 0.6, -0.12), Vector3(1.1, 0.5, -0.3), Vector3(1.3, 1.0, -0.35)])
+	_cable(path, 0.04, 0.011, _mat(Color(0.55, 0.68, 0.82), 0.45), "TuyauRespirateur", 2, 1, 0.03)
 
 
 ## Oxymètre au bout de l'index droit : pince grise, lueur rouge discrète, câble vers le moniteur.

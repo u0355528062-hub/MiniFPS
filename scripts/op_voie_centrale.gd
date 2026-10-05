@@ -79,6 +79,7 @@ func _ideal() -> Vector2:
 
 
 func configure_patient(p: Patient) -> void:
+	p.init_lung(0.0)  # pas de pneumothorax : poumons bien gonflés
 	p.WINDOW_MIN = Vector2(-0.2, -0.22)
 	p.WINDOW_MAX = Vector2(0.2, 0.22)
 	var c := _ideal() if not Patient.landmarks.is_empty() else Vector2(0.092, 0.1)

@@ -115,7 +115,10 @@ void fragment() {
 		col = mix(col, vec3(0.16, 0.05, 0.05), mouth);
 	}
 	if (!FRONT_FACING) {
-		col *= 0.3;
+		// Vue de l'intérieur (par une plaie) : tissu sombre, pas de la peau
+		col = vec3(0.2, 0.045, 0.04);
+		rough = 0.45;
+		spec = 0.3;
 	}
 	ALBEDO = col;
 	ROUGHNESS = rough;

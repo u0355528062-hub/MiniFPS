@@ -27,6 +27,8 @@ func _process(delta: float) -> void:
 	# Tracé ECG : même forme que le scope (microvoltage, alternance, extrasystoles)
 	var v := monitor.ecg_shape(p * 60.0 / hr * 0.85 + 0.03)
 	var pl := maxf(0.0, sin(TAU * (p - 0.35))) * (0.6 + 0.4 * exp(-pow((p - 0.55) / 0.06, 2.0)))
+	if monitor.arrest:
+		pl = monitor.art_wave()
 	for k in 2:
 		_ecg.remove_at(0)
 		_ecg.append(v)
@@ -46,7 +48,9 @@ func _draw() -> void:
 	var spo := int(round(monitor.spo2))
 	var hr_col := Color(0.3, 1.0, 0.45) if hr <= 110 else (UIKit.WARN if hr <= 130 else UIKit.BAD)
 	var sp_col := Color(0.35, 0.85, 1.0) if spo >= 94 else (UIKit.WARN if spo >= 90 else UIKit.BAD)
-	var blink := spo < 90 and fmod(_t, 1.0) < 0.5
+	var blink := (spo < 90 or monitor.arrest) and fmod(_t, 1.0) < 0.5
+	if monitor.arrest:
+		hr_col = UIKit.BAD
 	# ECG
 	var r := Rect2(14, 14, 190, 52)
 	_trace(_ecg, r, hr_col, 0.5, 0.45)
@@ -56,10 +60,10 @@ func _draw() -> void:
 	var r2 := Rect2(14, 78, 190, 40)
 	_trace(_pleth, r2, sp_col, 0.9, 0.0)
 	draw_string(fr, Vector2(214, 90), "SpO₂", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UIKit.TEXT_DIM)
-	draw_string(f, Vector2(214, 126), "%d %%" % spo, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, UIKit.BAD if blink else sp_col)
+	draw_string(f, Vector2(214, 126), "-- %" if monitor.arrest else "%d %%" % spo, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, UIKit.BAD if blink else sp_col)
 	# Tension et respiration
 	draw_string(fr, Vector2(14, 150), "PA", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UIKit.TEXT_DIM)
-	draw_string(f, Vector2(40, 152), "%d/%d" % [monitor.sys, monitor.dia], HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.55, 0.55))
+	draw_string(f, Vector2(40, 152), "--/--" if monitor.arrest else "%d/%d" % [monitor.sys, monitor.dia], HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.55, 0.55))
 	draw_string(fr, Vector2(150, 150), "FR", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UIKit.TEXT_DIM)
 	var rr := int(round(monitor.resp_rate))
 	draw_string(f, Vector2(176, 152), "%d /min" % rr, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.95, 0.5) if rr <= 22 else UIKit.WARN)

@@ -54,6 +54,7 @@ func _init() -> void:
 
 
 func configure_patient(p: Patient) -> void:
+	p.init_lung(0.0)  # pas de pneumothorax : poumons bien gonflés
 	# Pas de champ (urgence) : le thorax et le haut de l'abdomen sont découverts
 	p.WINDOW_MIN = Vector2(-0.3, -0.2)
 	p.WINDOW_MAX = Vector2(0.16, 0.2)

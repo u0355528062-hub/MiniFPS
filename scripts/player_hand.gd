@@ -47,6 +47,10 @@ func squeeze_value() -> float:
 	return 1.0 if _clicking() and not swallow_click and held != null else 0.0
 
 
+func pressing() -> bool:
+	return _clicking() and held == null and not swallow_click
+
+
 func _clicking() -> bool:
 	if sim_click >= 0:
 		return sim_click == 1

@@ -9,6 +9,7 @@ var hand: PlayerHand
 var player: Player
 var instruments: Array[Instrument] = []
 var required_id := ""
+var step_kind := ""  ## type du geste en cours (aide « mains nues » : manivelle, massage)
 
 var root: Control
 var _card: PanelContainer
@@ -328,6 +329,13 @@ func set_view_tag(t: String) -> void:
 
 # ---------------------------------------------------------------- Mise à jour
 
+func _crank_ready() -> bool:
+	for inst in instruments:
+		if inst.id == required_id:
+			return inst.parked
+	return false
+
+
 func _process(_delta: float) -> void:
 	if hand == null:
 		return
@@ -358,4 +366,8 @@ func _process(_delta: float) -> void:
 		pr = "Clic gauche · Prendre  « %s »" % hand.hovered.label
 	elif hand.held and not hand.on_patient and hand.held.id == required_id:
 		pr = "Vise la zone sur le patient"
+	elif hand.held == null and step_kind == "pump":
+		pr = "Vise le cœur · Clic gauche en rythme pour comprimer"
+	elif hand.held == null and step_kind == "crank" and _crank_ready():
+		pr = "Vise l'écarteur · Clic gauche maintenu pour tourner la manivelle"
 	_prompt.text = pr

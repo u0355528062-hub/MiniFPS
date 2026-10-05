@@ -13,6 +13,7 @@ uniform sampler2D muscle : hint_default_white, filter_linear_mipmap_anisotropic,
 uniform sampler2D muscle_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D blood_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform float depth_m = 0.05;
+uniform float taper = 0.72;  // les bords se rapprochent au fond (V) ; faible = parois droites (écarteur)
 
 vec3 wall_point(float u, float f, float side) {
 	vec2 d = inc_dir();
@@ -21,7 +22,7 @@ vec3 wall_point(float u, float f, float side) {
 	float D = edge_open(u, side);
 	vec2 rim = c + d * u + pp * side * D;
 	float top = surface_at(rim) + edge_lift(D, 1.0, 0.0);
-	vec2 xz = c + d * u * (1.0 - 0.08 * f) + pp * side * D * (1.0 - 0.72 * f);
+	vec2 xz = c + d * u * (1.0 - 0.08 * f) + pp * side * D * (1.0 - taper * f);
 	float depth = depth_m * f * smoothstep(0.0, 0.0015, D);
 	return vec3(xz.x, top - depth, xz.y);
 }

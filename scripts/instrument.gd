@@ -11,7 +11,7 @@ const GRIP := {
 	"bistouri": 0.56, "ciseaux": 0.42, "porte_aiguille": 0.42, "kelly": 0.44, "overholt": 0.44,
 	"mikulicz": 0.42, "debakey": 0.4, "langenbeck": 0.2, "roux": 0.24, "seringue": 0.3,
 	"drain": 0.3, "feutre": 0.35, "cathlon": 0.18, "sonde": 0.6, "aiguille": 0.18, "guide": 0.7,
-	"dilatateur": 0.25, "kt_central": 0.6,
+	"dilatateur": 0.25, "kt_central": 0.6, "finochietto": 0.22,
 }
 ## Mâchoires : [type (1 = branches croisées, 2 = mors de pince), pivot z (modèle), angle max (°)]
 const JAWS := {
@@ -124,6 +124,10 @@ func build_samples() -> void:
 		"langenbeck", "roux":
 			tag = "hook"
 	samples.append([tip_local, tag])
+	if id == "finochietto":
+		# Les deux bouts de la crémaillère
+		for bx in [-0.075, 0.075]:
+			samples.append([model.transform * Vector3(bx, FinochiettoModel.ARM_LEN, FinochiettoModel.BAR_Z), "body"])
 	if id == "bistouri":
 		# Ventre de la lame (sous l'axe)
 		samples.append([tip_local + Vector3(0, -0.0035, -0.012), "blade"])

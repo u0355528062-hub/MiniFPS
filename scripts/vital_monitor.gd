@@ -21,6 +21,11 @@ var alternans := 0.0  ## alternance électrique : un QRS sur deux plus petit (ta
 var beat_count := 0
 var pvc := false  ## battement en cours : extrasystole ventriculaire (QRS large, sans onde P)
 var _pvc_queue := 0
+## Arrêt cardiaque : activité électrique lente sans pouls (ni saturation ni tension mesurables) ;
+## chaque compression du massage crée une onde de pression
+var arrest := false
+var _art := 0.0
+var _art_t := 10.0
 
 
 func build() -> void:
@@ -72,8 +77,15 @@ func _process(delta: float) -> void:
 	heart_rate = lerpf(heart_rate, target_rate, delta * (1.5 if _react_t > 0.0 else 0.3))
 	if target_spo2 >= 0.0:
 		spo2 = move_toward(spo2, target_spo2, delta * 1.2)
-	# Alarme de désaturation
-	if spo2 < 90.0:
+	_art_t += delta
+	_art = maxf(0.0, _art - delta * 2.2)
+	# Alarme de désaturation (ou d'arrêt cardiaque)
+	if arrest:
+		_alarm_t -= delta
+		if _alarm_t <= 0.0:
+			_alarm_t = 0.9
+			Sfx.play("bip_alarme", global_position, -6.0, 1.15)
+	elif spo2 < 90.0:
 		_alarm_t -= delta
 		if _alarm_t <= 0.0:
 			_alarm_t = 1.4
@@ -90,6 +102,18 @@ func _process(delta: float) -> void:
 		Sfx.play("bip", global_position, -16.0, 1.0 if spo2 > 96 else 0.92)
 
 
+## Une compression du massage cardiaque : onde de pression sur la courbe de pouls.
+func compression() -> void:
+	_art = 1.0
+	_art_t = 0.0
+
+
+## Valeur de l'onde de pression créée par le massage (0..1), t secondes après la compression.
+func art_wave() -> float:
+	var t := _art_t
+	return 0.9 * exp(-pow((t - 0.12) / 0.07, 2.0)) + 0.25 * exp(-pow((t - 0.3) / 0.06, 2.0))
+
+
 ## Quelques extrasystoles ventriculaires (myocarde irrité, par exemple touché par une aiguille).
 func ectopic(n := 3) -> void:
 	_pvc_queue = maxi(_pvc_queue, n)
@@ -104,6 +128,10 @@ func beat_amp() -> float:
 ## Forme de l'ECG, t secondes après le début du battement.
 func ecg_shape(t: float) -> float:
 	var v := 0.0
+	if arrest:
+		# Activité électrique sans pouls : complexes larges, lents, de faible amplitude
+		v += 0.42 * exp(-pow((t - 0.12) / 0.05, 2.0)) - 0.16 * exp(-pow((t - 0.34) / 0.09, 2.0))
+		return v
 	if pvc:
 		v += 1.15 * exp(-pow((t - 0.14) / 0.045, 2.0)) - 0.35 * exp(-pow((t - 0.21) / 0.03, 2.0))
 		v -= 0.5 * exp(-pow((t - 0.36) / 0.07, 2.0))
@@ -155,7 +183,10 @@ class MonitorScreen:
 			var t := _since_beat
 			ecg[head] = monitor.ecg_shape(t) + randf_range(-0.015, 0.015)
 			var pt := t - 0.22
-			pleth[head] = (0.85 * exp(-pow((pt - 0.12) / 0.09, 2.0)) + 0.3 * exp(-pow((pt - 0.36) / 0.08, 2.0))) if pt > 0.0 else 0.0
+			if monitor.arrest:
+				pleth[head] = monitor.art_wave()
+			else:
+				pleth[head] = (0.85 * exp(-pow((pt - 0.12) / 0.09, 2.0)) + 0.3 * exp(-pow((pt - 0.36) / 0.08, 2.0))) if pt > 0.0 else 0.0
 			head = (head + 1) % ecg.size()
 
 	func _draw() -> void:
@@ -179,9 +210,11 @@ class MonitorScreen:
 		draw_string(font, Vector2(x0, 34), "FC", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.25, 1.0, 0.4))
 		draw_string(font, Vector2(x0, 120), str(int(round(monitor.heart_rate))), HORIZONTAL_ALIGNMENT_LEFT, -1, 92, Color(0.25, 1.0, 0.4))
 		draw_string(font, Vector2(x0, 226), "SpO2 %", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.3, 0.85, 1.0))
-		draw_string(font, Vector2(x0, 300), str(int(monitor.spo2)), HORIZONTAL_ALIGNMENT_LEFT, -1, 72, Color(0.3, 0.85, 1.0))
+		draw_string(font, Vector2(x0, 300), "--" if monitor.arrest else str(int(monitor.spo2)), HORIZONTAL_ALIGNMENT_LEFT, -1, 72, Color(0.3, 0.85, 1.0))
 		draw_string(font, Vector2(x0, 344), "PNI mmHg", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.4, 0.4))
-		draw_string(font, Vector2(x0, 384), "%d/%d" % [monitor.sys, monitor.dia], HORIZONTAL_ALIGNMENT_LEFT, -1, 38, Color(1, 0.4, 0.4))
+		draw_string(font, Vector2(x0, 384), "--/--" if monitor.arrest else "%d/%d" % [monitor.sys, monitor.dia], HORIZONTAL_ALIGNMENT_LEFT, -1, 38, Color(1, 0.4, 0.4))
+		if monitor.arrest and fmod(Time.get_ticks_msec() / 1000.0, 1.0) < 0.6:
+			draw_string(font, Vector2(170, 30), "PAS DE POULS", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 0.25, 0.25))
 		draw_string(font, Vector2(x0, 430), "FR %d   T° 37,9" % int(round(monitor.resp_rate)), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
 		draw_string(font, Vector2(x0, 478), "EtCO2 36", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
 

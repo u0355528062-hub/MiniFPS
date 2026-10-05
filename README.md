@@ -10,7 +10,7 @@ interventions :
 | **Exsufflation à l'aiguille** | Thomas, 24 ans, voiture — pneumothorax suffocant gauche | jouable |
 | **Péricardiocentèse** | Sofiane, 28 ans, couteau — tamponnade, sous échographie | jouable |
 | **Voie veineuse centrale** | Lucas, 35 ans, chute de 6 m — choc, sous-clavière gauche (Seldinger) | jouable |
-| Thoracotomie de sauvetage | arrêt cardiaque après une plaie | bientôt |
+| **Thoracotomie de sauvetage** | Kevin, 22 ans, couteau — arrêt cardiaque par tamponnade | jouable |
 | Pontage coronarien | infarctus, cœur arrêté sous machine | bientôt |
 
 ## Télécharger et jouer (Windows)
@@ -101,6 +101,29 @@ sous-clavière gauche.
    cœur (extrasystoles). En vue anatomique (V), on le voit suivre la veine jusqu'au cœur.
 6. **Dilatateur**, 7. **cathéter** glissé sur le guide jusqu'à 16-19 cm (pointe dans la veine
    cave supérieure), 8. **fixation** par deux points.
+
+## Thoracotomie de sauvetage
+
+Coup de couteau sous le mamelon gauche ; à l'arrivée, plus de pouls : le scope montre encore une
+activité électrique (alarme, « PAS DE POULS », pas de saturation ni de tension), mais le sang
+accumulé dans le péricarde empêche le cœur de pomper. Il est intubé et ventilé.
+
+1. **Incision** — sous le mamelon, du bord du sternum à la ligne axillaire antérieure, d'un seul
+   trait jusqu'aux muscles (pas d'anesthésie : il est en arrêt).
+2. **Intercostaux et plèvre** — ciseaux au fond de l'incision, clic maintenu en avançant le long
+   du 5e espace intercostal (son vrai tracé courbe, mesuré entre la 5e et la 6e côte de
+   l'atlas) : la paroi s'ouvre au fur et à mesure, le poumon s'affaisse, du sang au fond.
+3. **Écarteur de Finochietto** — les valves dans la brèche, sous les côtes, puis la manivelle
+   (clic maintenu) : toute la paroi s'écarte de 8 cm (côtes, muscles, plèvre glissent le long de
+   la peau).
+4. **Péricarde** — tendu et violacé par le sang ; ouvert aux ciseaux de la pointe vers la base,
+   en avant du nerf phrénique : les caillots sortent, le cœur se remet à battre faiblement et la
+   plaie du ventricule saigne à chaque battement.
+5. **Plaie du ventricule** — deux points en U appuyés sur des feutres de Téflon, entre deux
+   battements ; le saignement diminue puis s'arrête.
+6. **Massage cardiaque interne** — mains nues (R pour reposer l'instrument), un clic par
+   compression en visant le cœur, environ 100 par minute (rythme affiché) : la main gantée
+   comprime le cœur, l'onde de pression apparaît au scope, puis le cœur repart (118/min).
 
 ## Anatomie et graphismes
 

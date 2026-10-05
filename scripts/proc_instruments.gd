@@ -18,6 +18,8 @@ static func build(kind: String) -> Node3D:
 			return SeldingerModels.dilator()
 		"kt_central":
 			return SeldingerModels.central_catheter()
+		"finochietto":
+			return FinochiettoModel.new()
 	return Node3D.new()
 
 

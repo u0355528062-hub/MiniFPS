@@ -34,6 +34,9 @@ func build(op: Operation) -> void:
 	add_child(cloth)
 
 	var n: int = op.catalog.size()
+	var made: Array[Instrument] = []
+	var widths: Array[float] = []
+	var total := 0.0
 	for i in n:
 		var c: Array = op.catalog[i]
 		var rot: Vector3 = c[5] if c.size() > 5 else Vector3.ZERO
@@ -44,11 +47,26 @@ func build(op: Operation) -> void:
 			inst = Instrument.create(c[0], c[1], c[2], c[3], c[4], rot)
 		add_child(inst)
 		_decorate(inst)
-		var x := MAYO_POS.x - 0.2 + 0.4 * i / maxi(n - 1, 1)
-		# À plat, pointe vers la table d'opération (-Z), légèrement en éventail
-		var b := Basis(Vector3.UP, PI + deg_to_rad((i - n * 0.5) * 1.5)) * Basis(Vector3(0, 0, 1), inst.tray_roll)
+		made.append(inst)
+		# Largeur réelle sur le plateau (un écarteur prend plus de place qu'un bistouri)
+		var box := inst._local_aabb()
+		var w := maxf(absf(cos(inst.tray_roll)) * box.size.x + absf(sin(inst.tray_roll)) * box.size.y, 0.04)
+		widths.append(w)
+		total += w
+	var gap := (0.44 - total) / maxf(n - 1, 1)
+	var cursor := MAYO_POS.x - 0.22
+	for i in n:
+		var inst := made[i]
+		var x := cursor + widths[i] * 0.5
+		cursor += widths[i] + gap
+		# À plat, pointe vers la table d'opération (-Z), légèrement en éventail ; posé sur sa partie
+		# la plus basse (les valves d'un écarteur ne traversent pas le champ)
+		var roll := Basis(Vector3(0, 0, 1), inst.tray_roll)
+		var b := Basis(Vector3.UP, PI + deg_to_rad((i - n * 0.5) * 1.5)) * roll
 		var half := inst.length * 0.5
-		inst.tray_transform = Transform3D(b, Vector3(x, TRAY_Y + 0.006, MAYO_POS.z + 0.01 - (0.2 - half) * 0.15))
+		var rb := Transform3D(roll, Vector3.ZERO) * inst._local_aabb()
+		var lift := maxf(0.006, -rb.position.y + 0.0015)
+		inst.tray_transform = Transform3D(b, Vector3(x, TRAY_Y + lift, MAYO_POS.z + 0.01 - (0.2 - half) * 0.15))
 		inst.global_transform = inst.tray_transform
 		inst.build_samples()
 		instruments[inst.id] = inst
@@ -62,6 +80,12 @@ func build(op: Operation) -> void:
 ## Pièces procédurales au bout de certains instruments.
 func _decorate(inst: Instrument) -> void:
 	match inst.id:
+		"finochietto":
+			# Pointe = milieu des valves (la crémaillère est au bout des bras) ; axe vertical
+			var mt := inst.model.transform
+			inst.tip_local = mt * Vector3(0, 0, FinochiettoModel.BLADE_DEPTH + 0.0015)
+			inst.grip_local = mt * Vector3(0, 0, FinochiettoModel.BAR_Z)
+			inst.back_local = mt * Vector3(0, 0, FinochiettoModel.BAR_Z - 0.03)
 		"bistouri":
 			var blade := _blade()
 			inst.attach_tip_part(blade)

@@ -129,7 +129,9 @@ func _ready() -> void:
 		player.hand.hint_changed.connect(func(t: String) -> void:
 			if t != "" and t.begins_with("Approche"):
 				hud.toast(t, false))
-		procedure.step_changed.connect(func(_i: int) -> void: hud.required_id = procedure.required_id())
+		procedure.step_changed.connect(func(_i: int) -> void:
+			hud.required_id = procedure.required_id()
+			hud.step_kind = procedure.current().get("kind", ""))
 	# Vignettage léger sur l'image 3D, sous le HUD et les menus
 	var vig_layer := CanvasLayer.new()
 	vig_layer.name = "Vignettage"
