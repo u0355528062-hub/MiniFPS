@@ -14,14 +14,15 @@ const TABLE_TOP := 0.80
 const MASK_RES := 128
 const HMAP_RES := 160
 ## Table d'opération (le dessus) : X, Z
-const TABLE_MIN := Vector2(-1.41, -0.31)
-const TABLE_MAX := Vector2(0.69, 0.31)
+const TABLE_MIN := Vector2(-1.41, -0.30)
+const TABLE_MAX := Vector2(0.69, 0.30)
 ## Repères anatomiques (mesurés sur l'atlas, repère du jeu)
 const RIB6_TOP := -0.001  ## bord supérieur de la 6e côte (X) sur la ligne axillaire moyenne
 const RIB5_BOTTOM := 0.013  ## bord inférieur de la 5e côte
 const RIB_DIR := Vector2(-0.49, 0.87)  ## direction des côtes (X, Z) au site : vers l'avant et le bas
 const HILUM := Vector3(0.03, 1.165, -0.01)  ## hile du poumon droit (le poumon s'affaisse vers lui)
 const HEART_C := Vector3(0.015, 1.12, 0.03)
+const HIDDEN_IN_SKELETON := ["Muscles", "Plevre", "Intercostaux"]  ## masqués en vue squelette
 
 # ---- Cartes de hauteur (peau et champ), précalculées dans Blender (grille de 2,5 mm)
 static var _skin_h := PackedFloat32Array()
@@ -101,6 +102,8 @@ var walls: MeshInstance3D
 var drape: Node3D
 var anatomy_mats: Array[ShaderMaterial] = []
 var _mats_by_part := {}  ## nom du maillage -> matériaux
+var _part_meshes := {}  ## nom du maillage -> MeshInstance3D
+var _part_boxes := {}  ## nom du maillage -> boîte englobante (monde), avec marge
 var lung_collapse := 0.85  ## poumon droit affaissé (pneumothorax), 0 = ré-expansé
 var _lung_target := 0.85
 var view_mode := 0  ## 0 normal, 1 muscles (peau fantôme), 2 squelette et organes
@@ -353,8 +356,11 @@ func _build_body() -> void:
 			mats.append(mat)
 			anatomy_mats.append(mat)
 		_mats_by_part[part] = mats
+		_part_meshes[part] = m3
+		_part_boxes[part] = (m3.global_transform * m3.get_aabb()).grow(0.015)
 		m3.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		m3.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		m3.visible = false
 
 
 func _anatomy_material(part: String, kind: String) -> ShaderMaterial:
@@ -477,6 +483,9 @@ func _build_drape() -> void:
 	drape.name = "Champs"
 	add_child(drape)
 	drape_mat = Tex.drape(Color(0.17, 0.42, 0.53), WINDOW_MIN, WINDOW_MAX, breathe_amp)
+	drape_mat.set_shader_parameter("height_map", height_tex)
+	drape_mat.set_shader_parameter("patch_min", PATCH_MIN)
+	drape_mat.set_shader_parameter("patch_size", PATCH_SIZE)
 	for mi in drape.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).material_override = drape_mat
 
@@ -495,7 +504,7 @@ func set_view_mode(m: int) -> void:
 		st.visible = normal
 	for part in _mats_by_part:
 		var show := 1.0
-		if view_mode == 2 and part in ["Muscles", "Plevre", "Intercostaux"]:
+		if view_mode == 2 and part in HIDDEN_IN_SKELETON:
 			show = -1.0  # caché
 		elif normal:
 			show = 0.0  # seulement dans la plaie
@@ -762,6 +771,30 @@ func _process(delta: float) -> void:
 		m.set_shader_parameter("collapse", lung_collapse)
 		m.set_shader_parameter("breath", breath_b * (1.0 - lung_collapse * 0.8))
 		m.set_shader_parameter("beat", beat)
+	_cull_anatomy(center + Vector3.UP * 0.004, -skin_normal(center.x, center.z), reveal)
+
+
+## Les organes que rien ne montre ne sont pas dessinés : aucun avant l'incision, puis ceux que
+## traverse le cylindre sous la plaie, ou tous (sauf les masqués) en vue anatomique.
+func _cull_anatomy(c: Vector3, axis: Vector3, reveal: float) -> void:
+	for part in _part_meshes:
+		var show := true
+		if view_mode == 2 and part in HIDDEN_IN_SKELETON:
+			show = false
+		elif view_mode == 0:
+			show = reveal > 0.0 and _cylinder_hits(_part_boxes[part], c, axis, reveal)
+		var mi: MeshInstance3D = _part_meshes[part]
+		if mi.visible != show:
+			mi.visible = show
+
+
+## Le cylindre de la plaie (rayon r, sur 45 cm de profondeur) touche-t-il la boîte ?
+static func _cylinder_hits(box: AABB, c: Vector3, axis: Vector3, r: float) -> bool:
+	var grown := box.grow(r + 0.006)
+	for i in 46:
+		if grown.has_point(c + axis * (i * 0.01)):
+			return true
+	return false
 
 
 # ---------------------------------------------------------------- Points de suture

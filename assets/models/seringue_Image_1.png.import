@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dwma30p7wba5p"
-path="res://.godot/imported/seringue_Image_1.png-d14343a83beb87cd3495729f3053e27e.ctex"
+path.s3tc="res://.godot/imported/seringue_Image_1.png-d14343a83beb87cd3495729f3053e27e.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "b9d54cf73b595b85738ecb2b7ed1a3bb"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/seringue_Image_1.png"
-dest_files=["res://.godot/imported/seringue_Image_1.png-d14343a83beb87cd3495729f3053e27e.ctex"]
+dest_files=["res://.godot/imported/seringue_Image_1.png-d14343a83beb87cd3495729f3053e27e.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://x2f84hpenbe1"
-path="res://.godot/imported/table_sterile_2_Image_2.jpg-69288d43bf068d4bd8208ee1b7fc5a13.ctex"
+path.s3tc="res://.godot/imported/table_sterile_2_Image_2.jpg-69288d43bf068d4bd8208ee1b7fc5a13.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "a7fe1c11e1e6b1bba7f08c52123b9d05"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/table_sterile_2_Image_2.jpg"
-dest_files=["res://.godot/imported/table_sterile_2_Image_2.jpg-69288d43bf068d4bd8208ee1b7fc5a13.ctex"]
+dest_files=["res://.godot/imported/table_sterile_2_Image_2.jpg-69288d43bf068d4bd8208ee1b7fc5a13.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

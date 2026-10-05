@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dqf261o7o1plb"
-path="res://.godot/imported/chariot_pharmacie_Image_4.png-954b640630d6a4a83f07c9e969581e80.ctex"
+path.s3tc="res://.godot/imported/chariot_pharmacie_Image_4.png-954b640630d6a4a83f07c9e969581e80.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "f4b139fdc14b8e5636987934fd7e4534"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/chariot_pharmacie_Image_4.png"
-dest_files=["res://.godot/imported/chariot_pharmacie_Image_4.png-954b640630d6a4a83f07c9e969581e80.ctex"]
+dest_files=["res://.godot/imported/chariot_pharmacie_Image_4.png-954b640630d6a4a83f07c9e969581e80.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

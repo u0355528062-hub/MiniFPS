@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cxhxo8m4l2hyj"
-path="res://.godot/imported/bassin_Image_3.png-9f31bfe06c32d9889d33de2b0784e4aa.ctex"
+path.s3tc="res://.godot/imported/bassin_Image_3.png-9f31bfe06c32d9889d33de2b0784e4aa.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "40527db1bf69673a35364b8d021e915b"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/bassin_Image_3.png"
-dest_files=["res://.godot/imported/bassin_Image_3.png-9f31bfe06c32d9889d33de2b0784e4aa.ctex"]
+dest_files=["res://.godot/imported/bassin_Image_3.png-9f31bfe06c32d9889d33de2b0784e4aa.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

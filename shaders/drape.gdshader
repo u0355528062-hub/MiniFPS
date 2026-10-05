@@ -12,6 +12,10 @@ uniform sampler2D mottle : hint_default_white, filter_linear_mipmap_anisotropic,
 uniform vec2 window_min = vec2(0.0);
 uniform vec2 window_max = vec2(0.0);
 uniform float has_window = 0.0;
+// Hauteur de la peau sur le champ opératoire (pour ne retirer que le drap au niveau de la fenêtre)
+uniform sampler2D height_map : filter_linear, repeat_disable;
+uniform vec2 patch_min = vec2(0.0);
+uniform vec2 patch_size = vec2(0.3);
 uniform float breathe = 0.0; // amplitude (m) du soulèvement thoracique
 uniform float breath_b = 0.0; // phase de la respiration (0..1), donnée par le patient
 uniform float table_top = 0.80;
@@ -31,8 +35,13 @@ void vertex() {
 
 void fragment() {
 	vec2 p = wpos.xz;
+	// Fenêtre : le drap y est retiré au niveau de la peau et au-dessus (plis compris) ; celui qui
+	// descend sur le flanc, sous la même verticale, reste
 	if (has_window > 0.5 && p.x > window_min.x && p.x < window_max.x && p.y > window_min.y && p.y < window_max.y) {
-		discard;
+		float skin_y = textureLod(height_map, (p - patch_min) / patch_size, 0.0).r;
+		if (wpos.y > skin_y - 0.008) {
+			discard;
+		}
 	}
 	float sc = 1.0 / 0.04;
 	float det = tri_tex(fabric_detail, wpos, wnorm, sc).r;

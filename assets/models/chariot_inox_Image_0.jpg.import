@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ddxv7n61qony3"
-path="res://.godot/imported/chariot_inox_Image_0.jpg-25ba1a00f1dfba0176fd70a427260f09.ctex"
+path.s3tc="res://.godot/imported/chariot_inox_Image_0.jpg-25ba1a00f1dfba0176fd70a427260f09.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "178009f6ab1a61d82825875d4f117e63"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/chariot_inox_Image_0.jpg"
-dest_files=["res://.godot/imported/chariot_inox_Image_0.jpg-25ba1a00f1dfba0176fd70a427260f09.ctex"]
+dest_files=["res://.godot/imported/chariot_inox_Image_0.jpg-25ba1a00f1dfba0176fd70a427260f09.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

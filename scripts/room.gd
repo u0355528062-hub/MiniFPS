@@ -177,6 +177,9 @@ func _lights() -> void:
 	lam.shadow_enabled = true
 	lam.light_size = 1.2
 	lam.shadow_bias = 0.05
+	# Pas de reflet direct : avec une source aussi large, le reflet calculé par le moteur couvre
+	# toute surface lisse d'un voile blanc. Les dalles se reflètent via la sonde de reflets.
+	lam.light_specular = 0.0
 	add_child(lam)
 
 	# Éclairage général de la salle
@@ -201,10 +204,10 @@ func _lights() -> void:
 	scialytique_light.light_energy = 0.75
 	scialytique_light.light_color = Color(1.0, 0.97, 0.93)
 	scialytique_light.shadow_enabled = true
-	scialytique_light.light_size = 0.35
+	scialytique_light.light_size = 0.12
 	scialytique_light.shadow_bias = 0.08
 	scialytique_light.shadow_normal_bias = 2.5
-	scialytique_light.light_specular = 0.6
+	scialytique_light.light_specular = 0.5
 	var second := SpotLight3D.new()
 	second.name = "Scialytique2"
 	second.position = Vector3(0.4, 2.2, -0.3)
@@ -284,6 +287,28 @@ func _anesthesia_station() -> void:
 
 ## Coussin sous la tête (position latérale), appui-bras sous le bras droit levé.
 func _patient_supports() -> void:
+	# Matelas à dépression moulé sous le corps (décubitus latéral), planche à bras fixée au rail et
+	# coussin de gel sous l'avant-bras gauche : modelés dans Blender d'après le dessous du corps.
+	var sup := _place("matelas", Vector3.ZERO)
+	if sup:
+		sup.name = "Supports"
+		var vinyl := StandardMaterial3D.new()
+		vinyl.albedo_color = Color(0.09, 0.15, 0.24)
+		vinyl.roughness = 0.42
+		vinyl.normal_enabled = true
+		vinyl.normal_texture = Tex.get_tex("fabric_normal")
+		vinyl.normal_scale = 0.35
+		vinyl.uv1_triplanar = true
+		vinyl.uv1_scale = Vector3(6, 6, 6)
+		var gel := MeshUtil.mat(Color(0.16, 0.42, 0.62), 0.22)
+		gel.clearcoat_enabled = true
+		gel.clearcoat = 0.5
+		var board := MeshUtil.mat(Color(0.07, 0.075, 0.085), 0.62)
+		var clamp_mat := MeshUtil.mat(Color(0.78, 0.8, 0.82), 0.25, 0.9)
+		for mi in sup.find_children("*", "MeshInstance3D", true, false):
+			var g := mi as MeshInstance3D
+			var n := String(g.name)
+			g.material_override = vinyl if n == "Matelas" else (gel if n == "CoussinBras" else (board if n == "Planche" else clamp_mat))
 	# Têtière en mousse (housse vinyle gris-bleu) sous la tête, en position latérale
 	var foam := MeshUtil.mat(Color(0.18, 0.22, 0.27), 0.55)
 	var pillow := MeshInstance3D.new()
@@ -341,6 +366,12 @@ func _colliders() -> void:
 	add_box.call(Vector3(0, -0.05, 0), Vector3(SIZE_X, 0.1, SIZE_Z))
 	# Table + patient (on peut s'en approcher à ~25 cm)
 	add_box.call(Vector3(TABLE_X, 0.7, 0), Vector3(2.15, 1.4, 0.72))
+	# Planche à bras qui dépasse de la table côté joueur
+	var sup := get_node_or_null("Supports")
+	if sup:
+		for mi in sup.find_children("Planche", "MeshInstance3D", true, false):
+			var pb := _world_aabb(mi)
+			add_box.call(Vector3(pb.get_center().x, 0.45, pb.get_center().z), Vector3(pb.size.x, 0.9, pb.size.z))
 	# Meubles : boîte englobante de chaque modèle
 	for n in get_children():
 		if n is Node3D and String(n.name) in ["table_sterile_1", "table_sterile_2", "table_sterile_3", "chariot_pharmacie", "chariot_inox", "chariot", "lavabo", "paravent", "Anesthesie", "tabouret", "perfusion"]:

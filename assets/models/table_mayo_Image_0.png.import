@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://blt6j2xqbhke2"
-path="res://.godot/imported/table_mayo_Image_0.png-c950b003adf6d0150d555d6a99ad32c7.ctex"
+path.s3tc="res://.godot/imported/table_mayo_Image_0.png-c950b003adf6d0150d555d6a99ad32c7.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "7ab4b7760894d672f2c7916208119cee"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/table_mayo_Image_0.png"
-dest_files=["res://.godot/imported/table_mayo_Image_0.png-c950b003adf6d0150d555d6a99ad32c7.ctex"]
+dest_files=["res://.godot/imported/table_mayo_Image_0.png-c950b003adf6d0150d555d6a99ad32c7.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

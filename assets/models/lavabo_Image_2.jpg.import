@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c3vc6mcdkoqex"
-path="res://.godot/imported/lavabo_Image_2.jpg-4643613c9894ae28bba49e85e9bff9f7.ctex"
+path.s3tc="res://.godot/imported/lavabo_Image_2.jpg-4643613c9894ae28bba49e85e9bff9f7.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "981c088b38c274438073910d1b56d080"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/lavabo_Image_2.jpg"
-dest_files=["res://.godot/imported/lavabo_Image_2.jpg-4643613c9894ae28bba49e85e9bff9f7.ctex"]
+dest_files=["res://.godot/imported/lavabo_Image_2.jpg-4643613c9894ae28bba49e85e9bff9f7.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

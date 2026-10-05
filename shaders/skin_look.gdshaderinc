@@ -18,8 +18,28 @@ uniform float bleb_pale = 0.0;
 uniform vec2 win_min = vec2(-0.085, -0.08);
 uniform vec2 win_max = vec2(0.085, 0.08);
 uniform vec3 skin_tint : source_color = vec3(0.95, 0.86, 0.82);
+uniform vec3 drape_col : source_color = vec3(0.17, 0.42, 0.53); // couleur du champ (bord adhésif)
 uniform vec3 pen_mark = vec3(0.0); // x, z, visible : point marqué au feutre
 uniform float guide_on = 0.0; // le pointillé d'incision n'apparaît qu'une fois le point marqué
+
+// Bord adhésif du champ, collé à plat tout autour de la fenêtre (sur le dessus du corps) : le
+// contour reste net même là où le tissu forme un pli
+float drape_frame(vec2 p, vec3 wn) {
+	vec2 outw = max(win_min - p, p - win_max);
+	float eo = max(outw.x, outw.y);
+	return step(0.0, eo) * (1.0 - smoothstep(0.016, 0.02, eo)) * smoothstep(0.15, 0.35, wn.y);
+}
+
+void apply_frame(float frame, vec2 p, vec3 wn, inout vec3 col, inout float rough, inout float spec, inout vec3 nw) {
+	if (frame <= 0.0) {
+		return;
+	}
+	float weave = texture(blood_tex, p * 55.0).r;
+	col = mix(col, drape_col * (1.02 + 0.08 * weave) + vec3(0.008), frame);
+	rough = mix(rough, 0.5, frame);
+	spec = mix(spec, 0.2, frame);
+	nw = normalize(mix(nw, wn, frame));
+}
 
 void skin_shade(vec3 wp, vec3 wn, vec2 p, float top, float edge_d, float open_here,
 		out vec3 col, out float rough, out float spec, out vec3 nw) {
@@ -32,7 +52,9 @@ void skin_shade(vec3 wp, vec3 wn, vec2 p, float top, float edge_d, float open_he
 	rough = 0.58 + 0.36 * tri_tex(skin_rough, wp, wn, sc).r;
 	spec = 0.16;
 	nw = tri_normal(skin_normal, wp, wn, sc, 0.55);
+	float frame = drape_frame(p, wn);
 	if (top <= 0.0) {
+		apply_frame(frame, p, wn, col, rough, spec, nw);
 		return;
 	}
 	vec2 dv = inc_b - inc_a;
@@ -75,8 +97,10 @@ void skin_shade(vec3 wp, vec3 wn, vec2 p, float top, float edge_d, float open_he
 	float iod_cov = smoothstep(0.05, 0.35, iod);
 	float lum = dot(col, vec3(0.3, 0.5, 0.2)) / 0.45;
 	col = mix(col, iod_col * lum, iod_cov * 0.88);
-	rough = mix(rough, mix(0.34, 0.62, 1.0 - iodine_wet), iod_cov);
-	spec = mix(spec, mix(0.3, 0.14, 1.0 - iodine_wet), iod_cov);
+	// Film liquide : comble les pores (relief adouci), brillant tant qu'il est humide, mat une fois sec
+	nw = normalize(mix(nw, wn, iod_cov * mix(0.25, 0.7, iodine_wet)));
+	rough = mix(rough, mix(0.26, 0.6, 1.0 - iodine_wet), iod_cov);
+	spec = mix(spec, mix(0.3, 0.12, 1.0 - iodine_wet), iod_cov);
 	col = mix(col, mix(vec3(0.30, 0.10, 0.42), vec3(0.18, 0.05, 0.2), iod_cov), guide * 0.85);
 
 	// Incision : fente rouge sombre ; le sang perle derrière la lame, avec un temps de retard
@@ -104,4 +128,5 @@ void skin_shade(vec3 wp, vec3 wn, vec2 p, float top, float edge_d, float open_he
 	// Cicatrice suturée : bourrelet légèrement rouge
 	float scar = (1.0 - smoothstep(0.0, 0.002, dist_line)) * stitched * cut_on * top;
 	col = mix(col, vec3(0.5, 0.12, 0.1), scar * 0.6);
+	apply_frame(frame, p, wn, col, rough, spec, nw);
 }

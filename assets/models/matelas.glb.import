@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://csfunn5ymyq2q"
-path="res://.godot/imported/tete_patient.glb-ba5319cf58a52b6953ecc94be6a6f195.scn"
+uid="uid://dbhmr3ls2gvxr"
+path="res://.godot/imported/matelas.glb-0f797ecd5c305473ce5f8c273224270d.scn"
 
 [deps]
 
-source_file="res://assets/models/tete_patient.glb"
-dest_files=["res://.godot/imported/tete_patient.glb-ba5319cf58a52b6953ecc94be6a6f195.scn"]
+source_file="res://assets/models/matelas.glb"
+dest_files=["res://.godot/imported/matelas.glb-0f797ecd5c305473ce5f8c273224270d.scn"]
 
 [params]
 

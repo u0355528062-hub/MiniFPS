@@ -50,7 +50,9 @@ Bilan final : note (S à D), temps, erreurs, précision du repère et de l'incis
 - Corps et organes issus de l'atlas **Z-Anatomy** (CC BY-SA 4.0, dérivé de BodyParts3D) :
   peau remaillée, côtes, cartilages, sternum, vertèbres, muscles du thorax, intercostaux,
   plèvre, poumons, cœur, gros vaisseaux, nerfs, diaphragme, foie. Patient posé dans Blender
-  (décubitus latéral gauche, bras droit levé), champ opératoire simulé en tissu.
+  (décubitus latéral gauche, bras droit levé) sur un matelas à dépression moulé sous le corps,
+  avant-bras gauche sur une planche à bras ; champ opératoire simulé en tissu, collé autour de la
+  fenêtre.
 - Les tissus internes n'apparaissent que dans la plaie ; la vue anatomique (V) les montre tous.
   Le poumon droit est affaissé vers son hile et se regonfle quand le drain est posé ; le cœur bat.
 - Peau avec diffusion sous la surface, badigeon, plaie dont les bords s'écartent et se
