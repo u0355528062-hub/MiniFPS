@@ -383,6 +383,8 @@ func _run_cli() -> void:
 		var ad := AutoDriver.new()
 		add_child(ad)
 		ad.setup(procedure.hands[0], procedure, patient, tray)
+		if args.has("shot") and args.has("shotstep"):
+			_shot_during_test()
 		await ad.run_all()
 		get_tree().quit()
 		return
@@ -391,14 +393,7 @@ func _run_cli() -> void:
 		add_child(pb)
 		pb.setup(player, procedure, patient, tray)
 		if args.has("shot") and args.has("shotstep"):
-			# Capture pendant le test, quand l'étape demandée a commencé depuis « shotdelay » s
-			var target := int(args["shotstep"])
-			var delay := float(args.get("shotdelay", "1.0"))
-			procedure.step_changed.connect(func(i: int) -> void:
-				if i == target:
-					await get_tree().create_timer(delay).timeout
-					get_viewport().get_texture().get_image().save_png(args["shot"])
-					print("CAPTURE ", args["shot"]))
+			_shot_during_test()
 		await get_tree().process_frame
 		await pb.run_all()
 		get_tree().quit()
@@ -432,6 +427,31 @@ func _run_cli() -> void:
 		return
 	if args.has("shot"):
 		await _take_shot()
+
+
+## Capture pendant un test (robot) : quand l'étape « shotstep » a commencé depuis « shotdelay »
+## secondes ; caméra libre si --cam/--at (sinon la vue du joueur).
+func _shot_during_test() -> void:
+	var target := int(args["shotstep"])
+	var delay := float(args.get("shotdelay", "1.0"))
+	procedure.step_changed.connect(func(i: int) -> void:
+		if i != target:
+			return
+		await get_tree().create_timer(delay).timeout
+		if args.has("cam"):
+			var cam := Camera3D.new()
+			cam.fov = 50
+			add_child(cam)
+			var c: PackedFloat64Array = args["cam"].split_floats(",")
+			var t: PackedFloat64Array = args.get("at", "0,1,0").split_floats(",")
+			cam.look_at_from_position(Vector3(c[0], c[1], c[2]), Vector3(t[0], t[1], t[2]))
+			cam.current = true
+			if args.has("mode"):
+				patient.set_view_mode(int(args["mode"]))
+			for k in 6:
+				await get_tree().process_frame
+		get_viewport().get_texture().get_image().save_png(args["shot"])
+		print("CAPTURE ", args["shot"]))
 
 
 func _take_shot() -> void:

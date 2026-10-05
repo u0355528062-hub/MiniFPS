@@ -9,7 +9,7 @@ interventions :
 | **Drain thoracique** | Karim, 31 ans, moto — pneumothorax droit compressif | jouable |
 | **Exsufflation à l'aiguille** | Thomas, 24 ans, voiture — pneumothorax suffocant gauche | jouable |
 | **Péricardiocentèse** | Sofiane, 28 ans, couteau — tamponnade, sous échographie | jouable |
-| Voie veineuse centrale | choc, veine sous-clavière (Seldinger) | bientôt |
+| **Voie veineuse centrale** | Lucas, 35 ans, chute de 6 m — choc, sous-clavière gauche (Seldinger) | jouable |
 | Thoracotomie de sauvetage | arrêt cardiaque après une plaie | bientôt |
 | Pontage coronarien | infarctus, cœur arrêté sous machine | bientôt |
 
@@ -85,6 +85,22 @@ basse et pincée, veines du cou gonflées ; au scope, microvoltage et alternance
    dans le péricarde ; plus loin, l'aiguille touche le cœur (extrasystoles au scope).
 4. **Aspiration** — 20 mL : l'épanchement diminue à l'image, la tension remonte.
 5. **Laisser le cathéter** — pour ré-aspirer en attendant le bloc.
+
+## Voie veineuse centrale (technique de Seldinger)
+
+Choc hémorragique, veines des bras collabées, collier cervical : cathéter dans la veine
+sous-clavière gauche.
+
+1. **Repérage** — sous le milieu de la clavicule, à 1-2 cm de l'os. Le point est jugé sur la
+   clavicule et les vaisseaux de l'atlas : sur l'os, trop bas, trop en dedans (l'aiguille
+   plongerait vers le poumon), trajet qui croiserait l'artère…
+2. **Désinfection**, 3. **anesthésie locale** — il faut attendre qu'elle agisse avant de piquer.
+4. **Ponction** — l'aiguille glisse sous la clavicule vers le creux sus-sternal en aspirant ; le
+   sang veineux sombre revient dans la seringue. Trop profond : artère et sommet du poumon.
+5. **Guide** — poussé dans l'aiguille (clic maintenu), 15 à 20 cm ; trop loin, il touche le
+   cœur (extrasystoles). En vue anatomique (V), on le voit suivre la veine jusqu'au cœur.
+6. **Dilatateur**, 7. **cathéter** glissé sur le guide jusqu'à 16-19 cm (pointe dans la veine
+   cave supérieure), 8. **fixation** par deux points.
 
 ## Anatomie et graphismes
 

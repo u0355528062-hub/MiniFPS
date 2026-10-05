@@ -296,7 +296,7 @@ func process(_delta: float) -> void:
 		echo.contact = move_toward(echo.contact, 1.0 if on_skin else 0.0, 0.08)
 		# Pendant la ponction, l'aide oriente la coupe sur le trajet de l'aiguille
 		var needle := instrument("cathlon")
-		var nd := Vector3.ZERO
+		var seg := []
 		var needle_in := false
 		for h in proc.hands:
 			if h.held == needle and needle.tip_depth > 0.0:
@@ -306,10 +306,10 @@ func process(_delta: float) -> void:
 			var a := m * Vector3(0, 0, CathlonModel.BARREL_Z1 + 0.01)
 			var b := m * Vector3(0, 0, CathlonModel.TIP_Z)
 			echo.set_needle(a, b, true)
-			nd = (b - a).normalized()
+			seg = [a, b]
 		else:
 			echo.set_needle(Vector3.ZERO, Vector3.ZERO, false)
-		echo.set_probe(face, beam, nd)
+		echo.set_probe(face, beam, Vector3.ZERO, seg)
 	echo.on = showing
 	echo.effusion = effusion
 	echo.heart_rate = patient.heart_rate

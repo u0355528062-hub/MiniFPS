@@ -109,14 +109,28 @@ func _ready() -> void:
 
 ## Pose de la sonde : centre de sa face et direction du faisceau (vers l'intérieur). `side_hint` :
 ## direction à garder dans le plan de coupe (trajet d'une aiguille), sinon gauche-droite du patient.
-func set_probe(face: Vector3, beam: Vector3, side_hint := Vector3.ZERO) -> void:
+## `needle` : [a, b] d'une aiguille à garder dans la coupe ; la sonde est alors inclinée (par l'aide)
+## pour que le plan passe par toute l'aiguille (technique « dans le plan »).
+func set_probe(face: Vector3, beam: Vector3, side_hint := Vector3.ZERO, needle: Array = []) -> void:
 	_face = face
 	_beam = beam.normalized()
 	var side := Vector3(0, 0, 1) - _beam * _beam.z
-	if side_hint != Vector3.ZERO:
+	if needle.size() == 2:
+		var a: Vector3 = needle[0]
+		var b: Vector3 = needle[1]
+		var n := (a - face).cross(b - face)
+		if n.length() > 1e-6:
+			n = n.normalized()
+			var bp := _beam - n * _beam.dot(n)
+			if bp.length() > 0.3:
+				_beam = bp.normalized()
+				side = n.cross(_beam)
+	elif side_hint != Vector3.ZERO:
 		var h := side_hint - _beam * _beam.dot(side_hint)
 		if h.length() > 0.3:
-			side = h if h.dot(Vector3(0, 0, 1)) >= 0.0 else -h
+			side = h
+	if side.z < 0.0:
+		side = -side
 	if side.length() < 0.2:
 		side = Vector3(1, 0, 0) - _beam * _beam.x
 	side = side.normalized()

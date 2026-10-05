@@ -334,6 +334,10 @@ func _ecg() -> void:
 	var cl_r := Patient.lm("clavicle_lateral_R")
 	var cl_l := Patient.lm("clavicle_lateral_L")
 	var spots := [Vector2(cl_r.x - 0.035, cl_r.z + 0.03), Vector2(cl_l.x - 0.035, cl_l.z - 0.03), Vector2(-0.33, 0.1)]
+	if options.get("ecg_lateral", false):
+		# Région sous-claviculaire gardée libre (voie centrale) : électrodes sur les moignons d'épaule
+		spots[0] = Vector2(cl_r.x - 0.05, cl_r.z - 0.045)
+		spots[1] = Vector2(cl_l.x - 0.05, cl_l.z + 0.045)
 	var cols := [Color(0.9, 0.9, 0.92), Color(0.15, 0.15, 0.17), Color(0.85, 0.2, 0.2)]
 	var pad := _mat(Color(0.96, 0.96, 0.94), 0.7)
 	var head_x := float(Patient.landmarks.get("head_top_x", 0.41))

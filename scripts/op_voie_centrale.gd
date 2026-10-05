@@ -92,6 +92,7 @@ func configure_patient(p: Patient) -> void:
 	p.breathe_amp = 0.005
 	p.hole_limit = 0.003
 	p.antiseptic = "chlorhexidine"
+	p.props_options = {"ecg_lateral": true}
 
 
 func build_extras() -> void:
@@ -484,8 +485,8 @@ func _draw_wire() -> void:
 		m.no_depth_test = true
 		m.render_priority = 2
 		m.emission_enabled = true
-		m.emission = Color(0.55, 0.6, 0.7)
-		m.emission_energy_multiplier = 0.4
+		m.emission = Color(0.75, 0.8, 0.9)
+		m.emission_energy_multiplier = 1.2
 		_wire_in.material_override = m
 		root.add_child(_wire_in)
 		_wire_out = MeshInstance3D.new()
@@ -501,7 +502,8 @@ func _draw_wire() -> void:
 	var inside := _path_upto(wire_len + (0.0 if _needle_left else start.distance_to(site)))
 	if not _needle_left:
 		inside[0] = start
-	_wire_in.mesh = _tube_mesh(inside, 0.00045)
+	# (affiché plus épais qu'en vrai : visible en vue anatomique, comme sous radioscopie)
+	_wire_in.mesh = _tube_mesh(inside, 0.0009)
 	_wire_in.visible = patient.view_mode != 0
 	# Dehors : 30 cm de guide qui retombent sur le thorax vers l'épaule
 	var out_dir := Vector3(-axis.x, 0.0, -axis.z).normalized()

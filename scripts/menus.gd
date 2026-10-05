@@ -166,7 +166,7 @@ func _build_main() -> Control:
 	var b3 := UIKit.button("Quitter", 380)
 	b3.pressed.connect(func() -> void: quit_pressed.emit())
 	col.add_child(b3)
-	var foot := UIKit.label("Anatomie : atlas Z-Anatomy (CC BY-SA 4.0, d'après BodyParts3D)   ·   Version 2.0", 13, Color(1, 1, 1, 0.4))
+	var foot := UIKit.label("Anatomie : atlas Z-Anatomy (CC BY-SA 4.0, d'après BodyParts3D)   ·   Version 3.0", 13, Color(1, 1, 1, 0.4))
 	foot.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	foot.position = Vector2(90, -50)
 	c.add_child(foot)
