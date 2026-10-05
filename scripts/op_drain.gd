@@ -58,7 +58,7 @@ func configure_patient(p: Patient) -> void:
 	p.WINDOW_MIN = Vector2(-0.085, -0.08)
 	p.WINDOW_MAX = Vector2(0.085, 0.08)
 	p.paint_r = Vector2(0.06, 0.055)
-	p.wound_w = 0.006
+	p.wound_w = 0.0095
 	p.WOUND_DEPTH = 0.013
 	p.breathe_amp = 0.009
 	p.hole_limit = 0.006  # sous la peau : les muscles sont à écarter à la pince

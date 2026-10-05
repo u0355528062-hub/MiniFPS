@@ -109,21 +109,33 @@ func _shell() -> void:
 				var hue: Color = [Color(0.85, 0.85, 0.9), Color(0.3, 0.55, 0.8), Color(0.9, 0.9, 0.95), Color(0.95, 0.75, 0.3)][(b + s + i) % 4]
 				MeshUtil.box_instance(cab, Vector3(0.1, 0.18, 0.25), Vector3(-0.33 + b * 0.13, 1.05 + s * 0.4, 0), MeshUtil.mat(hue, 0.6), "Boite")
 
-	# Négatoscope (scanner de l'appendicite) sur le mur ouest
+	# Négatoscope (radiographie du patient) sur le mur nord, face au joueur
 	var neg := Node3D.new()
-	neg.position = Vector3(-SIZE_X / 2 + 0.06, 1.55, 0.2)
-	neg.rotation_degrees.y = 90
+	neg.position = Vector3(0.95, 1.6, -SIZE_Z / 2 + 0.06)
+	neg.rotation_degrees.y = 0
 	add_child(neg)
 	MeshUtil.box_instance(neg, Vector3(1.1, 0.5, 0.06), Vector3.ZERO, MeshUtil.mat(Color(0.9, 0.9, 0.9), 0.4), "Negatoscope")
 	MeshUtil.box_instance(neg, Vector3(1.0, 0.42, 0.01), Vector3(0, 0, 0.035), MeshUtil.emissive(Color(0.75, 0.82, 0.9), 1.2), "Ecran")
+	# Radiographie du patient sur le négatoscope
+	var film := MeshInstance3D.new()
+	var fq := QuadMesh.new()
+	fq.size = Vector2(0.38, 0.4)
+	film.mesh = fq
+	var fm := StandardMaterial3D.new()
+	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fm.albedo_texture = load("res://assets/textures/radio_thorax.png")
+	fm.albedo_color = Color(1.25, 1.3, 1.35)
+	film.material_override = fm
+	film.position = Vector3(-0.28, 0, 0.042)
+	neg.add_child(film)
 	var scan := Label3D.new()
 	scan_label = scan
 	scan.text = "RADIO THORAX\nPneumothorax droit"
-	scan.font_size = 40
+	scan.font_size = 30
 	scan.pixel_size = 0.0012
 	scan.modulate = Color(0.1, 0.12, 0.15)
 	scan.outline_size = 0
-	scan.position = Vector3(0, 0, 0.045)
+	scan.position = Vector3(0.22, 0, 0.045)
 	neg.add_child(scan)
 
 	# Horloge murale (mur sud)
@@ -183,10 +195,10 @@ func _lights() -> void:
 	scialytique_light.name = "Scialytique"
 	add_child(scialytique_light)
 	scialytique_light.look_at_from_position(Vector3(-0.05, 2.25, 0.35), Vector3(0.0, 1.3, 0.0))
-	scialytique_light.spot_angle = 16
+	scialytique_light.spot_angle = 24
 	scialytique_light.spot_angle_attenuation = 0.6
 	scialytique_light.spot_range = 3.0
-	scialytique_light.light_energy = 2.2
+	scialytique_light.light_energy = 0.75
 	scialytique_light.light_color = Color(1.0, 0.97, 0.93)
 	scialytique_light.shadow_enabled = true
 	scialytique_light.light_size = 0.35
@@ -198,9 +210,9 @@ func _lights() -> void:
 	second.position = Vector3(0.4, 2.2, -0.3)
 	add_child(second)
 	second.look_at_from_position(second.position, Vector3(0.0, 1.3, 0.0))
-	second.spot_angle = 14
+	second.spot_angle = 20
 	second.spot_range = 3.0
-	second.light_energy = 1.1
+	second.light_energy = 0.4
 	second.light_color = Color(0.98, 0.98, 1.0)
 	second.shadow_enabled = false
 
@@ -272,28 +284,40 @@ func _anesthesia_station() -> void:
 
 ## Coussin sous la tête (position latérale), appui-bras sous le bras droit levé.
 func _patient_supports() -> void:
-	var cloth := Tex.drape(Color(0.82, 0.86, 0.9))
+	# Têtière en mousse (housse vinyle gris-bleu) sous la tête, en position latérale
+	var foam := MeshUtil.mat(Color(0.18, 0.22, 0.27), 0.55)
 	var pillow := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.30, 0.25, 0.34)
-	bm.subdivide_width = 6
-	bm.subdivide_height = 4
-	bm.subdivide_depth = 6
+	bm.size = Vector3(0.28, 0.25, 0.30)
 	pillow.mesh = bm
-	pillow.material_override = cloth
-	pillow.position = Vector3(0.43, Patient.TABLE_TOP + 0.12, -0.01)
-	pillow.name = "Coussin"
+	pillow.material_override = foam
+	pillow.position = Vector3(0.43, Patient.TABLE_TOP + 0.125, -0.01)
+	pillow.name = "Tetiere"
 	add_child(pillow)
-	# Appui-bras rembourré fixé au rail de la table, sous le coude et l'avant-bras
+	# Bourrelet arrondi du bord supérieur (la housse est rebondie)
+	for zz in [-0.16, 0.14]:
+		var edge := MeshInstance3D.new()
+		var cm := CapsuleMesh.new()
+		cm.radius = 0.02
+		cm.height = 0.28
+		edge.mesh = cm
+		edge.material_override = foam
+		edge.rotation_degrees.z = 90
+		edge.position = Vector3(0.43, Patient.TABLE_TOP + 0.23, zz)
+		add_child(edge)
+	# Appui-bras rembourré sous le coude et l'avant-bras, sur une tige fixée au rail de la table
 	var pad_mat := MeshUtil.mat(Color(0.12, 0.13, 0.15), 0.6)
 	var arm := Node3D.new()
 	arm.name = "AppuiBras"
 	add_child(arm)
-	var pad := MeshUtil.box_instance(arm, Vector3(0.34, 0.045, 0.11), Vector3(0.43, 1.475, -0.04), pad_mat, "Gouttiere")
-	pad.rotation_degrees.z = 24
+	var a := Vector3(0.30, 1.497, -0.045)
+	var b := Vector3(0.52, 1.617, 0.025)
+	var pad := MeshUtil.box_instance(arm, Vector3(0.12, 0.04, (b - a).length() + 0.06), (a + b) * 0.5, pad_mat, "Gouttiere")
+	pad.look_at_from_position((a + b) * 0.5, b, Vector3.UP)
 	var steel := MeshUtil.mat(Color(0.78, 0.8, 0.82), 0.25, 0.9)
-	MeshUtil.cylinder_instance(arm, 0.012, 0.66, Vector3(0.36, Patient.TABLE_TOP + 0.31, -0.33), steel, "Tige")
-	var bar := MeshUtil.cylinder_instance(arm, 0.01, 0.3, Vector3(0.38, 1.43, -0.19), steel, "Bras")
+	var pole_x := 0.42
+	MeshUtil.cylinder_instance(arm, 0.012, 1.52 - Patient.TABLE_TOP, Vector3(pole_x, (1.52 + Patient.TABLE_TOP) * 0.5, -0.27), steel, "Tige")
+	var bar := MeshUtil.cylinder_instance(arm, 0.01, 0.26, Vector3(pole_x, 1.52, -0.14), steel, "Bras")
 	bar.rotation_degrees.x = 90
 
 

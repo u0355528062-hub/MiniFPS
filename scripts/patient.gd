@@ -115,6 +115,7 @@ var heart_rate := 128.0
 var _beat_t := 0.0
 var stitches: Array[Node3D] = []
 var wound_light: OmniLight3D
+var props: PatientProps
 
 
 # ---------------------------------------------------------------- Cartes de hauteur
@@ -208,6 +209,10 @@ func build() -> void:
 	_build_body()
 	_build_wound()
 	_build_drape()
+	props = PatientProps.new()
+	props.name = "Equipement"
+	add_child(props)
+	props.build()
 	set_opening(0.0)
 
 
@@ -641,6 +646,8 @@ func set_bleb(p: Vector3, radius: float, height: float) -> void:
 
 func set_breathe(v: float) -> void:
 	breathe_amp = v
+	if props:
+		props.breath_rate = breath_rate
 	if drape_mat:
 		drape_mat.set_shader_parameter("breathe", v)
 
@@ -741,6 +748,9 @@ func _process(delta: float) -> void:
 	# La plaie révèle ce qui est dessous : rayon selon l'ouverture et le trajet creusé
 	var reveal := clampf(opening * wound_w * 1.6 + tract_r * 2.0, 0.0, 0.035) if has_cut() else 0.0
 	var tb := tract_a + tract_dir * tract_depth
+	skin_mat.set_shader_parameter("reveal_c", center + Vector3.UP * 0.004)
+	skin_mat.set_shader_parameter("reveal_axis", -skin_normal(center.x, center.z))
+	skin_mat.set_shader_parameter("reveal_r", reveal)
 	for m in anatomy_mats:
 		m.set_shader_parameter("reveal_c", center + Vector3.UP * 0.004)
 		m.set_shader_parameter("reveal_axis", -skin_normal(center.x, center.z))

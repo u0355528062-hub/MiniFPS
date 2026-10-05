@@ -1,163 +1,75 @@
-# Bloc VR — Chirurgie en réalité virtuelle
+# Bloc Urgences — simulateur chirurgical à la première personne
 
-Simulateur de chirurgie en réalité virtuelle (Godot 4.7), jouable aux mains nues. Quatre opérations
-guidées : appendicectomie, drain thoracique, laparotomie pour plaie au couteau, drainage d'abcès.
-Un panneau te dit quoi faire, l'instrument à prendre brille sur la table (son nom s'affiche quand ta
-main s'en approche), un anneau lumineux montre où agir.
+Jeu PC (Godot 4.7, Forward+) : en salle de déchocage, tu poses un **drain thoracique** à Karim,
+31 ans, victime d'un accident de moto (pneumothorax droit compressif). Vue à la première personne,
+clavier et souris, anatomie réelle.
 
-Ça marche **avec le Quest 3 en Air Link / Quest Link**, ou **sans casque** à la souris et au clavier.
+## Télécharger et jouer (Windows)
 
----
+1. Télécharge `telechargement/BlocUrgences-Windows.zip`.
+2. Décompresse-le, puis lance `BlocUrgences.exe` (aucune installation).
 
-## Lancer le jeu (le plus simple)
-
-1. Télécharge `BlocVR-Windows.zip`, puis dézippe-le.
-2. **Avec le casque** :
-   - ouvre l'application **Meta Quest Link** sur le PC ;
-   - dans le casque, active **Air Link** (ou branche le câble Link) ;
-   - sur le PC, double-clique sur `BlocVR.exe`. Le jeu s'ouvre directement dans le casque.
-3. **Sans casque** : double-clique sur `BlocVR.exe` avec Quest Link fermé. Le jeu s'ouvre à l'écran.
-
-> Si le jeu s'ouvre à l'écran alors que le casque est branché : dans l'application Meta Quest Link
-> sur le PC, va dans **Paramètres → Général** et clique sur **« Définir Meta Quest Link comme
-> environnement d'exécution OpenXR actif »**. Puis relance `BlocVR.exe`.
-
-## Ouvrir le projet dans Godot (pour modifier)
-
-1. Installe **Godot 4.7.2** (version standard, pas « .NET ») depuis godotengine.org.
-2. Dans Godot : **Importer** → choisis le fichier `project.godot` de ce dossier → **Importer et modifier**.
-3. Le premier import prend une minute. Ensuite, appuie sur **F5** pour jouer.
-
----
+Configuration conseillée : carte graphique compatible Vulkan. La qualité graphique se règle dans
+**Options** (Bas, Moyen, Élevé, Ultra) avec la résolution de rendu.
 
 ## Commandes
 
-Tout se fait avec de **vrais gestes** : la lame coupe quand elle entre dans la peau, la compresse
-badigeonne là où elle frotte, l'écarteur étire le bord qu'il accroche (et le bord se détend si on
-lâche), les ciseaux et les pinces s'ouvrent et se ferment avec tes doigts, le piston de la seringue
-avance quand tu serres. Les instruments ne traversent ni la peau ni les objets.
-
-### Casque SANS manettes (mains nues) — recommandé
-
-| Geste | Action |
+| Action | Touche |
 |---|---|
-| **Pincer pouce + index** près d'un instrument | le prendre : il se tient entre le pouce et l'index, comme un crayon |
-| **Serrer / desserrer le pouce** contre l'index | fermer / ouvrir les ciseaux et les pinces, pousser le piston de la seringue (relâche d'abord, puis serre) |
-| **Ouvrir grand la main** (doigts tendus) | lâcher l'instrument : il retourne sur la table |
-| Pincer en visant de loin | un rayon discret attrape l'instrument visé |
-| **Toucher un bouton du bout de l'index** | menu : choisir l'opération, Commencer, Recommencer, Recentrer |
+| Marcher | ZQSD (ou WASD, flèches) — Maj : plus vite |
+| Regarder | Souris |
+| Prendre un instrument | Viser + clic gauche (ou E), ou touches 1 à 7 près de la table |
+| Appuyer / serrer / pousser le piston | Clic gauche maintenu |
+| Précision (zoom, souris ralentie) | Clic droit maintenu |
+| Lever / baisser l'instrument | Molette |
+| Reposer l'instrument | R (ou clic molette) |
+| Se pencher | Ctrl |
+| Vue anatomique (muscles, puis côtes / poumons / cœur) | V |
+| Masquer le texte de l'étape / l'aide | H / F1 |
+| Pause, options | Échap |
 
-Si tes mains n'apparaissent pas :
-1. dans le casque : **Paramètres → Mouvements → Suivi des mains** activé ;
-2. sur le PC, application **Meta Quest Link → Paramètres → Bêta** : active
-   **« Fonctionnalités d'exécution pour les développeurs »** (nécessaire au suivi des mains via Link).
+## L'intervention
 
-### Casque (manettes Quest)
+1. **Repérage** — trouver le 5e espace intercostal dans le triangle de sécurité (ligne axillaire
+   moyenne) et le marquer au feutre. Le point est jugé sur l'anatomie réelle : trop bas (foie,
+   diaphragme), trop haut (aisselle), trop en avant (grand pectoral) ou en arrière (grand dorsal).
+2. **Désinfection** — badigeon de bétadine qui se dépose là où la compresse frotte.
+3. **Anesthésie locale** — l'aiguille pique, le piston descend, un bouton gonfle et blanchit ;
+   il faut attendre que la lidocaïne agisse (sinon le patient sent la lame).
+4. **Incision** — 2,5 cm le long de la 6e côte, la lame coupe là où elle entre dans la peau.
+5. **Dissection** — pince de Kelly au ras du bord supérieur de la côte (le paquet
+   vasculo-nerveux passe sous chaque côte) : muscle grand dentelé, intercostaux, puis la plèvre
+   cède et l'air s'échappe. Le trajet se creuse vraiment dans les tissus.
+6. **Pose du drain** — le drain remonte vers l'apex, le poumon se regonfle, l'oxygène remonte.
+7. **Fixation** — trois points au porte-aiguille.
 
-| Bouton | Action |
-|---|---|
-| **Grip** | prendre l'instrument près de ta main ou visé par le rayon / le reposer |
-| **Gâchette** | serrer (mâchoires, piston) |
-| **A** ou **X** | commencer / recommencer |
-| **B** ou **Y** | te replacer face au patient |
-| Stick gauche / droit | te déplacer / tourner par crans |
+Bilan final : note (S à D), temps, erreurs, précision du repère et de l'incision, compte rendu.
 
-**Fluidité** : la résolution s'ajuste toute seule pour garder la cadence du casque (une image en
-retard fait trembler la vue). Pour Air Link, préfère un Wi-Fi 5/6 GHz proche, ou le câble Link.
+## Anatomie et graphismes
 
-### Souris et clavier
+- Corps et organes issus de l'atlas **Z-Anatomy** (CC BY-SA 4.0, dérivé de BodyParts3D) :
+  peau remaillée, côtes, cartilages, sternum, vertèbres, muscles du thorax, intercostaux,
+  plèvre, poumons, cœur, gros vaisseaux, nerfs, diaphragme, foie. Patient posé dans Blender
+  (décubitus latéral gauche, bras droit levé), champ opératoire simulé en tissu.
+- Les tissus internes n'apparaissent que dans la plaie ; la vue anatomique (V) les montre tous.
+  Le poumon droit est affaissé vers son hile et se regonfle quand le drain est posé ; le cœur bat.
+- Peau avec diffusion sous la surface, badigeon, plaie dont les bords s'écartent et se
+  détendent, parois de la plaie (derme, graisse), sang qui perle derrière la lame.
+- Éclairage de bloc (scialytiques, plafond soufflant), occlusion ambiante, éclairage indirect,
+  réflexions, brouillard volumétrique léger, profondeur de champ en mode précision.
 
-| Touche | Action |
-|---|---|
-| **Clic gauche** | prendre l'instrument visé |
-| **Clic gauche maintenu** | appuyer (la lame, l'aiguille, le drain s'enfoncent) et serrer (mâchoires, piston) |
-| **Molette** | lever / baisser l'instrument |
-| **R** ou **clic droit bref** | reposer l'instrument |
-| **1 à 8** | prendre directement un instrument |
-| **Clic droit glissé** | regarder autour |
-| **ZQSD** (ou flèches) | se déplacer, **E / C** monter / descendre |
-| **Espace** | commencer / recommencer |
+## Tests automatiques
 
----
+```
+godot --headless --path . -- --autotest      # un robot fait toute l'opération
+godot --headless --path . -- --desktest      # un robot joue au clavier et à la souris
+godot --headless --path . -- --chaos=3       # actions au hasard, puis le robot termine
+godot --headless --path . -- --restarttest   # fin de partie → rejouer
+```
 
-## Opérations
+Captures : `--shot=fichier.png --view=menu|briefing|player|field|overview|xray|end`.
 
-- **Appendicectomie** (9 étapes, ci-dessous).
-- **Drain thoracique** (6 étapes) : désinfection du flanc, anesthésie locale (on pique, on pousse le
-  piston, le bouton gonfle et blanchit : il faut **attendre qu'elle agisse**, sinon le patient sent la
-  lame), incision le long de la côte, dissection à la pince de Kelly (pousser, ouvrir, pousser...)
-  jusqu'à la plèvre, pose du drain (l'oxygène remonte, bulles dans le bocal, le tuyau s'embue),
-  fixation par 3 points. Le thorax respire sous tes mains.
-- **Laparotomie** (10 étapes) : plaie au couteau, ventre plein de sang. Grande incision médiane,
-  écarteur de Gosset qu'on ouvre en écartant les doigts, aspiration du sang à la canule, anse
-  d'intestin perforée sortie à la pince, clampée, recousue, lavage au sérum, fermeture de
-  l'aponévrose puis de la peau.
-- **Drainage d'abcès** (6 étapes) : abcès rouge, gonflé et tendu. Désinfection, anesthésie locale
-  (attendre), incision au sommet (le pus sort et coule), logettes cassées à la Kelly, lavage au
-  sérum à la seringue, mèche de gaze laissée dans la cavité.
+## Crédits
 
-## Les 9 étapes de l'appendicectomie
-
-1. **Désinfection** — frotter la compresse de la pince à badigeon sur toute la zone.
-2. **Incision** — poser la lame sur « DÉPART », appuyer, la glisser jusqu'à « ARRIVÉE ».
-3. **Écarteur 1** — accrocher un bord avec le Langenbeck et tirer ; tenu bien ouvert, l'aide le prend.
-4. **Écarteur 2** — même geste avec le Roux sur l'autre bord.
-5. **Sortir l'appendice** — mors de la pince De Bakey autour de la pointe, serrer, soulever.
-6. **Ligature** — serrer l'Overholt sur le fil à la base, puis tirer pour serrer le nœud.
-7. **Section** — ouvrir les ciseaux autour de l'appendice, les refermer.
-8. **Retrait** — saisir l'appendice, le lâcher au-dessus du haricot (il tombe vraiment).
-9. **Suture** — pour chaque point : piquer à l'entrée, ressortir sur l'autre bord ; 4 points.
-
-Fin : temps, erreurs et étoiles. Prendre le mauvais instrument compte une erreur (une fois par étape).
-
----
-
-## Options de lancement (tests)
-
-Après `--` sur la ligne de commande :
-
-- `--desktop` : forcer le mode écran.
-- `--step=N` : commencer directement à l'étape N (0 à 8).
-- `--autotest` : un robot fait toute l'opération et affiche `AUTOTEST OK` si tout s'enchaîne.
-- `--vrtest` : un robot fait toute l'opération **avec les mains VR** (grip, gâchette, rayon, deux
-  mains, maladresses volontaires) et affiche `VRTEST OK`.
-- `--desktest` : un robot fait toute l'opération **à la souris et au clavier** (vrais événements).
-- `--chaos=vr` ou `--chaos=desk` avec `--seed=N` : à chaque étape, des centaines d'actions au hasard,
-  puis le robot doit pouvoir finir l'étape depuis l'état laissé. Des règles sont vérifiées à chaque
-  image (un instrument jamais dans deux mains, rien ne sort de la salle, l'étape ne recule jamais…).
-- `--restarttest` : vérifie que « recommencer » en fin de partie fonctionne.
-- `--handtest` : partie complète **aux mains nues** (faux suivi des mains : 26 articulations par main,
-  pincement et poing), menu compris. `--chaos=vr --hands` : chaos aux mains nues.
-- `--op=drain`, `--op=laparotomie`, `--op=abces` : choisit l'opération pour les tests.
-- `--perf` : affiche le temps de calcul par image à chaque étape.
-- `--pose=id --vrmock [--handmock] --tipat=x,y,z --sq=0..1 --shot=...` : capture d'une main qui tient un instrument.
-
----
-
-## Crédits et licences
-
-Les modèles 3D restent la propriété de leurs auteurs, selon leur licence :
-
-| Modèle | Auteur | Licence |
-|---|---|---|
-| Instruments chirurgicaux, tables d'instruments | Digital Surgery (Sketchfab) | CC BY-NC 4.0 |
-| Paravent (« Curtain ») | Mehdi Shahsavan | CC BY 4.0 |
-| Masque chirurgical | Paul Subert | CC BY 4.0 |
-| Lavabo chirurgical | miraclejudy3 | CC BY 4.0 |
-| Chariot médical | Chenchanchong | CC BY 4.0 |
-| Chariot (« Hospital Trolley ») | creative_beast | CC BY 4.0 |
-| Tabouret | krio302 | CC BY 4.0 |
-| Haricot | aizad_musafir77 | CC BY 4.0 |
-| Chariot de pharmacie (« Medical Props ») | coa white | CC BY 4.0 |
-| Seringue | stfuaahil | CC BY 4.0 |
-| Pied à perfusion | Somar52 | CC BY 4.0 |
-| Table d'opération, scialytique, table de Mayo | générés par IA (fournis par le propriétaire du projet) | — |
-| Appendice, cæcum, intestin grêle, méso, artères | Z-Anatomy (d'après BodyParts3D, © DBCLS) | CC BY-SA 4.0 |
-| Tête du patient (scan « Lee Perry-Smith ») | Infinite-Realities (via three.js) | CC BY 3.0 |
-| Mains gantées, outils VR | Godot XR Tools | MIT |
-| Police Inter | Rasmus Andersson | SIL OFL 1.1 |
-
-Tout le reste a été fait pour ce projet : salle, champs, peau, plaie, textures procédurales
-(`tools/gen_textures.py`), shaders, sons synthétisés, interface et code.
-
-Attention : à cause de la licence **CC BY-NC** des instruments, ce prototype ne peut pas être vendu.
+Anatomie : Z-Anatomy (Gauthier Kervyn, CC BY-SA 4.0), d'après BodyParts3D (DBCLS, CC BY-SA).
+Police : Inter (SIL OFL). Moteur : Godot Engine (MIT).

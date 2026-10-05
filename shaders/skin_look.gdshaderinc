@@ -17,7 +17,7 @@ uniform float iodine_wet = 1.0;
 uniform float bleb_pale = 0.0;
 uniform vec2 win_min = vec2(-0.085, -0.08);
 uniform vec2 win_max = vec2(0.085, 0.08);
-uniform vec3 skin_tint : source_color = vec3(0.80, 0.70, 0.64);
+uniform vec3 skin_tint : source_color = vec3(0.95, 0.86, 0.82);
 uniform vec3 pen_mark = vec3(0.0); // x, z, visible : point marqué au feutre
 uniform float guide_on = 0.0; // le pointillé d'incision n'apparaît qu'une fois le point marqué
 
@@ -29,8 +29,8 @@ void skin_shade(vec3 wp, vec3 wn, vec2 p, float top, float edge_d, float open_he
 	// Teint irrégulier : marbrures légèrement rosées, zones plus pâles
 	float mot = tri_tex(mottle, wp, wn, 3.2).r;
 	col *= mix(vec3(0.97, 1.0, 1.01), vec3(1.05, 0.95, 0.93), smoothstep(0.35, 0.8, mot));
-	rough = 0.3 + tri_tex(skin_rough, wp, wn, sc).r;
-	spec = 0.34;
+	rough = 0.58 + 0.36 * tri_tex(skin_rough, wp, wn, sc).r;
+	spec = 0.16;
 	nw = tri_normal(skin_normal, wp, wn, sc, 0.55);
 	if (top <= 0.0) {
 		return;
@@ -75,8 +75,8 @@ void skin_shade(vec3 wp, vec3 wn, vec2 p, float top, float edge_d, float open_he
 	float iod_cov = smoothstep(0.05, 0.35, iod);
 	float lum = dot(col, vec3(0.3, 0.5, 0.2)) / 0.45;
 	col = mix(col, iod_col * lum, iod_cov * 0.88);
-	rough = mix(rough, mix(0.22, 0.6, 1.0 - iodine_wet), iod_cov);
-	spec = mix(spec, mix(0.5, 0.15, 1.0 - iodine_wet), iod_cov);
+	rough = mix(rough, mix(0.34, 0.62, 1.0 - iodine_wet), iod_cov);
+	spec = mix(spec, mix(0.3, 0.14, 1.0 - iodine_wet), iod_cov);
 	col = mix(col, mix(vec3(0.30, 0.10, 0.42), vec3(0.18, 0.05, 0.2), iod_cov), guide * 0.85);
 
 	// Incision : fente rouge sombre ; le sang perle derrière la lame, avec un temps de retard

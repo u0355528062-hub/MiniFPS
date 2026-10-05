@@ -121,8 +121,14 @@ func build() -> void:
 
 	# --- Légende de progression
 	_caption = UIKit.label("", 19, UIKit.TEXT, true)
-	_caption.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_caption.position = Vector2(-400, -150)
+	_caption.anchor_left = 0.5
+	_caption.anchor_right = 0.5
+	_caption.anchor_top = 1.0
+	_caption.anchor_bottom = 1.0
+	_caption.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_caption.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_caption.offset_top = -112
+	_caption.offset_bottom = -112
 	_caption.custom_minimum_size = Vector2(800, 0)
 	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_caption.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
@@ -138,7 +144,14 @@ func build() -> void:
 
 	# --- Barre d'instruments
 	_hotbar = UIKit.hbox(8)
-	_hotbar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_hotbar.anchor_left = 0.5
+	_hotbar.anchor_right = 0.5
+	_hotbar.anchor_top = 1.0
+	_hotbar.anchor_bottom = 1.0
+	_hotbar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_hotbar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hotbar.offset_top = -22
+	_hotbar.offset_bottom = -22
 	root.add_child(_hotbar)
 	for i in instruments.size():
 		var slot := PanelContainer.new()
@@ -155,13 +168,18 @@ func build() -> void:
 		_hotbar.add_child(slot)
 		_slots.append(slot)
 		_slot_labels.append(nm)
-	await get_tree().process_frame
-	_hotbar.position = Vector2(-_hotbar.size.x * 0.5, -_hotbar.size.y - 22)
 
 	# --- Aide des commandes (F1)
 	_help = UIKit.label("ZQSD : marcher  ·  Souris : regarder  ·  Clic : prendre / appuyer / serrer  ·  Clic droit : précision\nMolette : lever / baisser  ·  R : reposer  ·  1-7 : instrument  ·  Ctrl : se pencher  ·  V : vue anatomique  ·  Échap : pause", 14, UIKit.TEXT_DIM)
-	_help.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_help.position = Vector2(24, -60)
+	var hsb := UIKit.box(Color(0.02, 0.04, 0.05, 0.55), 8, Color(1, 1, 1, 0.04), 1, 10)
+	hsb.shadow_size = 0
+	_help.add_theme_stylebox_override("normal", hsb)
+	_help.anchor_top = 1.0
+	_help.anchor_bottom = 1.0
+	_help.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_help.offset_left = 24
+	_help.offset_top = -110
+	_help.offset_bottom = -110
 	root.add_child(_help)
 	_help.visible = Settings.show_hints
 	set_process_unhandled_input(true)

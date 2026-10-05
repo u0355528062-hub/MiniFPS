@@ -224,7 +224,7 @@ func _build_briefing() -> Control:
 		vit.add_child(UIKit.label(row[1], 19, row[2], true))
 	right.add_child(UIKit.label("IMAGERIE", 14, UIKit.ACCENT, true))
 	var xr := XRayCard.new()
-	xr.custom_minimum_size = Vector2(380, 200)
+	xr.custom_minimum_size = Vector2(380, 300)
 	right.add_child(xr)
 	var keys := UIKit.label("ZQSD marcher · Souris regarder · Clic prendre / appuyer · Clic droit précision · V vue anatomique · Échap pause", 14, UIKit.TEXT_DIM)
 	keys.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -451,34 +451,18 @@ class GradeBadge:
 		draw_string(f, c + Vector2(-w * 0.5, fs * 0.36), grade, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
-## Radio du thorax schématique : poumon droit rétracté (pneumothorax), médiastin dévié.
+## Radiographie du thorax de face (calculée sur l'atlas) : poumon droit rétracté, liseré pleural.
 class XRayCard:
 	extends Control
+	var tex: Texture2D = preload("res://assets/textures/radio_thorax.png")
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
-		draw_rect(r, Color(0.02, 0.02, 0.025))
-		var c := size * 0.5
-		var w := size.x
-		var h := size.y
-		# Cage thoracique
-		for i in 9:
-			var y := h * 0.18 + i * h * 0.075
-			for s in [-1.0, 1.0]:
-				var pts := PackedVector2Array()
-				for k in 12:
-					var t := k / 11.0
-					pts.append(Vector2(c.x + s * (w * 0.03 + t * w * 0.3), y + sin(t * PI) * -h * 0.05 + t * h * 0.06))
-				draw_polyline(pts, Color(0.75, 0.75, 0.72, 0.55), 2.0, true)
-		# Poumon gauche (à droite de l'image) normal, gris
-		draw_circle(c + Vector2(w * 0.17, h * 0.05), h * 0.27, Color(0.22, 0.22, 0.24, 0.6))
-		# Poumon droit rétracté vers le hile (à gauche de l'image), bord pleural visible
-		draw_circle(c + Vector2(-w * 0.11, h * 0.06), h * 0.13, Color(0.32, 0.32, 0.34, 0.75))
-		draw_arc(c + Vector2(-w * 0.11, h * 0.06), h * 0.13, 0, TAU, 40, Color(0.85, 0.85, 0.85, 0.7), 1.5, true)
-		# Hyperclarté (air) autour
-		draw_circle(c + Vector2(-w * 0.17, h * 0.03), h * 0.3, Color(0.0, 0.0, 0.0, 0.0))
-		# Cœur et médiastin, déviés vers la gauche du patient
-		draw_circle(c + Vector2(w * 0.07, h * 0.18), h * 0.15, Color(0.7, 0.7, 0.68, 0.55))
-		draw_rect(Rect2(c.x + w * 0.02, h * 0.05, w * 0.04, h * 0.3), Color(0.7, 0.7, 0.68, 0.45))
-		draw_string(UIKit.font(), Vector2(8, h - 10), "Pneumothorax droit compressif", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.9, 0.9, 0.9, 0.8))
-		draw_string(UIKit.font(), Vector2(8, 18), "D", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.8))
+		draw_rect(r, Color(0.0, 0.0, 0.0))
+		var ts := tex.get_size()
+		var k := minf(size.x / ts.x, size.y / ts.y)
+		var w := ts * k
+		draw_texture_rect(tex, Rect2((size - w) * 0.5, w), false)
+		var f := UIKit.font()
+		draw_string(f, Vector2((size.x - w.x) * 0.5 + 8, 22), "D", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.9))
+		draw_string(f, Vector2(8, size.y - 10), "Thorax de face · pneumothorax droit compressif", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.85))

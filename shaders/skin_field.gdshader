@@ -45,5 +45,5 @@ void fragment() {
 	ROUGHNESS = rough;
 	SPECULAR = spec;
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
-	SSS_STRENGTH = 0.35;
+	SSS_STRENGTH = 0.22;
 }

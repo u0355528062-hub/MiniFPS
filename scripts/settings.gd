@@ -91,7 +91,7 @@ func apply_graphics(env: Environment, vp: Viewport) -> void:
 	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_MEDIUM if q < 3 else RenderingServer.ENV_SSAO_QUALITY_HIGH, true, 0.5, 2, 50, 300)
 	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_MEDIUM if q < 3 else RenderingServer.ENV_SSIL_QUALITY_HIGH, true, 0.5, 4, 50, 300)
 	RenderingServer.sub_surface_scattering_set_quality(RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_DISABLED if q == 0 else (RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_MEDIUM if q < 3 else RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_HIGH))
-	RenderingServer.sub_surface_scattering_set_scale(0.004, 0.25)
+	RenderingServer.sub_surface_scattering_set_scale(0.02, 0.01)
 	var sq: RenderingServer.ShadowQuality = [RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, RenderingServer.SHADOW_QUALITY_SOFT_HIGH, RenderingServer.SHADOW_QUALITY_SOFT_ULTRA][q]
 	RenderingServer.directional_soft_shadow_filter_set_quality(sq)
 	RenderingServer.positional_soft_shadow_filter_set_quality(sq)

@@ -99,7 +99,7 @@ func _ready() -> void:
 		player = Player.new()
 		player.name = "Joueur"
 		add_child(player)
-		player.build(Vector3(0.22, 0.0, 1.35), Vector3(0.0, 1.3, 0.0))
+		player.build(Vector3(0.2, 0.0, 1.05), Vector3(0.0, 1.3, 0.0))
 		player.hand.patient = patient
 		player.hand.tray = tray
 		procedure.hands.append(player.hand)
@@ -131,6 +131,8 @@ func _ready() -> void:
 	menus.quit_pressed.connect(func() -> void: get_tree().quit())
 	procedure.uis.append(menus_proxy())
 	procedure.finished.connect(_on_finished)
+	if args.has("quality"):
+		Settings.quality = int(args["quality"])
 	Settings.apply_graphics(env.environment, get_viewport())
 	Settings.changed.connect(func() -> void:
 		if player:
@@ -233,7 +235,7 @@ func _go_briefing(instant := false) -> void:
 	player.camera.current = true
 	state = "briefing"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	hud.visible = true
+	hud.visible = false
 	menus.show_briefing()
 
 
@@ -242,6 +244,7 @@ func _start() -> void:
 		return
 	state = "play"
 	menus.hide_all()
+	hud.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	player.enabled = true
 	procedure.on_continue()
@@ -286,6 +289,8 @@ func _on_finished(_s: float, _e: int) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if player:
 		player.enabled = false
+	if hud:
+		hud.visible = false
 	if not _end_data.is_empty():
 		menus.callv("show_end", _end_data)
 
@@ -307,7 +312,7 @@ func _build_environment() -> void:
 	e.background_color = Color(0.05, 0.06, 0.07)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.6, 0.66, 0.68)
-	e.ambient_light_energy = 0.32
+	e.ambient_light_energy = 0.42
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_BG
 	e.tonemap_mode = Environment.TONE_MAPPER_AGX
 	e.tonemap_exposure = 1.0
@@ -398,8 +403,14 @@ func _take_shot() -> void:
 			cam = _menu_cam
 		"briefing":
 			state = "briefing"
+			hud.visible = false
 			menus.show_briefing()
 			cam = player.camera
+		"end":
+			procedure.skip_to(procedure.steps.size())
+			await get_tree().create_timer(2.2).timeout
+			cam = player.camera
+			player.look_towards(Vector3(0.0, 1.3, 0.0))
 		"player":
 			cam = player.camera
 			if args.has("at"):
@@ -425,7 +436,7 @@ func _take_shot() -> void:
 				at = Vector3(t2[0], t2[1], t2[2])
 			cam.look_at_from_position(from, at)
 	cam.current = true
-	if hud and view != "player" and view != "briefing":
+	if hud and not view in ["player"]:
 		hud.visible = false
 	for i in int(args.get("frames", "40")):
 		await get_tree().process_frame
