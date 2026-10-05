@@ -28,6 +28,8 @@ var bypass := false  ## circulation extracorporelle : pression non pulsée, pas 
 var asystole := false  ## cœur arrêté par la cardioplégie : tracé plat, pas d'alarme sous CEC
 var vf := false  ## fibrillation ventriculaire : tracé anarchique, pas de pouls
 var map_bypass := 64  ## pression artérielle moyenne sous CEC
+var ventilated := true  ## respirateur en marche (arrêté pendant la sternotomie et sous CEC)
+var temp := 37.0  ## température centrale (°C)
 var _art := 0.0
 var _art_t := 10.0
 
@@ -224,7 +226,9 @@ class MonitorScreen:
 			var x := 16.0 + i * w / 120.0
 			var period := 60.0 / maxf(monitor.resp_rate, 4.0)
 			var ph := fmod(_resp - (120 - i) * 0.033 + 100.0, period) / period * 4.0
-			var y := 470.0 - (60.0 if ph > 1.6 and ph < 3.4 else 0.0) * clampf(minf(ph - 1.6, 3.4 - ph) * 8.0, 0.0, 1.0)
+			# Plateau du CO2 expiré : bas en arrêt cardiaque (peu de sang aux poumons), plat sans ventilation
+			var plateau := 0.0 if not monitor.ventilated else (20.0 if monitor.arrest or monitor.vf else 60.0)
+			var y := 470.0 - (plateau if ph > 1.6 and ph < 3.4 else 0.0) * clampf(minf(ph - 1.6, 3.4 - ph) * 8.0, 0.0, 1.0)
 			cap.append(Vector2(x, y))
 		draw_polyline(cap, Color(1.0, 0.85, 0.2), 2.0, true)
 		draw_string(font, Vector2(16, 28), "II", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.25, 1.0, 0.4))
@@ -246,8 +250,10 @@ class MonitorScreen:
 			draw_string(font, Vector2(170, 30), "FIBRILLATION VENTRICULAIRE", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 0.25, 0.25))
 		if monitor.arrest and fmod(Time.get_ticks_msec() / 1000.0, 1.0) < 0.6:
 			draw_string(font, Vector2(170, 30), "PAS DE POULS", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 0.25, 0.25))
-		draw_string(font, Vector2(x0, 430), "FR %d   T° 37,9" % int(round(monitor.resp_rate)), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
-		draw_string(font, Vector2(x0, 478), "EtCO2 36", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
+		var fr_txt := str(int(round(monitor.resp_rate))) if monitor.ventilated else "--"
+		draw_string(font, Vector2(x0, 430), "FR %s   T° %s" % [fr_txt, ("%.1f" % monitor.temp).replace(".", ",")], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
+		var etco2 := "--" if not monitor.ventilated else ("12" if monitor.arrest or monitor.vf else "36")
+		draw_string(font, Vector2(x0, 478), "EtCO2 %s" % etco2, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))
 
 	func _trace(buf: PackedFloat32Array, r: Rect2, c: Color, amp: float) -> void:
 		var pts := PackedVector2Array()

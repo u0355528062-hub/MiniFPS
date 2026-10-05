@@ -57,7 +57,7 @@ func _init() -> void:
 	header = "DÉCHOCAGE  ·  VOIE CENTRALE  ·  SOUS-CLAVIÈRE GAUCHE"
 	summary = "Le cathéter central est en place, sa pointe dans la veine cave supérieure : la transfusion passe à plein débit, la tension remonte."
 	breath_rate = 24.0
-	vitals = {"hr": 124.0, "spo2": 95.0, "sys": 84, "dia": 52}
+	vitals = {"hr": 124.0, "spo2": 95.0, "sys": 84, "dia": 52, "temp": 35.2}
 	catalog = [
 		["feutre", "Feutre dermographique", "proc:feutre", 0.0, 0.0],
 		["mikulicz", "Pince à badigeon (chlorhexidine)", "pince_mikulicz", 0.0, 0.0],
@@ -130,7 +130,7 @@ func define_steps() -> void:
 	steps = [
 		{"id": "repere", "kind": "mark", "list": "Repérage", "inst": "feutre",
 			"title": "Repère le point de ponction",
-			"text": "Côté gauche, sous la clavicule. Suis l'os du sternum vers l'épaule : au milieu de la clavicule, descends de 1 à 2 cm. L'aiguille passera sous l'os vers le creux au-dessus du sternum. Marque le point au feutre (V : vue anatomique, la veine passe sous la clavicule).",
+			"text": "Côté gauche, sous la clavicule. Suis la clavicule du sternum vers l'épaule : à son milieu, descends de 1 à 2 cm. L'aiguille passera sous l'os vers le creux au-dessus du sternum. Marque le point au feutre (V : vue anatomique, la veine passe sous la clavicule).",
 			"label": "Sous la clavicule gauche", "ring": 3.6,
 			"area": func() -> Vector3: return patient.on_skin(Vector3(_ideal().x + 0.005, 0, 0.085)),
 			"ideal": func() -> Vector3: return patient.on_skin(Vector3(_ideal().x, 0, _ideal().y)),

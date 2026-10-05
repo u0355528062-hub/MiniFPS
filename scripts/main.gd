@@ -77,6 +77,7 @@ func _ready() -> void:
 	monitor.spo2 = op.vitals["spo2"]
 	monitor.sys = op.vitals["sys"]
 	monitor.dia = op.vitals["dia"]
+	monitor.temp = op.vitals.get("temp", 37.0)
 	monitor.position = Vector3(0.78, 1.62, -0.52)
 	monitor.look_at(Vector3(0.0, 1.62, 0.55), Vector3.UP, true)
 	procedure = Procedure.new()
@@ -156,7 +157,7 @@ func _ready() -> void:
 	menus.resume_pressed.connect(_resume)
 	menus.restart_pressed.connect(_restart)
 	menus.main_menu_pressed.connect(_to_main_menu)
-	menus.quit_pressed.connect(func() -> void: get_tree().quit())
+	menus.quit_pressed.connect(func() -> void: _quit())
 	procedure.uis.append(menus_proxy())
 	procedure.finished.connect(_on_finished)
 	if args.has("quality"):
@@ -389,7 +390,7 @@ func _run_cli() -> void:
 		if args.has("shot") and args.has("shotstep"):
 			_shot_during_test()
 		await ad.run_all()
-		get_tree().quit()
+		await _quit()
 		return
 	if args.has("desktest"):
 		var pb := PlayerBot.new()
@@ -399,7 +400,7 @@ func _run_cli() -> void:
 			_shot_during_test()
 		await get_tree().process_frame
 		await pb.run_all()
-		get_tree().quit()
+		await _quit()
 		return
 	if args.has("chaos"):
 		var ct := ChaosTest.new()
@@ -412,7 +413,7 @@ func _run_cli() -> void:
 		pb2.setup(player, procedure, patient, tray)
 		ct.bot = pb2
 		await ct.run(int(args.get("chaos", "1")) if args["chaos"].is_valid_int() else 1)
-		get_tree().quit()
+		await _quit()
 		return
 	if args.has("restarttest"):
 		if Procedure.restarts == 0:
@@ -420,13 +421,13 @@ func _run_cli() -> void:
 			await get_tree().create_timer(2.0).timeout
 			if state != "end":
 				print("RESTART ÉCHEC : pas d'écran de fin")
-				get_tree().quit()
+				await _quit()
 				return
 			_restart()
 			return
 		await get_tree().create_timer(0.5).timeout
 		print("RESTART OK (étape ", procedure.step, ", état ", state, ")")
-		get_tree().quit()
+		await _quit()
 		return
 	if args.has("shot"):
 		await _take_shot()
@@ -514,4 +515,11 @@ func _take_shot() -> void:
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(args["shot"])
 	print("CAPTURE ", args["shot"])
+	await _quit()
+
+
+## Quitte proprement : sons coupés d'abord (le serveur audio relâche ses lectures), puis quitter.
+func _quit() -> void:
+	Sfx.stop_all()
+	await get_tree().create_timer(0.15, true, false, true).timeout
 	get_tree().quit()

@@ -157,7 +157,7 @@ func _complete_step(msg := "") -> void:
 ## Note finale : S (parfait), A, B, C, D.
 func grade() -> String:
 	var pts := 100.0 - errors * 12.0
-	pts -= maxf(0.0, elapsed - 240.0) / 12.0
+	pts -= maxf(0.0, elapsed - op.reference_time()) / 12.0
 	pts += quality.get("bonus", 0.0)
 	if errors == 0 and pts >= 95.0:
 		return "S"
@@ -452,8 +452,17 @@ func _update_markers(s: Dictionary) -> void:
 		"cutline":
 			var path := cut_path(s)
 			var t0: float = st.get("t0", -1.0)
-			marker.show_at(path[0] if t0 < 0.0 else path_point(path, st.get("t1", 0.0)), s.get("label", "DÉPART"), 0.6)
-			marker2.show_at(path[path.size() - 1], "ARRIVÉE", 0.5)
+			var t1: float = st.get("t1", -1.0)
+			if t0 < 0.0:
+				marker.show_at(path[0], s.get("label", "DÉPART"), 0.6)
+				marker2.show_at(path[path.size() - 1], "ARRIVÉE", 0.5)
+			elif 1.0 - t1 >= t0:
+				# Coupe commencée : on la prolonge depuis son bord, du côté où il en reste le plus
+				marker.show_at(path_point(path, t1), "CONTINUE ICI", 0.6)
+				marker2.show_at(path[path.size() - 1], "ARRIVÉE", 0.5)
+			else:
+				marker.show_at(path_point(path, t0), "CONTINUE ICI", 0.6)
+				marker2.show_at(path[0], "ARRIVÉE", 0.5)
 		"pump":
 			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 1.2))
 		"pick":

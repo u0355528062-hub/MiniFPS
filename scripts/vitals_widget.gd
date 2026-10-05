@@ -72,7 +72,8 @@ func _draw() -> void:
 	draw_string(f, Vector2(48 if monitor.bypass else 40, 152), bp, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1.0, 0.7, 0.3) if monitor.bypass else Color(1, 0.55, 0.55))
 	draw_string(fr, Vector2(150, 150), "FR", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UIKit.TEXT_DIM)
 	var rr := int(round(monitor.resp_rate))
-	draw_string(f, Vector2(176, 152), "%d /min" % rr, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.95, 0.5) if rr <= 22 else UIKit.WARN)
+	var rr_txt := ("%d /min" % rr) if monitor.ventilated else "-- /min"
+	draw_string(f, Vector2(176, 152), rr_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.95, 0.5) if rr <= 22 or not monitor.ventilated else UIKit.WARN)
 
 
 func _trace(data: PackedFloat32Array, r: Rect2, c: Color, scale_y: float, offset: float) -> void:

@@ -138,7 +138,7 @@ func _build_main() -> Control:
 	grad.texture = gt
 	grad.set_anchors_preset(Control.PRESET_LEFT_WIDE)
 	grad.custom_minimum_size = Vector2(900, 0)
-	grad.size = Vector2(900, 2000)
+	grad.offset_right = 900.0  # pleine hauteur par les ancres, 900 px de large
 	grad.stretch_mode = TextureRect.STRETCH_SCALE
 	grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.add_child(grad)
@@ -461,7 +461,8 @@ func show_end(elapsed: float, errors: int, grade: String, summary: String, log: 
 	grid.add_theme_constant_override("v_separation", 4)
 	v.add_child(grid)
 	# Seules les mesures qui ont un sens pour cette intervention (repère au feutre, incision)
-	var stats := [["TEMPS", UIKit.fmt_time(elapsed)], ["ERREURS", str(errors)], ["ÉTAPES", str(op.steps.size())]]
+	var stats := [["TEMPS  ·  RÉF. %s" % UIKit.fmt_time(op.reference_time()), UIKit.fmt_time(elapsed)],
+		["ERREURS", str(errors)], ["ÉTAPES", str(op.steps.size())]]
 	if quality.has("mark_mm"):
 		stats.append(["REPÈRE", "%d mm" % int(quality["mark_mm"])])
 	if quality.has("incision_dev_mm"):

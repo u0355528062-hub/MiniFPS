@@ -22,6 +22,7 @@ var mouse_left := false
 var swallow_click := false
 var lift := 0.0
 var auto_lift := 0.0
+var bot_lift := 0.0  ## réglage de hauteur du robot de test (le joueur, lui, a la molette)
 var press_mode := "press"
 var press_max := 0.006
 var press_speed := 0.045
@@ -193,6 +194,8 @@ func _process(delta: float) -> void:
 		var pressing := _clicking() and not swallow_click
 		on_patient = target_pt != Vector3.INF
 		if pressing and press_mode != "none" and on_patient:
+			# On appuie pour travailler : l'instrument levé à la molette redescend sur le patient
+			lift = move_toward(lift, 0.0, 0.3 * delta)
 			var pm := press_max
 			if press_rel:
 				pm = maxf(0.002, press_max - (Patient.body_height(target_pt.x, target_pt.z) - target_pt.y))
@@ -206,19 +209,19 @@ func _process(delta: float) -> void:
 			var aim := target_pt
 			if patient:
 				aim.y += patient.breath_offset(aim.x, aim.z)
-			var target := aim + Vector3.UP * (lift + auto_lift - depth + HOVER)
+			var target := aim + Vector3.UP * (lift + bot_lift + auto_lift - depth + HOVER)
 			if assist_target != Vector3.INF:
 				var dflat := Vector2(target.x - assist_target.x, target.z - assist_target.z).length()
 				if dflat < 0.03:
 					var w := 1.0 - smoothstep(0.01, 0.03, dflat)
-					var snapped := assist_target + Vector3.UP * (lift + auto_lift - depth + HOVER)
+					var snapped := assist_target + Vector3.UP * (lift + bot_lift + auto_lift - depth + HOVER)
 					target = target.lerp(snapped, w * 0.85)
 			# Visée sur l'orifice d'un trajet (pince, drain) : la pointe s'enfonce le long du trajet
 			if assist_axis != Vector3.ZERO and assist_target != Vector3.INF:
 				var fl := Vector2(aim.x - assist_target.x, aim.z - assist_target.z).length()
 				var we := 1.0 - smoothstep(0.014, 0.028, fl)
 				if we > 0.0:
-					var along := depth - lift - auto_lift - HOVER
+					var along := depth - lift - bot_lift - auto_lift - HOVER
 					var lateral := Vector3(aim.x - assist_target.x, 0.0, aim.z - assist_target.z) * 0.35
 					var deep := assist_target + lateral + assist_axis * along
 					target = target.lerp(deep, we)
@@ -258,6 +261,7 @@ func _process(delta: float) -> void:
 		_xf = Transform3D.IDENTITY
 		_blend = 0.0
 		lift = 0.0
+		bot_lift = 0.0
 		depth = 0.0
 		on_patient = false
 		_set_hint(("Clic : prendre  « %s »" % hovered.label) if hovered else "")

@@ -112,7 +112,7 @@ func run_all() -> void:
 	var done := proc.step >= proc.steps.size()
 	if not done:
 		fail("opération inachevée")
-	print(prefix, " ", "OK" if ok and done else "ÉCHEC", " — ", proc.op.name, " — erreurs : ", proc.errors)
+	print(prefix, " ", "OK" if ok and done else "ÉCHEC", " — ", proc.op.name, " — erreurs : ", proc.errors, " — temps : %d s, note %s" % [int(proc.elapsed), proc.grade()])
 	for e in proc.error_log:
 		print(prefix, "   erreur : ", e)
 
@@ -290,22 +290,33 @@ func do_step() -> void:
 				if proc.step != si:
 					break
 		"cutline":
-			# Ciseaux au fond de la plaie, clic maintenu, d'un bout à l'autre de la ligne
+			# Ciseaux au fond de la plaie, clic maintenu, d'un bout à l'autre de la ligne ; une coupe
+			# déjà commencée (au hasard) se prolonge depuis ses bords : vers la fin, puis vers le début
 			var path := proc.cut_path(s)
-			squeeze(0.0)
-			await tip_to(_above(path[0], 0.04), 14)
-			await tip_to(path[0], 14)
-			squeeze(1.0)
-			for i in 260:
-				var t := minf(1.0, i / 180.0)
-				var target := Procedure.path_point(proc.cut_path(s), t)
-				await tip_to(target, 2)
-				if OS.get_cmdline_user_args().has("--debug") and i % 20 == 0:
-					print("DEBUG coupe t=%.2f cible=%s %s" % [t, target, debug_state()])
+			var legs := [[0.0, 1.0]]
+			if proc.st.get("t0", -1.0) >= 0.0:
+				legs = [[float(proc.st["t1"]), 1.0], [float(proc.st["t0"]), 0.0]]
+			for leg in legs:
+				var a: float = leg[0]
+				var b: float = leg[1]
+				var start := Procedure.path_point(path, a)
+				squeeze(0.0)
+				await tip_to(_above(start, 0.04), 14)
+				await tip_to(start, 14)
+				squeeze(1.0)
+				var span := maxf(180.0 * absf(b - a), 10.0)
+				for i in int(span) + 80:
+					var t := lerpf(a, b, minf(1.0, float(i) / span))
+					var target := Procedure.path_point(proc.cut_path(s), t)
+					await tip_to(target, 2)
+					if OS.get_cmdline_user_args().has("--debug") and i % 20 == 0:
+						print("DEBUG coupe t=%.2f cible=%s %s" % [t, target, debug_state()])
+					if proc.step != si:
+						break
+				squeeze(0.0)
+				await tip_to(_above(Procedure.path_point(path, b), 0.05), 8)
 				if proc.step != si:
 					break
-			squeeze(0.0)
-			await tip_to(_above(path[path.size() - 1], 0.05), 8)
 		"crank":
 			# Présenter l'écarteur dans l'incision, serrer : il se pose ; puis tourner la manivelle
 			var tgt: Vector3 = s["target"].call()

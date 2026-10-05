@@ -67,7 +67,7 @@ func _init() -> void:
 	header = "DÉCHOCAGE  ·  THORACOTOMIE  ·  ANTÉROLATÉRALE GAUCHE"
 	summary = "Le cœur bat à nouveau : 118 par minute, la tension remonte. Le thorax reste ouvert, il part au bloc où le chirurgien terminera la réparation et refermera."
 	breath_rate = 14.0
-	vitals = {"hr": 34.0, "spo2": 0.0, "sys": 0, "dia": 0}
+	vitals = {"hr": 34.0, "spo2": 0.0, "sys": 0, "dia": 0, "temp": 35.6}
 	catalog = [
 		["bistouri", "Bistouri lame 20", "manche_bistouri", 90.0, 0.0],
 		["ciseaux", "Ciseaux de Mayo", "ciseaux_metzenbaum", 0.0, 0.0],
@@ -181,7 +181,7 @@ func define_steps() -> void:
 			"done_msg": "Les caillots sortent : le cœur se remet à battre, la plaie saigne"},
 		{"id": "suture", "kind": "suture", "list": "Plaie du cœur", "inst": "porte_aiguille",
 			"title": "Ferme la plaie du ventricule",
-			"text": "Un doigt de l'aide bouche le trou. Deux points en X, de part et d'autre de la plaie : pique d'un côté, ressors de l'autre, entre deux battements.",
+			"text": "Un doigt de l'aide bouche le trou. Deux points en U appuyés sur des feutres de Téflon, de part et d'autre de la plaie : pique d'un côté, ressors de l'autre. Le cœur bat sous l'aiguille : vise bien.",
 			"label": "Point", "radius": 0.006, "zone_depth": heart_depth + 0.02,
 			"pairs": _heart_pairs, "point": _heart_point, "done": _heart_closed,
 			"done_msg": "Plaie fermée : plus de saignement"},

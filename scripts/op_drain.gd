@@ -37,7 +37,7 @@ func _init() -> void:
 	header = "DÉCHOCAGE  ·  DRAIN THORACIQUE  ·  5e ESPACE INTERCOSTAL DROIT"
 	scan_text = "RADIO THORAX DE FACE\nPneumothorax droit compressif\npoumon droit rétracté vers le hile\nmédiastin dévié à gauche"
 	breath_rate = 30.0
-	vitals = {"hr": 128.0, "spo2": 84.0, "sys": 96, "dia": 58}
+	vitals = {"hr": 128.0, "spo2": 84.0, "sys": 96, "dia": 58, "temp": 36.4}
 	catalog = [
 		["feutre", "Feutre dermographique", "proc:feutre", 0.0, 0.0],
 		["mikulicz", "Pince à badigeon", "pince_mikulicz", 0.0, 0.0],

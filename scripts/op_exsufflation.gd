@@ -37,7 +37,7 @@ func _init() -> void:
 	header = "DÉCHOCAGE  ·  EXSUFFLATION  ·  HÉMITHORAX GAUCHE"
 	summary = "L'air comprimé est sorti : la tension et l'oxygène remontent. Le cathéter reste en place en attendant le drain thoracique."
 	breath_rate = 36.0
-	vitals = {"hr": 138.0, "spo2": 79.0, "sys": 78, "dia": 44}
+	vitals = {"hr": 138.0, "spo2": 79.0, "sys": 78, "dia": 44, "temp": 36.3}
 	catalog = [
 		["feutre", "Feutre dermographique", "proc:feutre", 0.0, 0.0],
 		["mikulicz", "Pince à badigeon (chlorhexidine)", "pince_mikulicz", 0.0, 0.0],

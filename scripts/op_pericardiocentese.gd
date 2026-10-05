@@ -45,7 +45,7 @@ func _init() -> void:
 	header = "DÉCHOCAGE  ·  PÉRICARDIOCENTÈSE  ·  SOUS-XIPHOÏDIENNE"
 	summary = "Le sang retiré libère le cœur : la tension et le pouls se normalisent. Le cathéter reste en place jusqu'au bloc, où la plaie du cœur sera réparée."
 	breath_rate = 30.0
-	vitals = {"hr": 128.0, "spo2": 93.0, "sys": 76, "dia": 60}
+	vitals = {"hr": 128.0, "spo2": 93.0, "sys": 76, "dia": 60, "temp": 36.1}
 	catalog = [
 		["sonde", "Sonde d'échographie (gel)", "proc:sonde", 0.0, 0.0],
 		["mikulicz", "Pince à badigeon (chlorhexidine)", "pince_mikulicz", 0.0, 0.0],

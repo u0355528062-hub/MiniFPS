@@ -68,6 +68,7 @@ func put_back_all() -> void:
 	if hand.held:
 		key(KEY_R)
 	hand.lift = 0.0
+	hand.bot_lift = 0.0
 	player.position = home
 
 
@@ -87,7 +88,8 @@ func tip_to(p: Vector3, frames_n := 12) -> void:
 		player.look_towards(at0)
 		if OS.get_cmdline_user_args().has("--debug"):
 			print("DEBUG trajet cam=", player.camera.global_position, " cible=", at0, " visée=", hand.aim_point, " penché=", player.crouch)
-		hand.lift = hand.depth - PlayerHand.HOVER - along
+		hand.lift = 0.0  # comme un joueur qui redescend l'instrument à la molette
+		hand.bot_lift = hand.depth - PlayerHand.HOVER - along
 		if frames_n > 4:
 			await _settle()
 		else:
@@ -103,7 +105,8 @@ func tip_to(p: Vector3, frames_n := 12) -> void:
 		surf += patient.breath_offset(p.x, p.z)
 	# Coupe au fond de la plaie : le clic maintenu enfonce la main ; on compense pour rester sur la ligne
 	var held_down := hand.depth if proc.current().get("kind", "") == "cutline" else 0.0
-	hand.lift = clampf(p.y - surf - PlayerHand.HOVER + held_down, -0.12, 0.25)
+	hand.lift = 0.0
+	hand.bot_lift = clampf(p.y - surf - PlayerHand.HOVER + held_down, -0.12, 0.25)
 	if frames_n > 4:
 		await _settle()
 	else:
@@ -125,7 +128,7 @@ func held_id() -> String:
 
 func debug_state() -> String:
 	var tip := hand.tip()
-	return "tenu=%s tip=%s peau=%.3f prof=%.4f lift=%.3f appui=%.3f surPatient=%s cut=[%.2f %.2f] st=%s" % [held_id(), tip, Patient.body_height(tip.x, tip.z), hand.held.tip_depth if hand.held else 0.0, hand.lift, hand.depth, hand.on_patient, patient.cut0, patient.cut1, proc.st.keys()]
+	return "tenu=%s tip=%s peau=%.3f prof=%.4f lift=%.3f+%.3f appui=%.3f surPatient=%s cut=[%.2f %.2f] st=%s" % [held_id(), tip, Patient.body_height(tip.x, tip.z), hand.held.tip_depth if hand.held else 0.0, hand.lift, hand.bot_lift, hand.depth, hand.on_patient, patient.cut0, patient.cut1, proc.st.keys()]
 
 
 func held_inst() -> Instrument:
@@ -133,5 +136,5 @@ func held_inst() -> Instrument:
 
 
 func lift_clear() -> void:
-	hand.lift = 0.06
+	hand.bot_lift = 0.06
 	await _frames(3)

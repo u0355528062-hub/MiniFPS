@@ -30,6 +30,8 @@ var with_dish := false
 var catalog: Array = []
 var vitals := {"hr": 84.0, "spo2": 99.0, "sys": 124, "dia": 76}
 var steps: Array = []
+## Temps de référence (s) au-delà duquel la note baisse ; 0 : 90 s + 45 s par étape
+var par_time := 0.0
 ## Position du patient (voir Patient.POSES) et place du joueur au début
 var pose := "lateral"
 var player_spawn := Vector3(0.2, 0.0, 1.05)
@@ -73,6 +75,11 @@ static func is_ready(op_id: String) -> bool:
 
 
 ## Réglages du patient avant sa construction (incision, fenêtre, plaie...).
+## Temps de référence de l'intervention : une longue opération a droit à plus de temps.
+func reference_time() -> float:
+	return par_time if par_time > 0.0 else 90.0 + 45.0 * steps.size()
+
+
 func configure_patient(_p: Patient) -> void:
 	pass
 

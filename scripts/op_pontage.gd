@@ -82,7 +82,7 @@ func _init() -> void:
 	header = "BLOC CARDIAQUE  ·  PONTAGE AORTO-CORONAIRE"
 	summary = "Le cœur bat, l'artère mammaire irrigue l'IVA. Le sternum est fermé aux fils d'acier ; il part en réanimation, réveillé dans quelques heures."
 	breath_rate = 12.0
-	vitals = {"hr": 72.0, "spo2": 98.0, "sys": 132, "dia": 78}
+	vitals = {"hr": 72.0, "spo2": 98.0, "sys": 132, "dia": 78, "temp": 36.6}
 	catalog = [
 		["bistouri", "Bistouri lame 15", "manche_bistouri", 90.0, 0.0],
 		["scie_sternale", "Scie sternale", "proc:scie_sternale", 0.0, 0.0],
@@ -224,11 +224,11 @@ func define_steps() -> void:
 			"title": "Ouvre le sternum à la scie",
 			"text": "Glisse le sabot de la scie sous le haut du sternum, puis descends tout droit sur la ligne médiane en gardant le clic enfoncé. Le sabot protège le cœur, juste dessous. L'anesthésiste arrête de ventiler pendant la coupe.",
 			"label": "DÉPART", "path": _saw_path, "tol": 0.016, "need": 0.88, "depth": SAW_DEPTH, "sound": "scie",
-			"what": "Sternum coupé", "on_progress": _saw_progress, "done": _saw_done,
+			"what": "Sternum coupé", "enter": _apnea.bind(true), "on_progress": _saw_progress, "done": _saw_done,
 			"done_msg": "Sternum ouvert de haut en bas"},
 		{"id": "ecarteur", "kind": "crank", "list": "Écarteur sternal", "inst": "ecarteur_sternal",
 			"title": "Écarte le sternum",
-			"text": "Pose l'écarteur entre les deux moitiés du sternum (la crémaillère vers les pieds), puis tourne la manivelle doucement (clic maintenu) : un écartement trop brutal casse les côtes.",
+			"text": "Pose l'écarteur entre les deux moitiés du sternum (la crémaillère vers les pieds), puis tourne la manivelle (clic maintenu) : le sternum s'ouvre progressivement, sans à-coups.",
 			"label": "Valves ici", "ring": 1.2, "target": _ret_tip, "near": 0.05, "seconds": 6.0,
 			"what": "Écartement du sternum", "on_seat": _ret_seat, "on_progress": _ret_progress,
 			"done": _ret_done, "done_msg": "Le péricarde est à nu, le cœur bat dessous"},
@@ -285,7 +285,7 @@ func define_steps() -> void:
 			"done_msg": "Choc délivré : le cœur repart en rythme régulier"},
 		{"id": "decanulation", "kind": "pick", "list": "Décanulation", "inst": "canule_aortique",
 			"title": "Arrête la CEC, retire les canules",
-			"text": "Le cœur a repris la main : la machine ralentit puis s'arrête. Retire la canule aortique (main vide, clic dessus) ; l'aide noue la bourse, la canule veineuse est déjà retirée.",
+			"text": "Le cœur a repris la main : la machine ralentit et l'aide retire la canule veineuse. Retire la canule aortique (main vide, clic dessus) ; l'aide noue la bourse.",
 			"label": "Canule", "near": 0.06, "target": func() -> Vector3: return _cannula_grip("canule_aortique"),
 			"enter": _wean, "done": _decan_done,
 			"done_msg": "Sevrage réussi : le cœur assure seul la circulation"},
@@ -319,6 +319,14 @@ func _saw_progress(t0: float, t1: float) -> void:
 
 func _saw_done(_h: SurgeonHand, _instant: bool) -> void:
 	_saw_progress(0.0, 1.0)
+	_apnea(false)
+
+
+## Respirateur arrêté (les poumons dégonflés s'écartent de la scie, puis du champ sous CEC) ou
+## remis en marche.
+func _apnea(on: bool) -> void:
+	monitor.ventilated = not on
+	patient.set_breathe(0.0 if on else 0.003)
 
 
 # ---------------------------------------------------------------- Écarteur
@@ -671,7 +679,7 @@ func _start_bypass(_instant: bool) -> void:
 	monitor.bypass = true
 	monitor.map_bypass = 64
 	patient.beat_gain = 0.55  # le cœur, vidé, bat à vide
-	patient.breathe_amp = 0.0  # on arrête de ventiler
+	_apnea(true)  # la machine oxygène le sang : on arrête de ventiler
 	Sfx.play("ecarte", _cec.global_position + Vector3.UP, -12.0, 0.6)
 
 
@@ -845,23 +853,37 @@ func _flash() -> void:
 
 
 func _wean() -> void:
-	# Sevrage : la machine ralentit, le cœur reprend le travail
+	# Sevrage : la machine ralentit, le cœur reprend le travail ; l'aide retire d'abord la canule
+	# veineuse (sa ligne avec), le chirurgien retirera la canule aortique
+	_remove_cannula("canule_veineuse", false)
 	var tw := root.create_tween()
 	tw.tween_method(func(v: float) -> void:
 		_cec.flow = lerpf(4.8, 1.2, v)
 		patient.beat_gain = lerpf(0.8, 1.0, v), 0.0, 1.0, 3.0)
 
 
+## Canule retirée (rendue à la table) avec sa ligne.
+func _remove_cannula(inst_id: String, instant: bool) -> void:
+	var inst := instrument(inst_id)
+	if not inst.parked:
+		return
+	_show_cannula_body(inst, true)
+	proc.parked.erase(inst)
+	if instant:
+		inst.parked = false
+		inst.global_transform = inst.tray_transform
+	else:
+		inst.return_to_tray()
+	var nm := "LigneArterielle" if inst_id == "canule_aortique" else "LigneVeineuse"
+	for l in _lines.duplicate():
+		if l.name == nm:
+			_lines.erase(l)
+			l.queue_free()
+
+
 func _decan_done(_h: SurgeonHand, instant: bool) -> void:
-	for inst_id in ["canule_aortique", "canule_veineuse"]:
-		var inst := instrument(inst_id)
-		_show_cannula_body(inst, true)
-		proc.parked.erase(inst)
-		if instant:
-			inst.parked = false
-			inst.global_transform = inst.tray_transform
-		else:
-			inst.return_to_tray()
+	for inst_id in ["canule_veineuse", "canule_aortique"]:
+		_remove_cannula(inst_id, instant)
 	for l in _lines:
 		l.queue_free()
 	_lines.clear()
@@ -873,7 +895,8 @@ func _decan_done(_h: SurgeonHand, instant: bool) -> void:
 	monitor.dia = 66
 	monitor.target_spo2 = 99.0
 	patient.beat_gain = 1.0
-	patient.breathe_amp = 0.003
+	_apnea(false)
+	monitor.temp = 36.6
 
 
 # ---------------------------------------------------------------- Fermeture
@@ -1041,6 +1064,8 @@ func process(delta: float) -> void:
 		_heart_follow.transform = Transform3D(hb, Patient.HEART_C - hb * Patient.HEART_C)
 	if _vf_at > 0.0 and _t >= _vf_at:
 		_start_vf()
+	if on_bypass:
+		monitor.temp = move_toward(monitor.temp, _cec.temp, delta * 0.4)
 	# Les agrafes montent et descendent avec la peau (respiration)
 	for st in _staple_nodes:
 		var base: Transform3D = st.get_meta("base")

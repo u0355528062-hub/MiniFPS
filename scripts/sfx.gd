@@ -12,6 +12,7 @@ var loops := {}  ## sons continus : nom -> [lecteur, niveau voulu, rafraîchi ce
 var _players: Array[AudioStreamPlayer3D] = []
 var _flat: Array[AudioStreamPlayer] = []
 var _next := 0
+var muted := false
 
 
 func _ready() -> void:
@@ -61,8 +62,20 @@ func _ready() -> void:
 	_ambience()
 
 
+## Coupe tous les sons avant de quitter : le serveur audio relâche ses lectures en cours.
+static func stop_all() -> void:
+	if instance == null or not is_instance_valid(instance):
+		return
+	instance.muted = true  # plus aucun son ne démarre (bips du scope pendant la fermeture)
+	for c in instance.get_children():
+		if c is AudioStreamPlayer3D or c is AudioStreamPlayer:
+			c.stop()
+			c.stream = null
+	instance.loops.clear()
+
+
 static func play(sound: String, at := Vector3.INF, volume_db := 0.0, pitch := 1.0) -> void:
-	if instance == null or not instance.streams.has(sound):
+	if instance == null or instance.muted or not instance.streams.has(sound):
 		return
 	instance._play(sound, at, volume_db, pitch)
 
@@ -88,7 +101,7 @@ func _play(sound: String, at: Vector3, volume_db: float, pitch: float) -> void:
 
 ## Son continu : à appeler à chaque image avec le niveau voulu (0 = silence). S'arrête tout seul.
 static func loop(sound: String, at: Vector3, level: float) -> void:
-	if instance == null or not instance.streams.has("loop_" + sound):
+	if instance == null or instance.muted or not instance.streams.has("loop_" + sound):
 		return
 	instance._loop(sound, at, level)
 
