@@ -15,6 +15,15 @@ const TIP_Z := 0.093  ## pointe biseautée de l'aiguille
 
 var aspiration := 0.0
 var flash := ""
+## Seringue vide au départ qui se remplit de sang quand on tire (ponction d'un épanchement) ; sinon
+## seringue à moitié pleine de sérum (bulles d'air quand on aspire de l'air)
+var draws_blood := false:
+	set(v):
+		draws_blood = v
+		if v:
+			_liquid_mat.albedo_color = Color(0.42, 0.02, 0.03, 0.92)
+			_liquid_mat.rim = 0.15
+		set_aspiration(aspiration)
 var catheter: Node3D
 var _seal: MeshInstance3D
 var _rod: MeshInstance3D
@@ -134,6 +143,17 @@ func _cyl_to(parent: Node3D, r: float, h: float, z: float, mat: Material, nm: St
 ## Piston tiré : 0 = au repos (5 mL de sérum), 1 = tiré de 2 cm (dépression).
 func set_aspiration(v: float) -> void:
 	aspiration = clampf(v, 0.0, 1.0)
+	if draws_blood:
+		# Piston enfoncé au départ ; le sang remplit la place libérée
+		var sz := lerpf(-0.0175, -0.066, aspiration)
+		_seal.position.z = sz
+		_rod.position.z = sz - 0.032
+		_thumb.position.z = sz - 0.063
+		var hb := BARREL_Z1 - sz - 0.002
+		_liquid.visible = hb > 0.0008
+		_liquid.scale = Vector3(1, maxf(hb, 0.0001), 1)
+		_liquid.position.z = BARREL_Z1 - hb * 0.5
+		return
 	var seal_z := lerpf(-0.044, -0.064, aspiration)
 	_seal.position.z = seal_z
 	_rod.position.z = seal_z - 0.032
@@ -177,6 +197,8 @@ func _process(delta: float) -> void:
 				var a := i * 2.4
 				b.position = Vector3(cos(a) * 0.003, sin(a) * 0.003, lerpf(BARREL_Z1 - 0.002, -0.046, ph))
 		"blood", "fluid":
+			if draws_blood:
+				return
 			var c := Color(0.55, 0.03, 0.04, 0.85) if flash == "blood" else Color(0.92, 0.8, 0.4, 0.6)
 			_liquid_mat.albedo_color = Color(0.78, 0.9, 1.0, 0.38).lerp(c, _flash_k)
 			for b in _bubbles:

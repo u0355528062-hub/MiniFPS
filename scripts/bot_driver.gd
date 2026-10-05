@@ -236,6 +236,27 @@ func do_step() -> void:
 				if proc.step != si:
 					break
 			squeeze(0.0)
+		"probe":
+			var spot: Vector3 = s["target"].call()
+			want_axis = s["axis"]
+			squeeze(0.0)
+			await tip_to(spot + Vector3.UP * 0.01, 14)
+			squeeze(1.0)
+			for i in 240:
+				await tip_to(spot - (s["axis"] as Vector3) * 0.004, 1)
+				if proc.step != si:
+					break
+			squeeze(0.0)
+		"aspirate":
+			var entry: Vector3 = s["target"].call()
+			var axis: Vector3 = s["axis"]
+			want_axis = axis
+			squeeze(1.0)
+			for i in 600:
+				await tip_to(entry + axis * float(s.get("hold_depth", 0.0)), 1)
+				if proc.step != si:
+					break
+			squeeze(0.0)
 		"withdraw":
 			var entry: Vector3 = s["target"].call()
 			var axis: Vector3 = s["axis"]

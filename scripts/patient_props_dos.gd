@@ -14,12 +14,14 @@ var breath_rate := 14.0
 var _t := 0.0
 var _obstacles: Array = []  ## sphères que les câbles contournent (ballon réservoir, collier…)
 var _collar_dims := {}
+var options := {}  ## {"collar": false} : pas de collier cervical (plaie pénétrante)
 
 
 func build() -> void:
 	if Patient.landmarks.is_empty():
 		return
-	_collar()
+	if options.get("collar", true):
+		_collar()
 	_o2_mask()
 	_spo2_clip()
 	_iv_line()

@@ -10,6 +10,8 @@ static func build(kind: String) -> Node3D:
 			return _feutre()
 		"cathlon":
 			return CathlonModel.new()
+		"sonde":
+			return ProbeModel.new()
 	return Node3D.new()
 
 

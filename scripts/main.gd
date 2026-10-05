@@ -14,6 +14,7 @@ extends Node3D
 ##   --restarttest          fin de partie → rejouer (rechargement) sans erreur
 ##   --shot=chemin.png      capture d'écran puis quitter   --view=menu|player|field|overview|xray
 ##   --cam=x,y,z --at=x,y,z   caméra libre pour la capture  --frames=N  --hold=id  --mode=0|1|2
+##   --desktest --shot=f.png --shotstep=N --shotdelay=s   capture pendant le test (étape N)
 
 static var skip_menu := false
 ## Opération choisie dans le menu (gardée au rechargement de la scène)
@@ -389,6 +390,15 @@ func _run_cli() -> void:
 		var pb := PlayerBot.new()
 		add_child(pb)
 		pb.setup(player, procedure, patient, tray)
+		if args.has("shot") and args.has("shotstep"):
+			# Capture pendant le test, quand l'étape demandée a commencé depuis « shotdelay » s
+			var target := int(args["shotstep"])
+			var delay := float(args.get("shotdelay", "1.0"))
+			procedure.step_changed.connect(func(i: int) -> void:
+				if i == target:
+					await get_tree().create_timer(delay).timeout
+					get_viewport().get_texture().get_image().save_png(args["shot"])
+					print("CAPTURE ", args["shot"]))
 		await get_tree().process_frame
 		await pb.run_all()
 		get_tree().quit()

@@ -11,6 +11,7 @@ const FOREARM := Vector3(0.405, 1.608, -0.012)
 const WRIST := Vector3(0.516, 1.669, 0.033)
 
 var spo2_light: OmniLight3D
+var options := {}
 var spo2_mat: StandardMaterial3D
 var bag: MeshInstance3D
 var _t := 0.0

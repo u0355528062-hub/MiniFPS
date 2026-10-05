@@ -10,7 +10,7 @@ signal grabbed(inst: Instrument)
 const GRIP := {
 	"bistouri": 0.56, "ciseaux": 0.42, "porte_aiguille": 0.42, "kelly": 0.44, "overholt": 0.44,
 	"mikulicz": 0.42, "debakey": 0.4, "langenbeck": 0.2, "roux": 0.24, "seringue": 0.3,
-	"drain": 0.3, "feutre": 0.35, "cathlon": 0.18,
+	"drain": 0.3, "feutre": 0.35, "cathlon": 0.18, "sonde": 0.6,
 }
 ## Mâchoires : [type (1 = branches croisées, 2 = mors de pince), pivot z (modèle), angle max (°)]
 const JAWS := {

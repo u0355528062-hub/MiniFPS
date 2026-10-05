@@ -86,6 +86,8 @@ var _breath_t := 0.0
 var hole_limit := 0.006
 var belt := Vector4.ZERO  ## marque de la ceinture de sécurité (segment x0 z0 x1 z1), nulle = aucune
 var antiseptic := "betadine"  ## "betadine" (brune) ou "chlorhexidine" (alcoolique colorée, rose orangé)
+var stab := Vector4.ZERO  ## plaie au couteau (x, z, angle, longueur), nulle = aucune
+var props_options := {}  ## équipement du patient (ex. {"collar": false})
 var skin_y := 1.29  ## hauteur de la peau au centre de l'incision
 
 var skin_mat: ShaderMaterial  ## peau du corps entier
@@ -329,6 +331,7 @@ func build() -> void:
 	_build_drape()
 	props = PatientProps.new() if pose_id == "lateral" else PatientPropsDos.new()
 	props.name = "Equipement"
+	props.set("options", props_options)
 	add_child(props)
 	props.build()
 	Cable.save_cache()
@@ -372,6 +375,7 @@ func _skin_material(sh: Shader) -> ShaderMaterial:
 	m.set_shader_parameter("win_max", WINDOW_MAX)
 	m.set_shader_parameter("frame_on", 1.0 if pose_id == "lateral" else 0.0)
 	m.set_shader_parameter("belt", belt)
+	m.set_shader_parameter("stab", stab)
 	if antiseptic == "chlorhexidine":
 		m.set_shader_parameter("anti_thin", Vector3(0.62, 0.2, 0.15))
 		m.set_shader_parameter("anti_thick", Vector3(0.48, 0.07, 0.06))

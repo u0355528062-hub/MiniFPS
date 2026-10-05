@@ -16,6 +16,11 @@ var _beat_t := 0.0
 var _viewport: SubViewport
 var _draw_t := 0.0
 var _react_t := 0.0
+var ecg_voltage := 1.0  ## amplitude des QRS (épanchement péricardique : microvoltage)
+var alternans := 0.0  ## alternance électrique : un QRS sur deux plus petit (tamponnade)
+var beat_count := 0
+var pvc := false  ## battement en cours : extrasystole ventriculaire (QRS large, sans onde P)
+var _pvc_queue := 0
 
 
 func build() -> void:
@@ -77,8 +82,38 @@ func _process(delta: float) -> void:
 	var period := 60.0 / heart_rate
 	if _beat_t >= period:
 		_beat_t -= period
+		beat_count += 1
+		pvc = _pvc_queue > 0 and randf() < 0.75
+		if pvc:
+			_pvc_queue -= 1
 		screen.beat()
 		Sfx.play("bip", global_position, -16.0, 1.0 if spo2 > 96 else 0.92)
+
+
+## Quelques extrasystoles ventriculaires (myocarde irrité, par exemple touché par une aiguille).
+func ectopic(n := 3) -> void:
+	_pvc_queue = maxi(_pvc_queue, n)
+	Sfx.play("bip_alarme", global_position, -8.0, 1.3)
+
+
+## Amplitude du battement en cours (microvoltage, alternance électrique).
+func beat_amp() -> float:
+	return ecg_voltage * (1.0 - alternans * float(beat_count % 2))
+
+
+## Forme de l'ECG, t secondes après le début du battement.
+func ecg_shape(t: float) -> float:
+	var v := 0.0
+	if pvc:
+		v += 1.15 * exp(-pow((t - 0.14) / 0.045, 2.0)) - 0.35 * exp(-pow((t - 0.21) / 0.03, 2.0))
+		v -= 0.5 * exp(-pow((t - 0.36) / 0.07, 2.0))
+		return v * maxf(ecg_voltage, 0.7)
+	v += 0.12 * exp(-pow((t - 0.06) / 0.025, 2.0))  # P
+	v -= 0.12 * exp(-pow((t - 0.15) / 0.008, 2.0))  # Q
+	v += 1.0 * exp(-pow((t - 0.17) / 0.011, 2.0))  # R
+	v -= 0.25 * exp(-pow((t - 0.19) / 0.01, 2.0))  # S
+	v += 0.22 * exp(-pow((t - 0.38) / 0.05, 2.0))  # T
+	return v * beat_amp()
 
 
 ## Petite tachycardie quand on incise, retour au calme ensuite.
@@ -118,13 +153,7 @@ class MonitorScreen:
 			_since_beat += 0.01
 			_resp += 0.01
 			var t := _since_beat
-			var v := 0.0
-			v += 0.12 * exp(-pow((t - 0.06) / 0.025, 2.0))  # P
-			v -= 0.12 * exp(-pow((t - 0.15) / 0.008, 2.0))  # Q
-			v += 1.0 * exp(-pow((t - 0.17) / 0.011, 2.0))  # R
-			v -= 0.25 * exp(-pow((t - 0.19) / 0.01, 2.0))  # S
-			v += 0.22 * exp(-pow((t - 0.38) / 0.05, 2.0))  # T
-			ecg[head] = v + randf_range(-0.015, 0.015)
+			ecg[head] = monitor.ecg_shape(t) + randf_range(-0.015, 0.015)
 			var pt := t - 0.22
 			pleth[head] = (0.85 * exp(-pow((pt - 0.12) / 0.09, 2.0)) + 0.3 * exp(-pow((pt - 0.36) / 0.08, 2.0))) if pt > 0.0 else 0.0
 			head = (head + 1) % ecg.size()

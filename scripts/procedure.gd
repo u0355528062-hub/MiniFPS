@@ -12,6 +12,8 @@ extends Node
 ##   suture  : l'aiguille entre d'un côté, ressort de l'autre, le point se noue
 ##   needle  : l'aiguille avance en aspirant (clic maintenu) jusqu'au retour (air, sang, liquide)
 ##   withdraw: on retire l'aiguille, le cathéter souple reste en place
+##   probe   : la sonde d'échographie, posée sur la bonne fenêtre, montre l'organe visé
+##   aspirate: l'aiguille dans le liquide, on tire le piston (clic maintenu) : la seringue se remplit
 
 signal finished(seconds: float, errors: int)
 signal step_changed(index: int)
@@ -260,6 +262,8 @@ func _process(delta: float) -> void:
 		"insert": _tick_insert(s, delta)
 		"needle": _tick_needle(s, delta)
 		"withdraw": _tick_withdraw(s, delta)
+		"probe": _tick_probe(s, delta)
+		"aspirate": _tick_aspirate(s, delta)
 	if step >= 0 and step < steps.size() and current() == s:
 		_update_markers(s)
 	if not show_markers:
@@ -305,6 +309,17 @@ func _setup_hands(s: Dictionary) -> void:
 			speed = s.get("speed", 0.016)
 			target = s["target"].call()
 			axis = s["axis"]
+		"aspirate":
+			# L'aiguille reste où elle est : le clic ne sert qu'à tirer le piston
+			mode = "hold"
+			pmax = s["max_depth"] + 0.01
+			speed = 0.0
+			target = s["target"].call()
+			axis = s["axis"]
+		"probe":
+			pmax = 0.006
+			target = s["target"].call()
+			axis = s["axis"]
 	for h in hands:
 		var ok: bool = h.held != null and h.held.id == s["inst"]
 		h.assist_target = target if ok else Vector3.INF
@@ -338,7 +353,7 @@ func _update_zones(s: Dictionary) -> void:
 			if not pair.is_empty():
 				for p in pair:
 					Contact.add_zone(p, p, 0.01, 0.007, ["needle"])
-		"needle", "withdraw":
+		"needle", "withdraw", "aspirate":
 			var p: Vector3 = s["target"].call()
 			var axis: Vector3 = s["axis"]
 			var dmax: float = s["max_depth"] + 0.012
@@ -391,7 +406,7 @@ func _update_markers(s: Dictionary) -> void:
 			marker2.show_at(patient.incision_point(1.0) + Vector3.UP * 0.002, "ARRIVÉE", 0.55)
 		"inject":
 			marker.show_at(s["target"].call(), s.get("label", "Pique ici"), 0.8)
-		"spread", "insert", "needle", "withdraw":
+		"spread", "insert", "needle", "withdraw", "aspirate", "probe":
 			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 0.8))
 		"suture":
 			var pair := _suture_pair(s)
@@ -707,7 +722,8 @@ func _tick_needle(s: Dictionary, _delta: float) -> void:
 		var lateral := (d - axis * along).length()
 		var asp := h.squeeze_value()
 		if inst.model.has_method("set_aspiration"):
-			inst.model.call("set_aspiration", move_toward(float(inst.model.get("aspiration")), asp, 0.08))
+			var amax: float = s.get("aspiration_max", 1.0)
+			inst.model.call("set_aspiration", move_toward(float(inst.model.get("aspiration")), asp * amax, 0.08 * amax))
 		# Seule compte une aiguille plantée sur le repère, dans l'axe (pas en chemin depuis la table)
 		if lateral > 0.009:
 			if inst.tip_depth > 0.002 and _hint_cd <= 0.0:
@@ -768,6 +784,59 @@ func _tick_withdraw(s: Dictionary, _delta: float) -> void:
 	if not any_held:
 		_done(null, false)
 		_complete_step()
+
+
+## Sonde d'échographie : posée sur la peau, à la bonne fenêtre, le faisceau vers l'organe ; il faut
+## garder la bonne image un instant (« judge » note la pose de 0 à 1 et explique ce qui manque).
+func _tick_probe(s: Dictionary, delta: float) -> void:
+	var best := 0.0
+	for h in _active_hands():
+		var inst := h.held
+		var face := h.tip()
+		var beam := inst.global_transform.basis.z.normalized()
+		var on_skin := inst.tip_depth > -0.004
+		var res: Dictionary = s["judge"].call(face, beam, on_skin)
+		var q: float = res.get("q", 0.0)
+		best = maxf(best, q)
+		if q >= 0.8:
+			st["good"] = st.get("good", 0.0) + delta
+			_caption("%s  ·  garde la sonde immobile" % res.get("msg", "Bonne image"))
+		else:
+			st["good"] = maxf(0.0, st.get("good", 0.0) - delta * 2.0)
+			_caption(res.get("msg", ""))
+		if st.get("good", 0.0) >= s.get("hold_s", 1.5):
+			_done(h, false)
+			_complete_step(s.get("done_msg", ""))
+			return
+
+
+## Aspiration : l'aiguille dans le liquide (épanchement, vaisseau), clic maintenu, le piston recule et
+## la seringue se remplit ; « fill » va de 0 à 1 (seringue pleine).
+func _tick_aspirate(s: Dictionary, delta: float) -> void:
+	var entry: Vector3 = s["target"].call()
+	var axis: Vector3 = s["axis"]
+	for h in _active_hands():
+		var inst := h.held
+		var d := h.tip() - entry
+		var along := d.dot(axis)
+		var lateral := (d - axis * along).length()
+		var inside: bool = lateral < 0.009 and inst.tip_depth > 0.0 and s["in_liquid"].call(h.tip())
+		if not inside:
+			_caption(s.get("lost_msg", "La pointe n'est plus dans le liquide : remets l'aiguille sur son trajet"))
+			continue
+		var fill: float = st.get("fill", 0.0)
+		if h.squeeze_value() > 0.5:
+			fill = minf(1.0, fill + delta / s.get("seconds", 5.0))
+			st["fill"] = fill
+			if s.has("on_fill"):
+				s["on_fill"].call(fill)
+			_caption("%s : %d mL" % [s.get("what", "Aspiration"), int(round(fill * s.get("ml", 20.0)))])
+			if fill >= 1.0:
+				_done(h, false)
+				_complete_step(s.get("done_msg", ""))
+				return
+		else:
+			_caption("Maintiens le clic pour tirer le piston  ·  %d mL" % int(round(fill * s.get("ml", 20.0))))
 
 
 ## Saute directement à l'étape n (tests, captures) en appliquant les étapes précédentes.

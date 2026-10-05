@@ -24,10 +24,8 @@ func _process(delta: float) -> void:
 	var hr := maxf(monitor.heart_rate, 30.0)
 	_phase += delta * hr / 60.0
 	var p := fmod(_phase, 1.0)
-	# Tracé ECG synthétique (P, QRS, T)
-	var v := 0.08 * exp(-pow((p - 0.12) / 0.03, 2.0))
-	v += -0.12 * exp(-pow((p - 0.27) / 0.008, 2.0)) + 1.0 * exp(-pow((p - 0.3) / 0.011, 2.0)) - 0.25 * exp(-pow((p - 0.33) / 0.01, 2.0))
-	v += 0.22 * exp(-pow((p - 0.55) / 0.05, 2.0))
+	# Tracé ECG : même forme que le scope (microvoltage, alternance, extrasystoles)
+	var v := monitor.ecg_shape(p * 60.0 / hr * 0.85 + 0.03)
 	var pl := maxf(0.0, sin(TAU * (p - 0.35))) * (0.6 + 0.4 * exp(-pow((p - 0.55) / 0.06, 2.0)))
 	for k in 2:
 		_ecg.remove_at(0)

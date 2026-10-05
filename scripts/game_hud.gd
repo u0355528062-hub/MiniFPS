@@ -29,6 +29,9 @@ var _vitals: VitalsWidget
 var _cross: Crosshair
 var _help: Label
 var _view_tag: Label
+var _echo_panel: PanelContainer
+var _echo_rect: TextureRect
+var _echo_tag: Label
 var _current_step := -1
 var _details := true
 
@@ -102,6 +105,25 @@ func build() -> void:
 	_vitals.custom_minimum_size = Vector2(320, 168)
 	_vitals.size = Vector2(320, 168)
 	root.add_child(_vitals)
+
+	# --- Échographie (quand une sonde est posée)
+	_echo_panel = UIKit.panel(Color(0.02, 0.025, 0.03, 0.94), 12, 10)
+	_echo_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_echo_panel.position = Vector2(-404, 206)
+	_echo_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_echo_panel.visible = false
+	root.add_child(_echo_panel)
+	var ev := UIKit.vbox(6)
+	_echo_panel.add_child(ev)
+	_echo_tag = UIKit.label("ÉCHOGRAPHIE", 13, UIKit.ACCENT, true)
+	ev.add_child(_echo_tag)
+	_echo_rect = TextureRect.new()
+	_echo_rect.custom_minimum_size = Vector2(360, 270)
+	_echo_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_echo_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ev.add_child(_echo_rect)
+	var foot := UIKit.label("Sonde cardiaque  ·  3,5 MHz  ·  profondeur 16 cm", 12, UIKit.TEXT_DIM)
+	ev.add_child(foot)
 
 	# --- Viseur et aide contextuelle
 	_cross = Crosshair.new()
@@ -285,6 +307,19 @@ func set_status(elapsed: float, errors: int) -> void:
 
 func show_end(_elapsed: float, _errors: int, _grade: String, _summary: String, _log: Array, _quality: Dictionary) -> void:
 	_caption.text = ""
+
+
+## Image d'échographie en direct (null : masquée).
+func show_echo(tex: Texture2D, title := "") -> void:
+	if tex == null:
+		_echo_panel.visible = false
+		return
+	if not _echo_panel.visible:
+		_echo_panel.visible = true
+		UIKit.pop_in(_echo_panel)
+	_echo_rect.texture = tex
+	if title != "":
+		_echo_tag.text = title
 
 
 func set_view_tag(t: String) -> void:

@@ -52,6 +52,8 @@ uniform vec4 atlas_ry = vec4(0.0, 0.0, -1.0, -0.004);
 uniform vec4 atlas_rz = vec4(1.0, 0.0, 0.0, 1.275);
 // Marque de la ceinture de sécurité (accident de voiture) : segment x0 z0 x1 z1 (monde), nul = rien
 uniform vec4 belt = vec4(0.0);
+// Plaie par arme blanche : x, z (monde), angle (rad), longueur (m) ; nulle = rien
+uniform vec4 stab = vec4(0.0);
 
 vec3 atlas_pos(vec3 w) {
 	return vec3(dot(atlas_rx.xyz, w) + atlas_rx.w, dot(atlas_ry.xyz, w) + atlas_ry.w, dot(atlas_rz.xyz, w) + atlas_rz.w);
@@ -102,6 +104,28 @@ void skin_marks(vec3 wp, vec3 wn, vec2 p, inout vec3 col, inout float rough, ino
 		float abr = band * smoothstep(0.7, 0.8, streak) * (1.0 - smoothstep(0.005, 0.012, abs(sd))) * step(0.3, bt) * step(bt, 0.7);
 		col = mix(col, vec3(0.42, 0.06, 0.05), abr * 0.55);
 		rough = mix(rough, 0.32, abr);
+	}
+	// Plaie au couteau : fente fusiforme sombre, bords ecchymotiques, filet de sang qui coule vers
+	// le flanc
+	if (stab.w > 0.0 && wn.y > 0.2) {
+		vec2 sd2 = p - stab.xy;
+		vec2 ax = vec2(cos(stab.z), sin(stab.z));
+		vec2 lq = vec2(dot(sd2, ax), dot(sd2, vec2(-ax.y, ax.x)));
+		float hl = stab.w * 0.5;
+		float u = lq.x / hl;
+		float gap = 0.0017 * max(0.0, 1.0 - u * u);
+		float slit = (1.0 - smoothstep(gap * 0.5, gap + 0.0004, abs(lq.y))) * step(abs(u), 1.0);
+		float rim = 1.0 - smoothstep(0.0, 0.007, length(vec2(max(abs(lq.x) - hl, 0.0), lq.y)));
+		vec2 dn = normalize(vec2(-0.3, 1.0));
+		float ta = dot(sd2, dn);
+		float tc = dot(sd2, vec2(-dn.y, dn.x));
+		float wig = sin(ta * 150.0) * 0.0011 + sin(ta * 47.0) * 0.0016;
+		float trickle = step(0.002, ta) * (1.0 - smoothstep(0.02, 0.055, ta)) * (1.0 - smoothstep(0.0007, 0.002, abs(tc - wig - 0.002)));
+		float dried = (1.0 - smoothstep(0.004, 0.012, length(sd2))) * 0.5;
+		col = mix(col, col * vec3(0.84, 0.56, 0.62), rim * 0.65);
+		col = mix(col, vec3(0.30, 0.03, 0.03), max(trickle * 0.8, dried * (1.0 - slit)));
+		col = mix(col, vec3(0.10, 0.008, 0.01), slit);
+		rough = mix(rough, 0.22, max(slit, trickle));
 	}
 }
 
