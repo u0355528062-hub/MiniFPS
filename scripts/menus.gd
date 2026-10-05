@@ -166,7 +166,7 @@ func _build_main() -> Control:
 	var b3 := UIKit.button("Quitter", 380)
 	b3.pressed.connect(func() -> void: quit_pressed.emit())
 	col.add_child(b3)
-	var foot := UIKit.label("Anatomie : atlas Z-Anatomy (CC BY-SA 4.0, d'après BodyParts3D)   ·   Version 4.0", 13, Color(1, 1, 1, 0.4))
+	var foot := UIKit.label("Anatomie : atlas Z-Anatomy (CC BY-SA 4.0, d'après BodyParts3D)   ·   Version 5.0", 13, Color(1, 1, 1, 0.4))
 	foot.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	foot.position = Vector2(90, -50)
 	c.add_child(foot)
@@ -457,13 +457,16 @@ func show_end(elapsed: float, errors: int, grade: String, summary: String, log: 
 	s.custom_minimum_size.x = 600
 	info.add_child(s)
 	var grid := GridContainer.new()
-	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 34)
 	grid.add_theme_constant_override("v_separation", 4)
 	v.add_child(grid)
-	var stats := [["TEMPS", UIKit.fmt_time(elapsed)], ["ERREURS", str(errors)],
-		["REPÈRE", ("%d mm" % int(quality["mark_mm"])) if quality.has("mark_mm") else "—"],
-		["INCISION", ("± %.1f mm" % quality["incision_dev_mm"]) if quality.has("incision_dev_mm") else "—"]]
+	# Seules les mesures qui ont un sens pour cette intervention (repère au feutre, incision)
+	var stats := [["TEMPS", UIKit.fmt_time(elapsed)], ["ERREURS", str(errors)], ["ÉTAPES", str(op.steps.size())]]
+	if quality.has("mark_mm"):
+		stats.append(["REPÈRE", "%d mm" % int(quality["mark_mm"])])
+	if quality.has("incision_dev_mm"):
+		stats.append(["INCISION", "± %.1f mm" % quality["incision_dev_mm"]])
+	grid.columns = stats.size()
 	for stt in stats:
 		grid.add_child(UIKit.label(stt[0], 13, UIKit.TEXT_DIM, true))
 	for stt in stats:

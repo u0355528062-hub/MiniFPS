@@ -619,6 +619,21 @@ func _anatomy_material(part: String, kind: String) -> ShaderMaterial:
 		m.set_shader_parameter("hilum", HILUM)
 	if part in ["Coeur", "Coronaires", "Pericarde"]:
 		m.set_shader_parameter("beat_c", HEART_C)
+	if part == "Coeur" and landmarks.has("lad") and landmarks.has("heart_apex"):
+		# Graisse épicardique dans les sillons : le long de l'IVA et autour de la base des ventricules
+		var lp: Array = landmarks["lad"].get("points", [])
+		var arr := PackedVector4Array()
+		var n := mini(12, lp.size())
+		for k in n:
+			var q: Array = lp[int(round(float(k) / maxf(n - 1, 1) * (lp.size() - 1)))]
+			arr.append(Vector4(q[0], q[1], q[2], 0.0))
+		m.set_shader_parameter("fat_lad", arr)
+		m.set_shader_parameter("fat_lad_n", n)
+		var apex := lm("heart_apex")
+		var hc := lm("heart_center") if landmarks.has("heart_center") else HEART_C
+		var axis := (apex - hc).normalized()
+		var base := hc - axis * 0.015
+		m.set_shader_parameter("fat_av", Vector4(axis.x, axis.y, axis.z, axis.dot(base)))
 	return m
 
 
@@ -760,6 +775,11 @@ func paint_iodine(p: Vector3, radius := 0.02, strength := 1.0) -> float:
 	_iod_dirty = true
 	_iodine_wet = 1.0
 	return iodine_coverage()
+
+
+## Humidité du badigeon (1 : vient d'être passé, brillant ; 0 : sec).
+func set_iodine_wet(v: float) -> void:
+	_iodine_wet = v
 
 
 func iodine_coverage() -> float:

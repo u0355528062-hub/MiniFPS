@@ -35,6 +35,8 @@ var _echo_rect: TextureRect
 var _echo_tag: Label
 var _current_step := -1
 var _details := true
+var marker: TargetMarker  ## repère de l'endroit où agir (flèche au bord de l'écran s'il est hors champ)
+var _arrow: OffscreenArrow
 
 
 func build() -> void:
@@ -206,6 +208,10 @@ func build() -> void:
 	_help.offset_bottom = -110
 	root.add_child(_help)
 	_help.visible = Settings.show_hints
+	# --- Flèche vers le repère quand il sort de l'écran
+	_arrow = OffscreenArrow.new()
+	_arrow.visible = false
+	root.add_child(_arrow)
 	set_process_unhandled_input(true)
 
 
@@ -340,6 +346,7 @@ func _crank_ready() -> bool:
 func _process(_delta: float) -> void:
 	if hand == null:
 		return
+	_update_arrow()
 	for i in _slots.size():
 		var inst := instruments[i]
 		var held := hand.held == inst
@@ -372,3 +379,56 @@ func _process(_delta: float) -> void:
 	elif hand.held == null and step_kind == "crank" and _crank_ready():
 		pr = "Vise l'écarteur · Clic gauche maintenu pour tourner la manivelle"
 	_prompt.text = pr
+
+
+## Flèche au bord de l'écran, tournée vers le repère de l'étape quand il est hors champ (derrière
+## le joueur ou sur le côté) : on ne cherche jamais où agir.
+func _update_arrow() -> void:
+	var cam := player.camera if player else null
+	if marker == null or cam == null or not marker.is_visible_in_tree():
+		_arrow.visible = false
+		return
+	var vp := root.get_viewport_rect().size
+	var p := marker.global_position
+	var behind := cam.is_position_behind(p)
+	var sp := cam.unproject_position(p)
+	var m := 70.0
+	if not behind and sp.x > m and sp.x < vp.x - m and sp.y > m and sp.y < vp.y - m:
+		_arrow.visible = false
+		return
+	var c := vp * 0.5
+	var d := sp - c
+	if behind:
+		d = -d
+	if d.length() < 1.0:
+		d = Vector2(0.0, 1.0)
+	var half := c - Vector2(m, m)
+	var k := minf(half.x / maxf(absf(d.x), 0.001), half.y / maxf(absf(d.y), 0.001))
+	_arrow.visible = true
+	_arrow.position = c + d * k
+	_arrow.rotation = d.angle()
+
+
+## Flèche lumineuse (pointe vers +X), pulsée.
+class OffscreenArrow:
+	extends Control
+	var _t := 0.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _process(delta: float) -> void:
+		_t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var a := 0.65 + 0.35 * sin(_t * 6.0)
+		var col := Color(UIKit.ACCENT.r, UIKit.ACCENT.g, UIKit.ACCENT.b, a)
+		var pts := PackedVector2Array([Vector2(26, 0), Vector2(-14, -18), Vector2(-6, 0), Vector2(-14, 18)])
+		draw_colored_polygon(pts, Color(0.02, 0.05, 0.06, 0.55 * a), PackedVector2Array(), null)
+		var inner := PackedVector2Array()
+		for q in pts:
+			inner.append(q * 0.8 + Vector2(2, 0))
+		draw_colored_polygon(inner, col)
+		pts.append(pts[0])
+		draw_polyline(pts, Color(1, 1, 1, 0.5 * a), 1.5, true)

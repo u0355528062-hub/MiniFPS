@@ -19,6 +19,12 @@ uniform float fiber = 0.0;
 uniform float spots = 0.0;
 uniform float vessel_amount = 0.0;
 uniform float fat_grooves = 0.0;
+// Cœur : la graisse épicardique suit les sillons (IVA, sillon auriculo-ventriculaire) au lieu de
+// taches au hasard ; fat_lad = tracé de l'IVA (position au repos), fat_av = plan du sillon
+// auriculo-ventriculaire (normale xyz, décalage w)
+uniform vec4 fat_lad[12];
+uniform int fat_lad_n = 0;
+uniform vec4 fat_av = vec4(0.0);
 uniform float alt_mix = 1.0;  // part de la seconde couleur dans le grain du tissu
 uniform float cuttable = 1.0;
 uniform float is_pleura = 0.0;
@@ -233,7 +239,23 @@ void fragment() {
 			col = mix(col, vec3(0.22, 0.15, 0.17), smoothstep(0.74, 0.92, v) * 0.55 * spots);
 		}
 		if (fat_grooves > 0.0) {
-			float g = smoothstep(0.55, 0.78, tri_tex(detail, wpos, n0, tex_scale * 0.45).r);
+			float nz = tri_tex(detail, wpos, n0, tex_scale * 0.45).r;
+			float g = smoothstep(0.55, 0.78, nz);
+			if (fat_lad_n > 1) {
+				// Bande de graisse le long de l'IVA et dans le sillon auriculo-ventriculaire, bords
+				// irréguliers ; quelques îlots ailleurs
+				float d = 1e9;
+				for (int k = 0; k < 11; k++) {
+					if (k + 1 >= fat_lad_n) {
+						break;
+					}
+					d = min(d, seg_dist(rpos, fat_lad[k].xyz, fat_lad[k + 1].xyz));
+				}
+				float jag = (nz - 0.5) * 0.007;
+				float lad_f = 1.0 - smoothstep(0.003, 0.009, d + jag);
+				float av_f = 1.0 - smoothstep(0.004, 0.012, abs(dot(rpos, fat_av.xyz) - fat_av.w) + jag * 1.4);
+				g = max(max(lad_f, av_f), smoothstep(0.78, 0.9, nz) * 0.35);
+			}
 			col = mix(col, alt_color, g * 0.75 * fat_grooves);
 		}
 		if (vessel_amount > 0.0) {

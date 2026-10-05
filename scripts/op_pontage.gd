@@ -23,7 +23,10 @@ const SAW_DEPTH := 0.02  ## la lame traverse l'os (sternum épais de 1,5 à 2 cm
 const FALL := Vector2(0.03, 0.16)  ## l'écartement gagne toute la paroi (les côtes plient)
 const DEEP := Vector2(0.032, 0.06)  ## ... mais pas le cœur ni le péricarde
 const LIMA_LIFT := 0.026  ## l'aide soulève le bord gauche du sternum
-const PERI_W := 0.036  ## demi-largeur de l'ouverture du péricarde
+const PERI_W := 0.052  ## demi-largeur de l'ouverture du péricarde (large : toute la face avant du cœur)
+const WOUND_DEPTH := 0.012  ## peau et graisse au-dessus du sternum
+const CLOSE_SPREAD := 0.12  ## écartement restant quand l'écarteur est retiré
+const CLOSE_OPEN := 0.45  ## ouverture de la peau pendant la pose des fils d'acier
 
 var sternum := PackedVector3Array()  ## ligne médiane, sur la peau
 var sternum_h := PackedFloat32Array()
@@ -49,9 +52,11 @@ var _heart_follow: Node3D
 var _graft: MeshInstance3D
 var _graft_fat: MeshInstance3D
 var _graft_clip: MeshInstance3D
+var _graft_route := PackedVector3Array()  ## points de passage du greffon cousu (cœur au repos)
 var _lines: Array[MeshInstance3D] = []
 var _wires: Array[Node3D] = []
 var _stays: Array[Node3D] = []
+var _staple_nodes: Array[Node3D] = []
 var _thread_mat: StandardMaterial3D
 var _wire_mat: StandardMaterial3D
 var _vf_at := -1.0  ## moment où le cœur se met à fibriller après le déclampage
@@ -103,7 +108,7 @@ func configure_patient(p: Patient) -> void:
 	p.INC_B = STERNUM[STERNUM.size() - 1]
 	p.paint_r = Vector2(0.17, 0.12)  # badigeon sur toute la fenêtre
 	p.wound_w = 0.05
-	p.WOUND_DEPTH = 0.012  # peau et graisse ; dessous, le sternum
+	p.WOUND_DEPTH = WOUND_DEPTH  # peau et graisse ; dessous, le sternum
 	p.wall_taper = 0.1
 	p.zone_v_min = 0.12
 	p.hole_limit = 0.14
@@ -125,6 +130,7 @@ func build_extras() -> void:
 	patient.heart_rate = 72.0
 	patient.beat_gain = 1.0
 	patient.fill_iodine()
+	patient.set_iodine_wet(0.3)  # badigeon séché sous le film adhésif
 	# Artère mammaire gauche (atlas) : portion qui longe le sternum
 	var lm: Dictionary = Patient.landmarks.get("lima", {})
 	for q in lm.get("points", []):
@@ -132,8 +138,8 @@ func build_extras() -> void:
 		if v.x < 0.088 and v.x > -0.036:
 			lima_rest.append(v)
 	# Péricarde : au-dessus du cœur et de l'aorte, un peu à gauche de la ligne médiane
-	pc_a = _tissue_top(0.042, 0.01, 2.0)
-	pc_b = _tissue_top(-0.036, 0.01, 2.0)
+	pc_a = _tissue_top(0.042, 0.018, 2.0)
+	pc_b = _tissue_top(-0.036, 0.018, 2.0)
 	var pm := (pc_a + pc_b) * 0.5
 	peri_depth = Patient.body_height(pm.x, pm.z) - pm.y
 	# Aorte ascendante : canule en haut, clamp plus bas (entre la canule et le cœur)
@@ -175,7 +181,7 @@ func build_extras() -> void:
 	_wire_mat = MeshUtil.mat(Color(0.78, 0.8, 0.83), 0.22, 1.0)
 	_cec = CecMachine.new()
 	_cec.name = "MachineCEC"
-	_cec.position = Vector3(-0.12, 0.0, 1.22)
+	_cec.position = Vector3(0.02, 0.0, 1.22)
 	_cec.rotation_degrees.y = 180.0
 	root.add_child(_cec)
 	# Arceau d'anesthésie (sous le champ de tête) : barre au-dessus du cou, montants fixés aux rails
@@ -280,7 +286,8 @@ func define_steps() -> void:
 		{"id": "decanulation", "kind": "pick", "list": "Décanulation", "inst": "canule_aortique",
 			"title": "Arrête la CEC, retire les canules",
 			"text": "Le cœur a repris la main : la machine ralentit puis s'arrête. Retire la canule aortique (main vide, clic dessus) ; l'aide noue la bourse, la canule veineuse est déjà retirée.",
-			"label": "Canule", "near": 0.06, "enter": _wean, "done": _decan_done,
+			"label": "Canule", "near": 0.06, "target": func() -> Vector3: return _cannula_grip("canule_aortique"),
+			"enter": _wean, "done": _decan_done,
 			"done_msg": "Sevrage réussi : le cœur assure seul la circulation"},
 		{"id": "fermeture", "kind": "suture", "list": "Fermeture du sternum", "inst": "porte_aiguille",
 			"title": "Ferme le sternum aux fils d'acier",
@@ -439,11 +446,15 @@ func _smoke(p: Vector3) -> void:
 
 ## Greffon : l'artère mammaire (rouge) dans sa graisse, avec un clip au bout.
 func _build_graft() -> void:
-	var art := MeshUtil.mat(Color(0.62, 0.08, 0.07), 0.3)
+	# Artère rouge vif dans une fine gaine rosée (fascia, petites veines) : bien visible sur la
+	# graisse jaune du cœur
+	var art := MeshUtil.mat(Color(0.72, 0.07, 0.06), 0.25)
 	art.clearcoat_enabled = true
 	art.clearcoat = 0.7
 	var fat := StandardMaterial3D.new()
-	fat.albedo_color = Color(0.93, 0.78, 0.4, 0.82)
+	fat.albedo_color = Color(0.9, 0.52, 0.42, 0.5)
+	if OS.get_cmdline_user_args().has("--debugparts"):
+		fat.albedo_color = Color(0.0, 1.0, 0.2, 0.9)
 	fat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fat.roughness = 0.35
 	fat.clearcoat_enabled = true
@@ -473,27 +484,30 @@ func _update_graft() -> void:
 		return
 	var path := _lima_path()
 	var top := path[0]
-	var low := path[path.size() - 1]
-	var end := lad_c
-	if _heart_follow:
-		end = _heart_follow.transform * lad_c
+	var hf := _heart_follow.transform if _heart_follow else Transform3D.IDENTITY
+	var end := hf * lad_c
+	if _graft_route.is_empty():
+		# Trajet du greffon cousu : il sort de sous le bord gauche du sternum, entre dans le
+		# péricarde au-dessus de l'artère pulmonaire, puis se couche sur la face avant du cœur
+		_graft_route = PackedVector3Array([_tissue_top(0.062, 0.03, 5.0), _tissue_top(0.03, 0.042, 4.0), _tissue_top(0.004, 0.052, 3.5)])
+	var ctrl := PackedVector3Array([top, _graft_route[0], hf * _graft_route[1], hf * _graft_route[2], end])
+	var curve := Cable.smooth(ctrl, 5)
+	var n := curve.size()
 	var pts := PackedVector3Array()
-	var n := 18
 	for i in n:
 		var t := float(i) / (n - 1)
-		var on_wall := Procedure.path_point(path, t)
-		# Vers l'IVA : courbe qui quitte la paroi et descend dans le péricarde
-		var mid := top.lerp(end, 0.55) + Vector3.UP * 0.035
-		var to_lad := MeshUtil.bezier(top, top + Vector3(-0.02, 0.01, -0.01), mid, end, n)[i]
-		pts.append(on_wall.lerp(to_lad, graft_on))
+		pts.append(Procedure.path_point(path, t).lerp(curve[i], graft_on))
 	var rr := PackedFloat32Array()
 	var rf := PackedFloat32Array()
 	for i in n:
 		var t := float(i) / (n - 1)
-		rr.append(lerpf(0.0022, 0.0016, t))
-		rf.append(lerpf(0.0045, 0.0026, t))
+		rr.append(lerpf(0.0024, 0.0018, t))
+		rf.append(lerpf(0.0038, 0.0024, t))
 	_graft.mesh = MeshUtil.tube(pts, rr, 10)
 	_graft_fat.mesh = MeshUtil.tube(pts, rf, 10)
+	if OS.get_cmdline_user_args().has("--debug") and graft_on > 0.99 and not has_meta("graft_dbg"):
+		set_meta("graft_dbg", true)
+		print("DEBUG greffon ", pts[0], " → ", pts[n >> 1], " → ", pts[n - 1], " route=", _graft_route, " visible=", _graft.is_visible_in_tree())
 	var e := pts[n - 1]
 	var d := (pts[n - 1] - pts[n - 2]).normalized()
 	_graft_clip.visible = graft_on < 0.5
@@ -580,36 +594,71 @@ func _vei_done(hand: SurgeonHand, instant: bool) -> void:
 
 ## La canule reste en place (tenue par un garrot) ; sa ligne part vers la machine.
 func _park_cannula(inst_id: String, hand: SurgeonHand, _instant: bool) -> void:
-	# La canule reste dans l'axe de son trajet (fixée par un garrot) : pose toujours identique, la
-	# tubulure qui en part est donc calculée une seule fois (cache des câbles)
+	# Le bout de la canule reste dans le vaisseau, dans l'axe de son trajet (pose toujours
+	# identique : la tubulure qui en part est calculée une seule fois, cache des câbles). La partie
+	# souple sort du thorax, se couche sur les champs et pend jusqu'à la machine : c'est la ligne.
 	var inst := instrument(inst_id)
-	var s: Dictionary = {}
-	for st in steps:
-		if st.get("inst", "") == inst_id and st["kind"] == "insert":
-			s = st
+	var s := _insert_step(inst_id)
 	var tgt: Vector3 = s["target"].call()
 	var axis: Vector3 = s["axis"]
 	var xf := inst.tip_transform(tgt + axis * float(s["depth"]), axis, Vector3(0, 0, -1))
 	if hand and hand.held == inst:
 		hand.release_parked()
 	park(inst, xf, true)
-	_add_line(inst, inst_id == "canule_aortique")
+	_show_cannula_body(inst, false)
+	_add_line(inst_id, inst_id == "canule_aortique")
 
 
-func _add_line(inst: Instrument, arterial: bool) -> void:
-	var back := inst.global_transform * inst.back_local
+func _insert_step(inst_id: String) -> Dictionary:
+	for st in steps:
+		if st.get("inst", "") == inst_id and st["kind"] == "insert":
+			return st
+	return {}
+
+
+## Corps rigide de la canule (long tube transparent) : caché tant que la ligne souple le remplace.
+func _show_cannula_body(inst: Instrument, on: bool) -> void:
+	for n in ["Tube", "Raccord", "Spirale", "Repere"]:
+		var c := inst.model.find_child(n, false, false)
+		if c:
+			(c as Node3D).visible = on
+
+
+## Point où l'on saisit la canule pour la retirer (à sa sortie du vaisseau).
+func _cannula_grip(inst_id: String) -> Vector3:
+	var s := _insert_step(inst_id)
+	return (s["target"].call() as Vector3) - (s["axis"] as Vector3) * 0.01
+
+
+func _add_line(inst_id: String, arterial: bool) -> void:
+	var s := _insert_step(inst_id)
+	var tgt: Vector3 = s["target"].call()
+	var axis: Vector3 = s["axis"]
 	var port := _cec.art_port_global() if arterial else _cec.ven_port_global()
-	# Les lignes quittent le champ, passent sur le drap du côté gauche et pendent jusqu'à la machine
-	var mid := back.lerp(port, 0.5) + Vector3.UP * 0.07
-	var path := PackedVector3Array([back, back + (back - inst.global_transform * inst.tip_local).normalized() * 0.05, mid, port])
-	var pts := Cable.smooth(Cable.lay(path, 0.12, 0.005, 0.03, 2, 1, []))
+	# Du vaisseau, la tubulure remonte hors du thorax, file sur le drap du côté gauche, passe le
+	# bord de la table et pend jusqu'à la machine
+	var inside := tgt + axis * float(s["depth"]) * 0.6
+	var exit := tgt - axis * 0.012
+	var out := exit - axis * 0.03 + Vector3.UP * 0.012
+	# Elles partent vers le haut du champ (la face avant du cœur reste libre pour le pontage), puis
+	# passent sur l'épaule gauche
+	var cran := Cable.on_surface(0.11, 0.03 if arterial else 0.012, 0.01)
+	var side := Cable.on_surface(0.1, 0.2, 0.01)
+	var edge := Vector3(0.09, Patient.TABLE_TOP + 0.12, Patient.TABLE_MAX.y + 0.04)
+	var path := PackedVector3Array([inside, exit, out, cran, side, edge, port])
+	var pts := Cable.smooth(Cable.lay(path, 0.08, 0.006, 0.025, 2, 1, []))
 	var rr := PackedFloat32Array()
 	rr.resize(pts.size())
-	rr.fill(0.0048 if arterial else 0.0068)
+	rr.fill(0.0055 if arterial else 0.0075)
 	var line := MeshInstance3D.new()
 	line.name = "LigneArterielle" if arterial else "LigneVeineuse"
 	line.mesh = MeshUtil.tube(pts, rr, 12)
-	line.material_override = MeshUtil.mat(Color(0.72, 0.06, 0.06) if arterial else Color(0.32, 0.02, 0.04), 0.12)
+	# PVC transparent plein de sang : rouge vif (artériel) ou sombre (veineux), brillant
+	var m := MeshUtil.mat(Color(0.68, 0.05, 0.05) if arterial else Color(0.3, 0.02, 0.04), 0.1)
+	m.clearcoat_enabled = true
+	m.clearcoat = 0.8
+	m.clearcoat_roughness = 0.05
+	line.material_override = m
 	root.add_child(line)
 	_lines.append(line)
 	Cable.save_cache()  # lignes livrées avec le jeu (calculées une fois, hors export)
@@ -806,6 +855,7 @@ func _wean() -> void:
 func _decan_done(_h: SurgeonHand, instant: bool) -> void:
 	for inst_id in ["canule_aortique", "canule_veineuse"]:
 		var inst := instrument(inst_id)
+		_show_cannula_body(inst, true)
 		proc.parked.erase(inst)
 		if instant:
 			inst.parked = false
@@ -829,22 +879,38 @@ func _decan_done(_h: SurgeonHand, instant: bool) -> void:
 # ---------------------------------------------------------------- Fermeture
 
 func _close_enter() -> void:
-	# L'écarteur est retiré, l'aide rapproche les deux moitiés du sternum ; les fils de suspension
-	# du péricarde sont coupés
+	# L'écarteur est retiré, l'aide rapproche les deux moitiés du sternum ; la peau revient sur le
+	# sternum (on voit ses deux moitiés et la fente entre elles)
+	_remove_retractor(false)
+	var from := spread
+	var tw := root.create_tween()
+	tw.tween_method(func(v: float) -> void:
+		patient.set_aperture(sternum, sternum_h, 0.0, 1.0, CUT_W, SPREAD * lerpf(from, CLOSE_SPREAD, v), 0.045, FALL, DEEP)
+		patient.opening = lerpf(1.0, CLOSE_OPEN, v), 0.0, 1.0, 1.2).set_trans(Tween.TRANS_SINE)
+	spread = CLOSE_SPREAD
+
+
+## Écarteur rendu à la table (bras refermés) ; les fils de suspension du péricarde sont coupés.
+func _remove_retractor(instant: bool) -> void:
 	for st in _stays:
 		st.queue_free()
 	_stays.clear()
 	var ret := instrument("ecarteur_sternal")
 	if ret.parked:
 		proc.parked.erase(ret)
-		ret.return_to_tray()
+		if instant:
+			ret.parked = false
+			ret.global_transform = ret.tray_transform
+		else:
+			ret.return_to_tray()
 	if ret.model is FinochiettoModel:
 		var fm := ret.model as FinochiettoModel
-		var tw0 := root.create_tween()
-		tw0.tween_method(fm.set_spread, fm.spread, 0.012, 0.8)
-	var tw := root.create_tween()
-	tw.tween_method(func(v: float) -> void: patient.set_aperture(sternum, sternum_h, 0.0, 1.0, CUT_W, SPREAD * v, 0.045, FALL, DEEP), spread, 0.12, 1.2)
-	spread = 0.12
+		fm.set_lift(0.0)
+		if instant:
+			fm.set_spread(0.012)
+		else:
+			var tw0 := root.create_tween()
+			tw0.tween_method(fm.set_spread, fm.spread, 0.012, 0.8)
 
 
 func _wire_pairs() -> Array:
@@ -880,21 +946,32 @@ func _rebuild_wire(w: Node3D) -> void:
 		c.queue_free()
 	var x: float = w.get_meta("x")
 	var top := Patient.body_height(x, 0.0)
+	var bone := top - WOUND_DEPTH  # face avant du sternum, sous la peau et la graisse
 	var half := CUT_W + SPREAD * spread * _h_at(x) + 0.011
-	var pts := PackedVector3Array([Vector3(x, top - 0.021, -half), Vector3(x, top - 0.012, -half - 0.003), Vector3(x, top - 0.004, -half + 0.002),
-		Vector3(x, top - 0.003, -0.002), Vector3(x, top - 0.003, 0.002), Vector3(x, top - 0.004, half - 0.002), Vector3(x, top - 0.012, half + 0.003), Vector3(x, top - 0.021, half)])
-	var rr := PackedFloat32Array()
-	rr.resize(pts.size())
-	rr.fill(0.0006)
+	# Le fil passe derrière chaque moitié du sternum, remonte sur son bord externe et revient sur
+	# sa face avant jusqu'à la torsade, au milieu
+	var pts := PackedVector3Array()
+	for sd in [-1.0, 1.0]:
+		var side := PackedVector3Array([Vector3(x, bone - 0.018, sd * half), Vector3(x, bone - 0.009, sd * (half + 0.0028)),
+			Vector3(x, bone - 0.0008, sd * (half - 0.0012)), Vector3(x, bone + 0.0006, sd * half * 0.55), Vector3(x, bone + 0.0008, sd * 0.0022)])
+		if sd < 0.0:
+			pts.append_array(side)
+		else:
+			side.reverse()
+			pts.append_array(side)
 	var loop := MeshInstance3D.new()
-	loop.mesh = MeshUtil.tube(Cable.smooth(pts), _radii(Cable.smooth(pts).size(), 0.0006), 6)
+	var sm := Cable.smooth(pts)
+	loop.mesh = MeshUtil.tube(sm, _radii(sm.size(), 0.0006), 6)
 	loop.material_override = _wire_mat
 	w.add_child(loop)
+	# Torsade (5 mm), puis les bouts coupés couchés vers les pieds
 	var twist := MeshInstance3D.new()
 	var tp := PackedVector3Array()
 	for k in 10:
 		var a := k * 1.4
-		tp.append(Vector3(x + 0.0008 * cos(a), top - 0.002 + k * 0.0004, 0.0008 * sin(a)))
+		tp.append(Vector3(x + 0.0008 * cos(a), bone + 0.001 + k * 0.00045, 0.0008 * sin(a)))
+	for j in range(1, 4):
+		tp.append(Vector3(x - 0.0016 * j, bone + 0.0052 - 0.0006 * j, 0.0))
 	twist.mesh = MeshUtil.tube(tp, _radii(tp.size(), 0.0007), 6)
 	twist.material_override = _wire_mat
 	w.add_child(twist)
@@ -908,21 +985,47 @@ static func _radii(n: int, r: float) -> PackedFloat32Array:
 
 
 func _close_done(instant: bool) -> void:
-	# Les fils serrés rapprochent les berges : sternum fermé
+	# Les fils serrés rapprochent les berges : sternum fermé ; la peau est refermée aux agrafes
 	if instant:
+		_remove_retractor(true)
 		_close_to(0.0)
+		_staples()
 	else:
 		var tw := root.create_tween()
 		tw.tween_method(_close_to, spread, 0.0, 1.5).set_trans(Tween.TRANS_SINE)
+		tw.tween_callback(_staples)
 		for h in proc.hands:
 			if h.held and h.held.id == "porte_aiguille":
 				h.put_back()
 
 
+## Agrafes cutanées en travers de l'incision refermée.
+func _staples() -> void:
+	var n := 12
+	for i in n:
+		var p := Procedure.path_point(sternum, (i + 0.5) / n)
+		var y := Patient.body_height(p.x, p.z) + 0.0012
+		var nrm := Patient.skin_normal(p.x, p.z)
+		var pts := PackedVector3Array([Vector3(p.x, y - 0.0018, -0.0032), Vector3(p.x, y - 0.0002, -0.0033), Vector3(p.x, y + 0.0003, -0.0022),
+			Vector3(p.x, y + 0.0004, 0.0), Vector3(p.x, y + 0.0003, 0.0022), Vector3(p.x, y - 0.0002, 0.0033), Vector3(p.x, y - 0.0018, 0.0032)])
+		var st := MeshInstance3D.new()
+		st.name = "Agrafe"
+		var sm := Cable.smooth(pts)
+		st.mesh = MeshUtil.tube(sm, _radii(sm.size(), 0.00032), 5)
+		st.material_override = _wire_mat
+		root.add_child(st)
+		# Couchée sur la peau (la peau monte vers l'abdomen) : tournée autour de son milieu
+		var b := Basis(Quaternion(Vector3.UP, nrm))
+		var c := Vector3(p.x, y, 0.0)
+		st.global_transform = Transform3D(b, c - b * c)
+		st.set_meta("base", st.global_transform)
+		_staple_nodes.append(st)
+
+
 func _close_to(v: float) -> void:
 	spread = v
 	patient.set_aperture(sternum, sternum_h, 0.0, 1.0, CUT_W * minf(v * 8.0, 1.0), SPREAD * v, 0.045, FALL, DEEP)
-	patient.opening = lerpf(0.0, 1.0, v / 0.12)
+	patient.opening = lerpf(0.0, CLOSE_OPEN, v / CLOSE_SPREAD)
 	for w in _wires:
 		_rebuild_wire(w)
 
@@ -937,6 +1040,11 @@ func process(delta: float) -> void:
 		_heart_follow.transform = Transform3D(hb, Patient.HEART_C - hb * Patient.HEART_C)
 	if _vf_at > 0.0 and _t >= _vf_at:
 		_start_vf()
+	# Les agrafes montent et descendent avec la peau (respiration)
+	for st in _staple_nodes:
+		var base: Transform3D = st.get_meta("base")
+		var c := base * Vector3.ZERO
+		st.global_transform = base.translated(Vector3.UP * patient.breath_offset(c.x, c.z))
 	# Le bout du greffon suit les battements une fois cousu
 	if _graft and graft_on > 0.99 and patient.beat_gain > 0.0:
 		_graft_t += delta

@@ -123,6 +123,7 @@ func _ready() -> void:
 		hud.instruments = tray.ordered
 		add_child(hud)
 		hud.build()
+		hud.marker = procedure.marker
 		procedure.uis.append(hud)
 		player.pause_requested.connect(_on_pause_key)
 		player.view_mode_requested.connect(_cycle_view)
@@ -506,6 +507,8 @@ func _take_shot() -> void:
 	cam.current = true
 	if hud and not view in ["player"]:
 		hud.visible = false
+	if menus and not view in ["menu", "briefing", "end", "player"]:
+		menus.visible = false  # vue libre : la scène seule (pas le compte rendu de fin)
 	for i in int(args.get("frames", "40")):
 		await get_tree().process_frame
 	var img := get_viewport().get_texture().get_image()
