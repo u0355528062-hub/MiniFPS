@@ -224,6 +224,8 @@ func do_step() -> void:
 				if proc.step != si:
 					break
 		"needle":
+			while proc.anesthesia_ready_at > 0 and Time.get_ticks_msec() < proc.anesthesia_ready_at + 200:
+				await _frames(5)
 			var entry: Vector3 = s["target"].call()
 			var axis: Vector3 = s["axis"]
 			var fd: float = s["flash_depth"]
@@ -247,6 +249,22 @@ func do_step() -> void:
 				if proc.step != si:
 					break
 			squeeze(0.0)
+		"thread":
+			var tgt: Vector3 = s["target"].call()
+			var ok: Vector2 = s["ok"]
+			want_axis = s["axis"]
+			squeeze(0.0)
+			await tip_to(tgt, 14)
+			squeeze(1.0)
+			for i in 900:
+				await tip_to(tgt, 1)
+				if proc.step != si or float(proc.st.get("len", 0.0)) >= (ok.x + ok.y) * 0.5:
+					break
+			squeeze(0.0)
+			for i in 30:
+				await _frames(1)
+				if proc.step != si:
+					break
 		"aspirate":
 			var entry: Vector3 = s["target"].call()
 			var axis: Vector3 = s["axis"]

@@ -15,6 +15,12 @@ const TIP_Z := 0.093  ## pointe biseautée de l'aiguille
 
 var aspiration := 0.0
 var flash := ""
+## Aiguille seule (sans cathéter souple) : aiguille introductrice des voies centrales (Seldinger).
+var with_catheter := true:
+	set(v):
+		with_catheter = v
+		if catheter:
+			catheter.visible = v
 ## Seringue vide au départ qui se remplit de sang quand on tire (ponction d'un épanchement) ; sinon
 ## seringue à moitié pleine de sérum (bulles d'air quand on aspire de l'air)
 var draws_blood := false:
@@ -33,6 +39,8 @@ var _liquid_mat: StandardMaterial3D
 var _bubbles: Array[MeshInstance3D] = []
 var _flash_k := 0.0
 var _t := 0.0
+var _syringe_parts: Array[Node3D] = []
+var _syringe_on := true
 
 
 func _init() -> void:
@@ -48,7 +56,7 @@ func _init() -> void:
 	var barrel := _cyl(BARREL_R, BARREL_Z1 - BARREL_Z0, (BARREL_Z0 + BARREL_Z1) * 0.5, clear, "Corps")
 	barrel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var flange := MeshUtil.box_instance(self, Vector3(0.034, 0.002, 0.0035), Vector3(0, 0, BARREL_Z0 - 0.001), white, "Ailettes")
-	flange.rotation_degrees = Vector3(0, 0, 0)
+	_syringe_parts.append_array([barrel, flange])
 	_cyl(0.0022, 0.008, BARREL_Z1 + 0.004, white, "EmboutLuer")
 	# Graduations
 	var grad := MeshUtil.mat(Color(0.1, 0.12, 0.15), 0.6)
@@ -65,6 +73,7 @@ func _init() -> void:
 		ring.position = Vector3(0, 0, BARREL_Z1 - 0.004 - k * 0.0055)
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(ring)
+		_syringe_parts.append(ring)
 	# Sérum (moitié de la seringue), bulles d'air
 	_liquid_mat = StandardMaterial3D.new()
 	_liquid_mat.albedo_color = Color(0.78, 0.9, 1.0, 0.38)
@@ -97,6 +106,7 @@ func _init() -> void:
 	_seal = _cyl(BARREL_R - 0.0004, 0.004, 0.0, MeshUtil.mat(Color(0.08, 0.08, 0.09), 0.5), "Joint")
 	_rod = MeshUtil.box_instance(self, Vector3(0.0055, 0.0055, 0.06), Vector3.ZERO, white, "Tige")
 	_thumb = _cyl(0.0085, 0.0018, 0.0, white, "AppuiPouce")
+	_syringe_parts.append_array([_liquid, _seal, _rod, _thumb])
 	# Cathéter : embase orange (14G), gaine translucide ; aiguille d'acier dedans
 	catheter = Node3D.new()
 	catheter.name = "Catheter"
@@ -150,7 +160,7 @@ func set_aspiration(v: float) -> void:
 		_rod.position.z = sz - 0.032
 		_thumb.position.z = sz - 0.063
 		var hb := BARREL_Z1 - sz - 0.002
-		_liquid.visible = hb > 0.0008
+		_liquid.visible = _syringe_on and hb > 0.0008
 		_liquid.scale = Vector3(1, maxf(hb, 0.0001), 1)
 		_liquid.position.z = BARREL_Z1 - hb * 0.5
 		return
@@ -169,6 +179,17 @@ func set_aspiration(v: float) -> void:
 func set_flash(kind: String) -> void:
 	flash = kind
 	_flash_k = 0.0
+
+
+## Seringue retirée (technique de Seldinger) : il ne reste que l'aiguille et son embase.
+func show_syringe(v: bool) -> void:
+	_syringe_on = v
+	for n in _syringe_parts:
+		n.visible = v
+	for b in _bubbles:
+		b.visible = b.visible and v
+	if v and draws_blood:
+		set_aspiration(aspiration)
 
 
 func detach_catheter() -> Node3D:

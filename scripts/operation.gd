@@ -9,7 +9,7 @@ const CATALOG := [
 	{"id": "drain", "name": "Drain thoracique", "tag": "Pneumothorax compressif : un drain entre deux côtes, en urgence.", "level": 2, "minutes": 6, "ready": true},
 	{"id": "exsufflation", "name": "Exsufflation à l'aiguille", "tag": "Pneumothorax suffocant : faire sortir l'air en quelques secondes.", "level": 1, "minutes": 3, "ready": true},
 	{"id": "pericardiocentese", "name": "Péricardiocentèse", "tag": "Tamponnade : vider le sang autour du cœur, sous échographie.", "level": 2, "minutes": 5, "ready": true},
-	{"id": "voie_centrale", "name": "Voie veineuse centrale", "tag": "Choc : un cathéter dans la veine sous-clavière (technique de Seldinger).", "level": 2, "minutes": 7, "ready": false},
+	{"id": "voie_centrale", "name": "Voie veineuse centrale", "tag": "Choc : un cathéter dans la veine sous-clavière (technique de Seldinger).", "level": 2, "minutes": 7, "ready": true},
 	{"id": "thoracotomie", "name": "Thoracotomie de sauvetage", "tag": "Arrêt cardiaque après une plaie : ouvrir le thorax, masser le cœur.", "level": 3, "minutes": 8, "ready": false},
 	{"id": "pontage", "name": "Pontage coronarien", "tag": "Infarctus : cœur arrêté sous machine, nouvelle artère sur l'IVA.", "level": 3, "minutes": 20, "ready": false},
 ]
@@ -55,6 +55,8 @@ static func create(op_id: String) -> Operation:
 			return OpExsufflation.new()
 		"pericardiocentese":
 			return OpPericardiocentese.new()
+		"voie_centrale":
+			return OpVoieCentrale.new()
 		_:
 			return OpDrain.new()
 

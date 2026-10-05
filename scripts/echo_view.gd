@@ -27,6 +27,7 @@ var _beat := 0.0
 var _frame := 0.0
 var _face := Vector3.ZERO
 var _beam := Vector3.DOWN
+var _was_on := true
 
 
 static func load_volume() -> bool:
@@ -133,7 +134,16 @@ func set_needle(a: Vector3, b: Vector3, visible_now: bool) -> void:
 func _process(delta: float) -> void:
 	_beat = fmod(_beat + delta * heart_rate / 60.0, 1.0)
 	_frame += 1.0
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
+	if on:
+		viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		_was_on = true
+	elif _was_on:
+		# Sonde rangée : l'écran repasse au noir (pas d'image figée)
+		_was_on = false
+		contact = 0.0
+		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	else:
+		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	material.set_shader_parameter("beat", _beat)
 	material.set_shader_parameter("frame", fmod(_frame, 97.0))
 	material.set_shader_parameter("effusion", effusion)

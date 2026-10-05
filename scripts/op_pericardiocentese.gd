@@ -6,8 +6,8 @@ extends Operation
 ##   1. Échographie : sonde sous la pointe du sternum, faisceau vers l'épaule gauche ; l'image (calculée
 ##      sur le vrai volume anatomique) montre le cœur qui bat et « nage » dans le liquide noir.
 ##   2. Désinfection de la région sous-xiphoïdienne.
-##   3. Ponction : aiguille dans l'angle entre l'appendice xiphoïde et le rebord costal gauche, à 30°
-##      de la peau, vers l'épaule gauche, en aspirant : le sang revient quand la pointe entre dans le
+##   3. Ponction : aiguille dans l'angle entre l'appendice xiphoïde et le rebord costal gauche, à
+##      30-50° de la peau, vers l'épaule gauche, en aspirant : le sang revient quand la pointe entre dans le
 ##      péricarde (l'aiguille est visible à l'échographie). Plus loin, c'est le cœur : extrasystoles.
 ##   4. Aspiration de 20 mL : l'épanchement diminue à l'image, la tension remonte.
 ##   5. On laisse le cathéter souple, raccordé à un robinet (drainage, nouvelle aspiration si besoin).
@@ -23,6 +23,7 @@ var heart_depth := 0.075  ## distance jusqu'au myocarde
 var effusion := 1.0
 var catheter: Node3D
 var _echo_shown := false
+var skin_angle := 35.0  ## angle entre l'aiguille et la peau (degrés)
 var _touch_ms := 0
 
 
@@ -86,8 +87,11 @@ func build_extras() -> void:
 	# La sonde, juste à droite de l'aiguille, regarde le cœur
 	probe_spot = patient.on_skin(Vector3(xi.x - 0.03, 0, -0.022))
 	probe_axis = (Patient.HEART_C - probe_spot).normalized()
+	# Angle réel entre l'aiguille et la peau (arrondi à 5°) pour la consigne
+	var n := Patient.skin_normal(entry.x, entry.z)
+	skin_angle = snappedf(90.0 - rad_to_deg(axis.angle_to(-n)), 5.0)
 	if OS.get_cmdline_user_args().has("--debug"):
-		print("PERICARDE entrée=%s axe=%s liquide=%.4f cœur=%.4f sonde=%s" % [entry, axis, fluid_depth, heart_depth, probe_spot])
+		print("PERICARDE entrée=%s axe=%s liquide=%.4f cœur=%.4f sonde=%s angle peau=%.0f°" % [entry, axis, fluid_depth, heart_depth, probe_spot, skin_angle])
 	var needle := instrument("cathlon")
 	if needle and needle.model is CathlonModel:
 		(needle.model as CathlonModel).draws_blood = true
@@ -119,7 +123,7 @@ func define_steps() -> void:
 			"done_msg": "Désinfecté"},
 		{"id": "ponction", "kind": "needle", "list": "Ponction", "inst": "cathlon",
 			"title": "Pique vers l'épaule gauche",
-			"text": "Dans l'angle entre la pointe du sternum et le rebord des côtes à gauche, à 30° de la peau, vers l'épaule gauche. Maintiens le clic : l'aiguille avance en aspirant. Suis la pointe brillante à l'échographie ; dès que du sang revient dans la seringue, arrête-toi.",
+			"text": "Dans l'angle entre la pointe du sternum et le rebord des côtes à gauche, à %d° de la peau, vers la gauche et vers le haut (direction de l'épaule gauche). Maintiens le clic : l'aiguille avance en aspirant. Suis la pointe brillante à l'échographie ; dès que du sang revient dans la seringue, arrête-toi." % int(skin_angle),
 			"label": "Pique ici", "ring": 0.8,
 			"target": func() -> Vector3: return patient.live(entry),
 			"axis": axis, "flash_depth": fluid_depth + 0.0025, "max_depth": heart_depth - 0.0015, "flash": "blood",

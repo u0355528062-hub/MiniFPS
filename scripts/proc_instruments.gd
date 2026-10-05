@@ -12,6 +12,12 @@ static func build(kind: String) -> Node3D:
 			return CathlonModel.new()
 		"sonde":
 			return ProbeModel.new()
+		"guide":
+			return SeldingerModels.guide()
+		"dilatateur":
+			return SeldingerModels.dilator()
+		"kt_central":
+			return SeldingerModels.central_catheter()
 	return Node3D.new()
 
 

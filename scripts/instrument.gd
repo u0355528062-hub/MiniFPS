@@ -10,7 +10,8 @@ signal grabbed(inst: Instrument)
 const GRIP := {
 	"bistouri": 0.56, "ciseaux": 0.42, "porte_aiguille": 0.42, "kelly": 0.44, "overholt": 0.44,
 	"mikulicz": 0.42, "debakey": 0.4, "langenbeck": 0.2, "roux": 0.24, "seringue": 0.3,
-	"drain": 0.3, "feutre": 0.35, "cathlon": 0.18, "sonde": 0.6,
+	"drain": 0.3, "feutre": 0.35, "cathlon": 0.18, "sonde": 0.6, "aiguille": 0.18, "guide": 0.7,
+	"dilatateur": 0.25, "kt_central": 0.6,
 }
 ## Mâchoires : [type (1 = branches croisées, 2 = mors de pince), pivot z (modèle), angle max (°)]
 const JAWS := {
@@ -114,8 +115,10 @@ func build_samples() -> void:
 	match id:
 		"bistouri":
 			tag = "blade"
-		"seringue", "porte_aiguille", "cathlon":
+		"seringue", "porte_aiguille", "cathlon", "aiguille":
 			tag = "needle"
+		"dilatateur":
+			tag = "tube"
 		"drain":
 			tag = "tube"
 		"langenbeck", "roux":
@@ -129,8 +132,10 @@ func build_samples() -> void:
 		var t := "body"
 		if id == "seringue" and f <= 0.25:
 			t = "needle"
-		elif id == "cathlon" and f <= 0.45:
+		elif (id == "cathlon" or id == "aiguille") and f <= 0.45:
 			t = "needle"
+		elif id == "dilatateur" and f <= 0.45:
+			t = "tube"
 		elif id == "drain" and f <= 0.45:
 			t = "tube"
 		elif id in ["kelly", "debakey", "overholt", "ciseaux", "mikulicz"] and f <= 0.1:

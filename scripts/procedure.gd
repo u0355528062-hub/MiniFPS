@@ -14,6 +14,8 @@ extends Node
 ##   withdraw: on retire l'aiguille, le cathéter souple reste en place
 ##   probe   : la sonde d'échographie, posée sur la bonne fenêtre, montre l'organe visé
 ##   aspirate: l'aiguille dans le liquide, on tire le piston (clic maintenu) : la seringue se remplit
+##   thread  : on pousse un guide ou un cathéter souple dans un vaisseau (clic maintenu), longueur
+##             affichée en centimètres ; trop loin, il touche le cœur
 
 signal finished(seconds: float, errors: int)
 signal step_changed(index: int)
@@ -264,6 +266,7 @@ func _process(delta: float) -> void:
 		"withdraw": _tick_withdraw(s, delta)
 		"probe": _tick_probe(s, delta)
 		"aspirate": _tick_aspirate(s, delta)
+		"thread": _tick_thread(s, delta)
 	if step >= 0 and step < steps.size() and current() == s:
 		_update_markers(s)
 	if not show_markers:
@@ -318,6 +321,13 @@ func _setup_hands(s: Dictionary) -> void:
 			axis = s["axis"]
 		"probe":
 			pmax = 0.006
+			target = s["target"].call()
+			axis = s["axis"]
+		"thread":
+			# L'extrémité reste à l'entrée : le clic pousse le guide (ou le cathéter), pas la main
+			mode = "hold"
+			pmax = 0.004
+			speed = 0.0
 			target = s["target"].call()
 			axis = s["axis"]
 	for h in hands:
@@ -406,7 +416,7 @@ func _update_markers(s: Dictionary) -> void:
 			marker2.show_at(patient.incision_point(1.0) + Vector3.UP * 0.002, "ARRIVÉE", 0.55)
 		"inject":
 			marker.show_at(s["target"].call(), s.get("label", "Pique ici"), 0.8)
-		"spread", "insert", "needle", "withdraw", "aspirate", "probe":
+		"spread", "insert", "needle", "withdraw", "aspirate", "probe", "thread":
 			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 0.8))
 		"suture":
 			var pair := _suture_pair(s)
@@ -699,7 +709,7 @@ func _tick_insert(s: Dictionary, _delta: float) -> void:
 		Sfx.loop("ecarte", tipp, 0.4 if along > 0.005 else 0.0)
 		if s.has("progress"):
 			s["progress"].call(clampf(along / depth, 0.0, 1.0))
-		_caption("Drain enfoncé : %d cm sur %d" % [int(along * 100.0), int(depth * 100.0)])
+		_caption("%s : %d cm sur %d" % [s.get("what", "Drain enfoncé"), int(along * 100.0), int(depth * 100.0)])
 		if along >= depth:
 			_done(h, false)
 			_complete_step()
@@ -710,6 +720,8 @@ func _tick_insert(s: Dictionary, _delta: float) -> void:
 ## l'aiguille avance ET le piston est tiré) ; quand la pointe atteint la cible (plèvre, vaisseau,
 ## péricarde), ce qu'elle contient remonte dans la seringue. Trop loin : blessure.
 func _tick_needle(s: Dictionary, _delta: float) -> void:
+	if anesthesia_ready_at > 0 and Time.get_ticks_msec() < anesthesia_ready_at:
+		_caption("L'anesthésie agit… encore %d s" % ceili((anesthesia_ready_at - Time.get_ticks_msec()) / 1000.0))
 	var entry: Vector3 = s["target"].call()
 	var axis: Vector3 = s["axis"]
 	var flash_d: float = s["flash_depth"]
@@ -731,6 +743,12 @@ func _tick_needle(s: Dictionary, _delta: float) -> void:
 				_toast("Pique sur le repère.", false)
 			continue
 		if along < 0.0015 or inst.tip_depth < -0.002:
+			continue
+		if anesthesia_ready_at > 0 and Time.get_ticks_msec() < anesthesia_ready_at:
+			if _hint_cd <= 0.0:
+				_hint_cd = 2.5
+				monitor.react()
+				_error("Il a senti l'aiguille ! Attends que l'anesthésie agisse.", "early")
 			continue
 		if not st.get("in", false):
 			st["in"] = true
@@ -837,6 +855,42 @@ func _tick_aspirate(s: Dictionary, delta: float) -> void:
 				return
 		else:
 			_caption("Maintiens le clic pour tirer le piston  ·  %d mL" % int(round(fill * s.get("ml", 20.0))))
+
+
+## Guide ou cathéter souple : l'extrémité présentée à l'entrée (embase de l'aiguille, orifice de
+## la peau), clic maintenu = on pousse ; la longueur introduite grandit ; on relâche dans la bonne
+## plage (« ok » : Vector2 min, max en m) ; au-delà de « max », il touche le cœur.
+func _tick_thread(s: Dictionary, delta: float) -> void:
+	var tgt: Vector3 = s["target"].call()
+	var ok: Vector2 = s["ok"]
+	for h in _active_hands():
+		var tipp := h.tip()
+		var length: float = st.get("len", 0.0)
+		if tipp.distance_to(tgt) > s.get("near", 0.025) and length <= 0.0:
+			_caption(s.get("approach_msg", "Présente l'extrémité au point d'entrée"))
+			continue
+		var pushing := h.squeeze_value() > 0.5
+		if pushing:
+			length = minf(length + s.get("speed", 0.05) * delta, s["max"] + 0.03)
+			st["len"] = length
+			st["pushed"] = true
+			Sfx.loop("ecarte", tipp, 0.25)
+			if s.has("on_length"):
+				s["on_length"].call(length)
+			if length > s["max"] and not st.has("err_far"):
+				st["err_far"] = true
+				_error(s.get("far_msg", "Trop loin !"), "far")
+				if s.has("on_too_far"):
+					s["on_too_far"].call()
+		var cm := int(round(length * 100.0))
+		if length < ok.x:
+			_caption("%s : %d cm  ·  pousse jusqu'à %d-%d cm (clic maintenu)" % [s.get("what", "Guide"), cm, int(round(ok.x * 100.0)), int(round(ok.y * 100.0))])
+		else:
+			_caption("%s : %d cm  ·  relâche le clic" % [s.get("what", "Guide"), cm])
+		if length >= ok.x and not pushing:
+			_done(h, false)
+			_complete_step(s.get("done_msg", ""))
+			return
 
 
 ## Saute directement à l'étape n (tests, captures) en appliquant les étapes précédentes.

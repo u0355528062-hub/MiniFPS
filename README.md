@@ -8,7 +8,7 @@ interventions :
 |---|---|---|
 | **Drain thoracique** | Karim, 31 ans, moto — pneumothorax droit compressif | jouable |
 | **Exsufflation à l'aiguille** | Thomas, 24 ans, voiture — pneumothorax suffocant gauche | jouable |
-| Péricardiocentèse | tamponnade, sous échographie | bientôt |
+| **Péricardiocentèse** | Sofiane, 28 ans, couteau — tamponnade, sous échographie | jouable |
 | Voie veineuse centrale | choc, veine sous-clavière (Seldinger) | bientôt |
 | Thoracotomie de sauvetage | arrêt cardiaque après une plaie | bientôt |
 | Pontage coronarien | infarctus, cœur arrêté sous machine | bientôt |
@@ -68,6 +68,23 @@ la ceinture de sécurité barre le thorax.
    quand la plèvre est franchie, l'air sort en sifflant, le poumon se regonfle, la saturation et
    la tension remontent. Trop profond : erreur.
 4. **Laisser le cathéter** — on retire l'aiguille, le cathéter souple reste en place.
+
+## Péricardiocentèse sous échographie
+
+Coup de couteau à gauche du sternum : le sang remplit le péricarde et comprime le cœur (tension
+basse et pincée, veines du cou gonflées ; au scope, microvoltage et alternance électrique).
+
+1. **Échographie** — sonde posée sous la pointe du sternum, faisceau vers l'épaule gauche. L'image
+   est calculée en direct dans le volume anatomique du patient : foie en haut, péricarde brillant,
+   liquide noir, parois du cœur qui battent, cœur qui se balance dans l'épanchement, ombres des
+   côtes. Elle s'affiche dans le coin de l'écran et sur l'échographe ; l'aide garde ensuite la
+   sonde en place.
+2. **Désinfection** — sous la pointe du sternum.
+3. **Ponction** — aiguille longue sur seringue, sous le rebord costal gauche, vers le haut et la
+   gauche, en aspirant ; l'aiguille brille à l'échographie. Le sang revient quand la pointe entre
+   dans le péricarde ; plus loin, l'aiguille touche le cœur (extrasystoles au scope).
+4. **Aspiration** — 20 mL : l'épanchement diminue à l'image, la tension remonte.
+5. **Laisser le cathéter** — pour ré-aspirer en attendant le bloc.
 
 ## Anatomie et graphismes
 
