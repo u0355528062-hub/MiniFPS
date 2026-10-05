@@ -1,6 +1,6 @@
 class_name PlayerBot
 extends BotDriver
-## Robot de test du jeu à la première personne : vrais événements clavier (touches 1-7, R), clic
+## Robot de test du jeu à la première personne : vrais événements clavier (touches 1-9 et 0, R), clic
 ## simulé, regard orienté vers la cible (le viseur est au centre de l'écran) et molette (hauteur).
 
 var player: Player

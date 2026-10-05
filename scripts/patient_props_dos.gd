@@ -14,7 +14,7 @@ var breath_rate := 14.0
 var _t := 0.0
 var _obstacles: Array = []  ## sphères que les câbles contournent (ballon réservoir, collier…)
 var _collar_dims := {}
-var options := {}  ## {"collar": false} : pas de collier cervical (plaie pénétrante)
+var options := {}  ## {"collar": false} : pas de collier ; {"draped": true} : sous les champs (bloc)
 
 
 func build() -> void:
@@ -26,6 +26,9 @@ func build() -> void:
 		_intubation()
 	else:
 		_o2_mask()
+	if options.get("draped", false):
+		# Au bloc, sous les champs : électrodes, oxymètre, perfusion et brassard sont cachés
+		return
 	_spo2_clip()
 	_iv_line()
 	_ecg()

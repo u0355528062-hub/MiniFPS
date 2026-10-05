@@ -11,7 +11,7 @@ interventions :
 | **Péricardiocentèse** | Sofiane, 28 ans, couteau — tamponnade, sous échographie | jouable |
 | **Voie veineuse centrale** | Lucas, 35 ans, chute de 6 m — choc, sous-clavière gauche (Seldinger) | jouable |
 | **Thoracotomie de sauvetage** | Kevin, 22 ans, couteau — arrêt cardiaque par tamponnade | jouable |
-| Pontage coronarien | infarctus, cœur arrêté sous machine | bientôt |
+| **Pontage coronarien** | Gérard, 64 ans — angor instable, IVA bouchée à 95 % (cœur arrêté sous CEC) | jouable |
 
 ## Télécharger et jouer (Windows)
 
@@ -27,7 +27,7 @@ Configuration conseillée : carte graphique compatible Vulkan. La qualité graph
 |---|---|
 | Marcher | ZQSD (ou WASD, flèches) — Maj : plus vite |
 | Regarder | Souris |
-| Prendre un instrument | Viser + clic gauche (ou E), ou touches 1 à 7 près de la table |
+| Prendre un instrument | Viser + clic gauche (ou E), ou touches 1 à 9 et 0 près de la table |
 | Appuyer / serrer / pousser le piston | Clic gauche maintenu |
 | Précision (zoom, souris ralentie) | Clic droit maintenu |
 | Lever / baisser l'instrument | Molette |
@@ -125,6 +125,42 @@ accumulé dans le péricarde empêche le cœur de pomper. Il est intubé et vent
    compression en visant le cœur, environ 100 par minute (rythme affiché) : la main gantée
    comprime le cœur, l'onde de pression apparaît au scope, puis le cœur repart (118/min).
 
+## Pontage coronarien
+
+Gérard, 64 ans : douleurs dans la poitrine au moindre effort, l'artère interventriculaire
+antérieure (IVA) est bouchée à 95 % à son origine. Bloc de chirurgie cardiaque : il est endormi,
+intubé, sous les champs (fenêtre sur le sternum, film iodé, champ de tête sur l'arceau
+d'anesthésie) ; la machine de circulation extracorporelle (CEC) attend à sa gauche. On branche
+l'artère mammaire interne gauche sur l'IVA, cœur arrêté.
+
+1. **Incision** — sur la ligne médiane, du creux sus-sternal à l'appendice xiphoïde, jusqu'à l'os.
+2. **Sternotomie** — scie sternale (bruit de scie, lame qui va et vient) : le sabot passe sous le
+   haut du sternum, puis on descend tout droit, clic maintenu ; le trait de scie s'ouvre au fur et
+   à mesure.
+3. **Écarteur sternal** — valves entre les deux moitiés du sternum, crémaillère vers les pieds,
+   puis la manivelle : le sternum s'écarte de 9 cm, les bords des poumons suivent, le péricarde
+   apparaît.
+4. **Artère mammaire** — l'aide soulève le bord gauche du sternum (la valve gauche se relève) ;
+   au bistouri électrique (fumée), l'artère est décollée de haut en bas avec ses veines et sa
+   graisse : c'est le greffon, coupé et clippé en bas.
+5. **Péricarde** — ouvert aux ciseaux de l'aorte au diaphragme ; quatre fils de suspension tirent
+   ses bords vers la peau : le cœur bat dans son berceau.
+6. **Canule aortique**, puis 7. **canule veineuse** dans l'oreillette droite — les lignes rouge
+   vif et sombre partent vers la machine : départ de la CEC (pompes à galets qui tournent,
+   débit 4,8 L/min ; le scope affiche la pression de la machine, on arrête de ventiler).
+8. **Clampage** — clamp en travers de l'aorte, cardioplégie froide : le cœur ralentit, pâlit et
+   s'arrête (asystolie au scope).
+9. **Artériotomie** — l'IVA ouverte au bistouri sur 6 mm, dans sa longueur.
+10. **Anastomose** — l'aide amène le greffon ; surjet au fil 8/0, six points entre le bout de la
+    mammaire et les bords de l'IVA.
+11. **Déclampage** — main nue sur le clamp : le sang chaud revient, le cœur se réchauffe… et
+    fibrille (fibrillation ventriculaire au scope, le cœur tremble).
+12. **Choc interne** — palettes de part et d'autre du cœur, un clic : il repart en rythme régulier.
+13. **Décanulation** — la machine ralentit puis s'arrête, le cœur reprend la main ; les canules
+    sont retirées.
+14. **Fermeture** — l'écarteur est retiré, cinq fils d'acier passent autour des deux moitiés du
+    sternum, puis sont serrés et torsadés : le sternum se referme.
+
 ## Anatomie et graphismes
 
 - Corps et organes issus de l'atlas **Z-Anatomy** (CC BY-SA 4.0, dérivé de BodyParts3D) :
@@ -134,7 +170,8 @@ accumulé dans le péricarde empêche le cœur de pomper. Il est intubé et vent
   le dos, bras le long du corps, tête sur un anneau de gel (autres gestes). Repères mesurés sur
   l'atlas : côtes et espaces intercostaux, plèvre, sternum, clavicules, vaisseaux.
 - Champ opératoire et drap simulés en tissu ; le bord adhésif colle le champ à plat autour de la
-  fenêtre. Câbles du scope, tuyau d'oxygène, tubulure de perfusion et tuyau du brassard simulés
+  fenêtre. Pontage : grand drap simulé sur tout le corps, collé autour de la fenêtre sternale, et
+  champ de tête jeté sur l'arceau d'anesthésie. Câbles du scope, tuyau d'oxygène, tubulure de perfusion et tuyau du brassard simulés
   comme des cordes : ils reposent sur le patient, pendent au bord de la table, traînent au sol.
 - Les tissus internes n'apparaissent que dans la plaie ; la vue anatomique (V) les montre tous.
   Le poumon droit est affaissé vers son hile et se regonfle quand le drain est posé ; le cœur bat.

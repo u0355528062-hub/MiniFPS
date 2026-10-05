@@ -5,7 +5,7 @@ extends SurgeonHand
 ##  - ailleurs : il est tenu devant soi, prêt à servir.
 ## Clic gauche maintenu : appuyer (la pointe s'enfonce là où le geste le permet) et serrer
 ## (mâchoires, piston). Molette : lever / baisser. Clic sur un instrument (ou E) : le prendre.
-## R : le reposer. 1-7 : prendre directement l'instrument n (à portée de la table).
+## R : le reposer. 1-9 et 0 : prendre directement l'instrument n (à portée de la table).
 
 signal hint_changed(text: String)
 

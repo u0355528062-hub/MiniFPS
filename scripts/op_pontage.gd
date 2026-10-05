@@ -23,6 +23,7 @@ const SAW_DEPTH := 0.02  ## la lame traverse l'os (sternum épais de 1,5 à 2 cm
 const FALL := Vector2(0.03, 0.16)  ## l'écartement gagne toute la paroi (les côtes plient)
 const DEEP := Vector2(0.032, 0.06)  ## ... mais pas le cœur ni le péricarde
 const LIMA_LIFT := 0.026  ## l'aide soulève le bord gauche du sternum
+const PERI_W := 0.036  ## demi-largeur de l'ouverture du péricarde
 
 var sternum := PackedVector3Array()  ## ligne médiane, sur la peau
 var sternum_h := PackedFloat32Array()
@@ -50,6 +51,7 @@ var _graft_fat: MeshInstance3D
 var _graft_clip: MeshInstance3D
 var _lines: Array[MeshInstance3D] = []
 var _wires: Array[Node3D] = []
+var _stays: Array[Node3D] = []
 var _thread_mat: StandardMaterial3D
 var _wire_mat: StandardMaterial3D
 var _vf_at := -1.0  ## moment où le cœur se met à fibriller après le déclampage
@@ -91,19 +93,24 @@ func _init() -> void:
 
 
 func configure_patient(p: Patient) -> void:
-	p.WINDOW_MIN = Vector2(-0.3, -0.22)
-	p.WINDOW_MAX = Vector2(0.2, 0.22)
+	# Champs du bloc : fenêtre sur le sternum (film adhésif iodé), le reste du corps est couvert
+	p.WINDOW_MIN = Vector2(-0.115, -0.08)
+	p.WINDOW_MAX = Vector2(0.13, 0.08)
+	p.drape_override = {"glb": "res://assets/models/champ_sternum.glb", "map": "res://assets/data/champ_sternum_hauteur.bin"}
 	p.PATCH_MIN = Vector2(-0.16, -0.16)
 	p.PATCH_SIZE = Vector2(0.32, 0.32)
 	p.INC_A = STERNUM[0]
 	p.INC_B = STERNUM[STERNUM.size() - 1]
+	p.paint_r = Vector2(0.17, 0.12)  # badigeon sur toute la fenêtre
 	p.wound_w = 0.05
 	p.WOUND_DEPTH = 0.012  # peau et graisse ; dessous, le sternum
 	p.wall_taper = 0.1
 	p.zone_v_min = 0.12
 	p.hole_limit = 0.14
 	p.breathe_amp = 0.003
-	p.props_options = {"collar": false, "intubated": true}
+	p.props_options = {"collar": false, "intubated": true, "draped": true}
+	# Les bords antérieurs des poumons suivent la paroi quand le sternum s'écarte
+	p.spread_extra = ["PoumonG", "PoumonD"]
 	p.init_lung(0.0)
 
 
@@ -171,6 +178,13 @@ func build_extras() -> void:
 	_cec.position = Vector3(-0.12, 0.0, 1.22)
 	_cec.rotation_degrees.y = 180.0
 	root.add_child(_cec)
+	# Arceau d'anesthésie (sous le champ de tête) : barre au-dessus du cou, montants fixés aux rails
+	var steel := MeshUtil.mat(Color(0.7, 0.72, 0.75), 0.3, 0.9)
+	var bar := MeshUtil.cylinder_instance(root, 0.009, 0.92, Vector3(0.215, 1.27, 0.0), steel, "Arceau")
+	bar.rotation_degrees.x = 90.0
+	for zs in [-0.4, 0.4]:
+		MeshUtil.cylinder_instance(root, 0.009, 1.27 - 0.74, Vector3(0.215, (1.27 + 0.74) * 0.5, zs), steel, "MontantArceau")
+		MeshUtil.box_instance(root, Vector3(0.03, 0.025, 0.11), Vector3(0.215, 0.755, zs * 0.875), steel, "PinceRail")
 	var ret := instrument("ecarteur_sternal")
 	if ret and ret.model is FinochiettoModel:
 		(ret.model as FinochiettoModel).set_spread(0.012)
@@ -367,9 +381,17 @@ func _lima_path() -> PackedVector3Array:
 
 
 func _lima_enter() -> void:
-	# L'aide soulève le bord gauche du sternum (écarteur à mammaire)
+	# L'aide soulève le bord gauche du sternum (la valve gauche de l'écarteur se relève)
 	var tw := root.create_tween()
-	tw.tween_method(func(v: float) -> void: patient.set_edge_lift(Vector2(v, 0.0)), 0.0, LIMA_LIFT, 1.2).set_trans(Tween.TRANS_SINE)
+	tw.tween_method(_lift_left, 0.0, LIMA_LIFT, 1.2).set_trans(Tween.TRANS_SINE)
+
+
+func _lift_left(v: float) -> void:
+	patient.set_edge_lift(Vector2(v, 0.0))
+	var fin := instrument("ecarteur_sternal")
+	if fin and fin.model is FinochiettoModel:
+		var fm := fin.model as FinochiettoModel
+		fm.set_lift(asin(clampf(v / fm.arm_len, 0.0, 0.9)))
 
 
 func _lima_progress(_t0: float, _t1: float) -> void:
@@ -383,11 +405,11 @@ func _lima_done(_h: SurgeonHand, instant: bool) -> void:
 	patient.set_lima_hidden(true)
 	_build_graft()
 	if instant:
-		patient.set_edge_lift(Vector2.ZERO)
+		_lift_left(0.0)
 	else:
 		var tw := root.create_tween()
 		tw.tween_interval(0.6)
-		tw.tween_method(func(v: float) -> void: patient.set_edge_lift(Vector2(v, 0.0)), LIMA_LIFT, 0.0, 1.0).set_trans(Tween.TRANS_SINE)
+		tw.tween_method(_lift_left, LIMA_LIFT, 0.0, 1.0).set_trans(Tween.TRANS_SINE)
 
 
 ## Fumée blanche du bistouri électrique.
@@ -486,7 +508,59 @@ func _peri_progress(t0: float, t1: float) -> void:
 
 func _peri_done(_h: SurgeonHand, _instant: bool) -> void:
 	# Bords suspendus : grande fenêtre sur le cœur et l'aorte
-	patient.set_pericardium(0.0, pc_a.lerp(pc_b, -0.1), pc_a.lerp(pc_b, 1.08), 0.036)
+	patient.set_pericardium(0.0, pc_a.lerp(pc_b, -0.1), pc_a.lerp(pc_b, 1.08), PERI_W)
+	_stay_sutures()
+
+
+## Fils de suspension : quatre points sur les bords du péricarde ouvert, tirés et noués sur le bord
+## de la peau (le cœur est présenté dans un berceau).
+func _stay_sutures() -> void:
+	for st in _stays:
+		st.queue_free()
+	_stays.clear()
+	var a := pc_a.lerp(pc_b, -0.1)
+	var b := pc_a.lerp(pc_b, 1.08)
+	var mi: MeshInstance3D = patient._part_meshes.get("Pericarde")
+	var verts := PackedVector3Array()
+	if mi and mi.mesh:
+		var xf := mi.global_transform
+		for k in mi.mesh.get_surface_count():
+			for v in mi.mesh.surface_get_arrays(k)[Mesh.ARRAY_VERTEX]:
+				verts.append(xf * v)
+	var mat := MeshUtil.mat(Color(0.86, 0.86, 0.82), 0.6)
+	for q in [[0.3, 1.0], [0.72, 1.0], [0.3, -1.0], [0.72, -1.0]]:
+		var p0 := _peri_edge(verts, a, b, q[0], q[1])
+		var uv := patient.uv_of(p0)
+		var p3 := patient.edge_point(uv.x, signf(uv.y), 0.012) + Vector3.UP * 0.003
+		var up := Vector3.UP
+		# Le fil monte du péricarde, passe par-dessus le bord du sternum et descend sur la peau
+		var pts := MeshUtil.bezier(p0, p0 + up * 0.05, p3 + up * 0.022 + (p0 - p3) * 0.1, p3, 16)
+		var th := MeshInstance3D.new()
+		th.name = "FilSuspension"
+		th.mesh = MeshUtil.tube(pts, ProcInstruments._radii(pts.size(), 0.00045), 5)
+		th.material_override = mat
+		root.add_child(th)
+		_stays.append(th)
+		MeshUtil.cylinder_instance(th, 0.0018, 0.0016, p3 + Vector3.UP * 0.0008, mat, "Noeud")
+
+
+## Point du bord du péricarde ouvert (à PERI_W du tracé), à t le long du tracé, du côté `side`.
+func _peri_edge(verts: PackedVector3Array, a: Vector3, b: Vector3, t: float, side: float) -> Vector3:
+	var ab := b - a
+	var along := ab.normalized()
+	var c := pc_a.lerp(pc_b, t)
+	var across := along.cross(Vector3.UP).normalized() * side
+	var best := c + across * PERI_W - Vector3.UP * 0.006
+	var best_y := -INF
+	for v in verts:
+		var k := clampf((v - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+		var d := v.distance_to(a + ab * k)
+		if absf(d - PERI_W) > 0.003 or (v - c).dot(across) < 0.0 or absf((v - c).dot(along)) > 0.006:
+			continue
+		if v.y > best_y:
+			best_y = v.y
+			best = v
+	return best
 
 
 # ---------------------------------------------------------------- CEC
@@ -505,17 +579,17 @@ func _vei_done(hand: SurgeonHand, instant: bool) -> void:
 
 
 ## La canule reste en place (tenue par un garrot) ; sa ligne part vers la machine.
-func _park_cannula(inst_id: String, hand: SurgeonHand, instant: bool) -> void:
+func _park_cannula(inst_id: String, hand: SurgeonHand, _instant: bool) -> void:
+	# La canule reste dans l'axe de son trajet (fixée par un garrot) : pose toujours identique, la
+	# tubulure qui en part est donc calculée une seule fois (cache des câbles)
 	var inst := instrument(inst_id)
-	var xf := inst.global_transform
-	if instant:
-		var s: Dictionary = {}
-		for st in steps:
-			if st.get("inst", "") == inst_id and st["kind"] == "insert":
-				s = st
-		var tgt: Vector3 = s["target"].call()
-		var axis: Vector3 = s["axis"]
-		xf = inst.tip_transform(tgt + axis * float(s["depth"]), axis, Vector3.UP)
+	var s: Dictionary = {}
+	for st in steps:
+		if st.get("inst", "") == inst_id and st["kind"] == "insert":
+			s = st
+	var tgt: Vector3 = s["target"].call()
+	var axis: Vector3 = s["axis"]
+	var xf := inst.tip_transform(tgt + axis * float(s["depth"]), axis, Vector3(0, 0, -1))
 	if hand and hand.held == inst:
 		hand.release_parked()
 	park(inst, xf, true)
@@ -525,7 +599,8 @@ func _park_cannula(inst_id: String, hand: SurgeonHand, instant: bool) -> void:
 func _add_line(inst: Instrument, arterial: bool) -> void:
 	var back := inst.global_transform * inst.back_local
 	var port := _cec.art_port_global() if arterial else _cec.ven_port_global()
-	var mid := back.lerp(port, 0.5) + Vector3.UP * 0.06
+	# Les lignes quittent le champ, passent sur le drap du côté gauche et pendent jusqu'à la machine
+	var mid := back.lerp(port, 0.5) + Vector3.UP * 0.07
 	var path := PackedVector3Array([back, back + (back - inst.global_transform * inst.tip_local).normalized() * 0.05, mid, port])
 	var pts := Cable.smooth(Cable.lay(path, 0.12, 0.005, 0.03, 2, 1, []))
 	var rr := PackedFloat32Array()
@@ -537,6 +612,7 @@ func _add_line(inst: Instrument, arterial: bool) -> void:
 	line.material_override = MeshUtil.mat(Color(0.72, 0.06, 0.06) if arterial else Color(0.32, 0.02, 0.04), 0.12)
 	root.add_child(line)
 	_lines.append(line)
+	Cable.save_cache()  # lignes livrées avec le jeu (calculées une fois, hors export)
 
 
 func _start_bypass(_instant: bool) -> void:
@@ -753,11 +829,19 @@ func _decan_done(_h: SurgeonHand, instant: bool) -> void:
 # ---------------------------------------------------------------- Fermeture
 
 func _close_enter() -> void:
-	# L'écarteur est retiré, l'aide rapproche les deux moitiés du sternum
+	# L'écarteur est retiré, l'aide rapproche les deux moitiés du sternum ; les fils de suspension
+	# du péricarde sont coupés
+	for st in _stays:
+		st.queue_free()
+	_stays.clear()
 	var ret := instrument("ecarteur_sternal")
 	if ret.parked:
 		proc.parked.erase(ret)
 		ret.return_to_tray()
+	if ret.model is FinochiettoModel:
+		var fm := ret.model as FinochiettoModel
+		var tw0 := root.create_tween()
+		tw0.tween_method(fm.set_spread, fm.spread, 0.012, 0.8)
 	var tw := root.create_tween()
 	tw.tween_method(func(v: float) -> void: patient.set_aperture(sternum, sternum_h, 0.0, 1.0, CUT_W, SPREAD * v, 0.045, FALL, DEEP), spread, 0.12, 1.2)
 	spread = 0.12

@@ -109,8 +109,8 @@ func _decorate(inst: Instrument) -> void:
 			# Pointe = milieu des valves (la crémaillère est au bout des bras) ; axe vertical
 			var mt := inst.model.transform
 			inst.tip_local = mt * Vector3(0, 0, (inst.model as FinochiettoModel).blade_depth + 0.0015)
-			inst.grip_local = mt * Vector3(0, 0, FinochiettoModel.BAR_Z)
-			inst.back_local = mt * Vector3(0, 0, FinochiettoModel.BAR_Z - 0.03)
+			inst.grip_local = mt * Vector3(0, 0, (inst.model as FinochiettoModel).bar_z)
+			inst.back_local = mt * Vector3(0, 0, (inst.model as FinochiettoModel).bar_z - 0.03)
 		"bistouri":
 			var blade := _blade()
 			inst.attach_tip_part(blade)

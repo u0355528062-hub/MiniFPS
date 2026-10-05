@@ -8,36 +8,39 @@ extends Node3D
 
 const BAR_Z := -0.010  ## crémaillère et bras, au-dessus de la peau une fois posé
 
+var bar_z := BAR_Z  ## hauteur de la crémaillère et des bras (vers -Z), au-dessus du haut des valves
 var blade_depth := 0.043
 var blade_len := 0.056  ## longueur des valves, le long de l'incision
 var arm_len := 0.062  ## de la crémaillère au milieu des valves
 var rack_len := 0.15
 var spread := 0.012
+var lift_b := 0.0  ## bras B relevé autour de la crémaillère (rad) : sa valve soulève son bord
 var _arm_a: Node3D
 var _arm_b: Node3D
 var _crank: Node3D
 
 
-func _init(p_blade_len := 0.056, p_arm_len := 0.062, p_rack_len := 0.15, p_blade_depth := 0.043) -> void:
+func _init(p_blade_len := 0.056, p_arm_len := 0.062, p_rack_len := 0.15, p_blade_depth := 0.043, p_bar_z := BAR_Z) -> void:
 	blade_len = p_blade_len
 	arm_len = p_arm_len
 	rack_len = p_rack_len
 	blade_depth = p_blade_depth
-	var steel := _steel(Color(0.80, 0.82, 0.85), 0.16)
-	var satin := _steel(Color(0.64, 0.66, 0.70), 0.34)
+	bar_z = p_bar_z
+	var steel := _steel(Color(0.68, 0.7, 0.73), 0.24)
+	var satin := _steel(Color(0.5, 0.52, 0.55), 0.46)
 	# Crémaillère : barre plate, dents tournées vers les bras, butées aux deux bouts
-	MeshUtil.box_instance(self, Vector3(rack_len, 0.012, 0.0065), Vector3(0, arm_len, BAR_Z), satin, "Cremaillere")
+	MeshUtil.box_instance(self, Vector3(rack_len, 0.012, 0.0065), Vector3(0, arm_len, bar_z), satin, "Cremaillere")
 	var teeth := int((rack_len - 0.018) / 0.004)
 	for k in teeth:
-		MeshUtil.box_instance(self, Vector3(0.0016, 0.003, 0.0062), Vector3(-rack_len * 0.5 + 0.009 + k * 0.004, arm_len - 0.0072, BAR_Z), steel, "Dent")
+		MeshUtil.box_instance(self, Vector3(0.0016, 0.003, 0.0062), Vector3(-rack_len * 0.5 + 0.009 + k * 0.004, arm_len - 0.0072, bar_z), steel, "Dent")
 	for sx in [-1.0, 1.0]:
-		MeshUtil.box_instance(self, Vector3(0.006, 0.018, 0.009), Vector3(sx * (rack_len * 0.5 - 0.002), arm_len, BAR_Z), satin, "Butee")
+		MeshUtil.box_instance(self, Vector3(0.006, 0.018, 0.009), Vector3(sx * (rack_len * 0.5 - 0.002), arm_len, bar_z), satin, "Butee")
 	_arm_a = _arm(steel, satin, -1.0)
 	_arm_b = _arm(steel, satin, 1.0)
 	# Manivelle sur le chariot du bras mobile : moyeu, bras, poignée noire verticale
 	_crank = Node3D.new()
 	_crank.name = "Manivelle"
-	_crank.position = Vector3(0, arm_len, BAR_Z - 0.0095)
+	_crank.position = Vector3(0, arm_len, bar_z - 0.0095)
 	_arm_b.add_child(_crank)
 	var hub := MeshUtil.cylinder_instance(_crank, 0.0068, 0.008, Vector3.ZERO, steel, "Moyeu")
 	hub.rotation_degrees.x = 90
@@ -58,12 +61,12 @@ func _arm(steel: Material, satin: Material, side: float) -> Node3D:
 	var a := Node3D.new()
 	a.name = "Bras%s" % ("A" if side < 0.0 else "B")
 	add_child(a)
-	MeshUtil.box_instance(a, Vector3(0.018, 0.022, 0.014), Vector3(0, arm_len, BAR_Z), satin, "Chariot")
-	MeshUtil.box_instance(a, Vector3(0.0085, arm_len - 0.006, 0.0062), Vector3(side * 0.0012, arm_len * 0.5, BAR_Z), steel, "Bras")
+	MeshUtil.box_instance(a, Vector3(0.018, 0.022, 0.014), Vector3(0, arm_len, bar_z), satin, "Chariot")
+	MeshUtil.box_instance(a, Vector3(0.0085, arm_len - 0.006, 0.0062), Vector3(side * 0.0012, arm_len * 0.5, bar_z), steel, "Bras")
 	# Articulation de la valve au bout du bras, puis le montant qui descend vers la valve
-	var knuckle := MeshUtil.cylinder_instance(a, 0.0052, 0.012, Vector3(side * 0.0012, 0.0, BAR_Z), satin, "Articulation")
+	var knuckle := MeshUtil.cylinder_instance(a, 0.0052, 0.012, Vector3(side * 0.0012, 0.0, bar_z), satin, "Articulation")
 	knuckle.rotation_degrees.z = 90
-	MeshUtil.box_instance(a, Vector3(0.0075, 0.016, 0.011), Vector3(side * 0.0012, 0, BAR_Z + 0.0085), steel, "Montant")
+	MeshUtil.box_instance(a, Vector3(0.0075, 0.016, 0.001 - bar_z), Vector3(side * 0.0012, 0, (bar_z + 0.007) * 0.5), steel, "Montant")
 	var blade := MeshInstance3D.new()
 	blade.name = "Valve"
 	blade.mesh = blade_mesh(side, blade_len, blade_depth)
@@ -144,7 +147,20 @@ static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, na: Vector
 
 func set_spread(d: float) -> void:
 	spread = d
-	_arm_a.position.x = -d * 0.5
-	_arm_b.position.x = d * 0.5
+	_place_arms()
 	if _crank:
 		_crank.rotation.z = d * 140.0
+
+
+## Relève le bras B (pivot sur son chariot) : la valve soulève le bord qu'elle tient (l'aide qui
+## présente l'artère mammaire).
+func set_lift(angle: float) -> void:
+	lift_b = angle
+	_place_arms()
+
+
+func _place_arms() -> void:
+	_arm_a.position = Vector3(-spread * 0.5, 0.0, 0.0)
+	var piv := Vector3(0.0, arm_len, bar_z)
+	var r := Basis(Vector3.RIGHT, lift_b)
+	_arm_b.transform = Transform3D(r, Vector3(spread * 0.5, 0.0, 0.0) + piv - r * piv)

@@ -66,6 +66,7 @@ static var _rib_grid := [0, 0, 0.0, 0.0, 0.0025]
 # ---- Cartes de hauteur (peau et champ), précalculées dans Blender (grille de 2,5 mm)
 static var _skin_h := PackedFloat32Array()
 static var _drape_h := PackedFloat32Array()
+static var _drape_src := ""  ## carte de hauteur des champs chargée
 static var _nx := 0
 static var _nz := 0
 static var _x0 := 0.0
@@ -94,6 +95,10 @@ var stab := Vector4.ZERO  ## plaie au couteau (x, z, angle, longueur), nulle = a
 var props_options := {}  ## équipement du patient (ex. {"collar": false})
 var zone_v_min := 0.0  ## largeur minimale de la zone de peau détaillée (grandes ouvertures)
 var wall_taper := 0.72  ## parois de la plaie en V (0 = droites : écarteur posé)
+var spread_extra: Array = []  ## autres structures repoussées par l'écarteur (poumons d'une sternotomie)
+## Champs propres à l'opération (pontage : grand drap collé autour d'une fenêtre sur le sternum et
+## champ de tête jeté sur l'arceau) : "glb", "map" ; vide = champs habituels de la position
+var drape_override := {}
 ## Thoracotomie : brèche le long de l'espace intercostal (points de la peau, part de l'écartement
 ## en chaque point), portion coupée t0..t1, demi-largeur coupée, écartement au milieu, profondeur
 var ap_path := PackedVector3Array()
@@ -204,7 +209,8 @@ static func load_maps() -> void:
 	_maps_pose = pose_id
 	var P: Dictionary = POSES[pose_id]
 	_skin_h = _read_map(P["skin_map"])
-	_drape_h = _read_map(P["drape_map"]) if ResourceLoader.exists(P["drape_map"]) or FileAccess.file_exists(P["drape_map"]) else PackedFloat32Array()
+	_drape_src = ""
+	use_drape_map(P["drape_map"])
 	CHEST_X = P["chest_x"]
 	CHEST_Z = P["chest_z"]
 	CHEST_H = P["chest_h"]
@@ -282,6 +288,14 @@ static func lm_line(key: String) -> PackedVector3Array:
 	return out
 
 
+## Charge la carte de hauteur des champs (même grille que celle de la peau).
+static func use_drape_map(path: String) -> void:
+	if path == _drape_src:
+		return
+	_drape_src = path
+	_drape_h = _read_map(path) if ResourceLoader.exists(path) or FileAccess.file_exists(path) else PackedFloat32Array()
+
+
 static func _read_map(path: String) -> PackedFloat32Array:
 	var bytes := FileAccess.get_file_as_bytes(path)
 	if bytes.size() < 24:
@@ -352,6 +366,7 @@ static func skin_normal(x: float, z: float) -> Vector3:
 
 func build() -> void:
 	load_maps()
+	use_drape_map(drape_override.get("map", POSES[pose_id]["drape_map"]))
 	var a := Vector3(INC_A.x, 0, INC_A.y)
 	var b := Vector3(INC_B.x, 0, INC_B.y)
 	dir3 = (b - a).normalized()
@@ -408,7 +423,7 @@ func _skin_material(sh: Shader) -> ShaderMaterial:
 	m.set_shader_parameter("iodine_mask", iodine_tex)
 	m.set_shader_parameter("win_min", WINDOW_MIN)
 	m.set_shader_parameter("win_max", WINDOW_MAX)
-	m.set_shader_parameter("frame_on", 1.0 if pose_id == "lateral" else 0.0)
+	m.set_shader_parameter("frame_on", 1.0 if windowed_drape() else 0.0)
 	m.set_shader_parameter("belt", belt)
 	m.set_shader_parameter("stab", stab)
 	if antiseptic == "chlorhexidine":
@@ -587,7 +602,7 @@ func _anatomy_material(part: String, kind: String) -> ShaderMaterial:
 	elif part in WALL_PARTS:
 		wall = 1.0
 	m.set_shader_parameter("wall_tissue", wall)
-	m.set_shader_parameter("spreadable", 1.0 if part in SPREAD_PARTS else 0.0)
+	m.set_shader_parameter("spreadable", 1.0 if part in SPREAD_PARTS or part in spread_extra else 0.0)
 	if OS.get_cmdline_user_args().has("--debugparts"):
 		# Diagnostic : chaque structure d'une couleur franche, tranches (faces arrière) en cyan
 		var pal := {"Os": Color(1, 1, 1), "CoteG5": Color(1, 1, 0), "CoteG6": Color(1, 0.5, 0), "Muscles": Color(0.8, 0, 0),
@@ -659,18 +674,22 @@ func _build_wound() -> void:
 	add_child(wound_light)
 
 
+## Champs fenêtrés (collés autour de la fenêtre WINDOW_MIN..WINDOW_MAX) ?
+func windowed_drape() -> bool:
+	return pose_id == "lateral" or not drape_override.is_empty()
+
+
 ## Champ stérile simulé (tissu tombé sur le patient), fenêtre collée autour du site ; sur le dos,
-## drap qui couvre le bas du corps (pas de champ : urgence).
+## drap qui couvre le bas du corps (pas de champ : urgence), ou champs propres à l'opération.
 func _build_drape() -> void:
-	var path: String = POSES[pose_id]["drape_glb"]
+	var path: String = drape_override.get("glb", POSES[pose_id]["drape_glb"])
 	if not ResourceLoader.exists(path):
 		return
 	var scene: PackedScene = load(path)
 	drape = scene.instantiate()
 	drape.name = "Champs"
 	add_child(drape)
-	var windowed := pose_id == "lateral"
-	if windowed:
+	if windowed_drape():
 		drape_mat = Tex.drape(Color(0.17, 0.42, 0.53), WINDOW_MIN, WINDOW_MAX, breathe_amp)
 	else:
 		drape_mat = Tex.drape(Color(0.80, 0.84, 0.86), Vector2.ZERO, Vector2.ZERO, breathe_amp)
@@ -685,8 +704,17 @@ func _build_drape() -> void:
 	drape_mat.set_shader_parameter("body_map", ImageTexture.create_from_image(img))
 	drape_mat.set_shader_parameter("body_min", Vector2(_x0, _z0))
 	drape_mat.set_shader_parameter("body_cells", Vector3(_nx, _nz, _step))
+	var head_mat: ShaderMaterial = null
 	for mi in drape.find_children("*", "MeshInstance3D", true, false):
-		(mi as MeshInstance3D).material_override = drape_mat
+		var m: ShaderMaterial = drape_mat
+		if String(mi.name).begins_with("ChampTete"):
+			# Champ de tête : pend de l'arceau (rien de collé, ne bouge pas avec la respiration)
+			if head_mat == null:
+				head_mat = drape_mat.duplicate()
+				head_mat.set_shader_parameter("has_window", 0.0)
+				head_mat.set_shader_parameter("breathe", 0.0)
+			m = head_mat
+		(mi as MeshInstance3D).material_override = m
 
 
 # ---------------------------------------------------------------- Vue anatomique
@@ -1085,7 +1113,7 @@ func set_aperture(path: PackedVector3Array, h: PackedFloat32Array, t0: float, t1
 		m.set_shader_parameter("ap_lift", lift)
 		m.set_shader_parameter("ap_wall_vis", wall_vis)
 	# La paroi repoussée sort de la boîte de ses maillages : marge de visibilité
-	for part in SPREAD_PARTS:
+	for part in SPREAD_PARTS + spread_extra:
 		var mi: MeshInstance3D = _part_meshes.get(part)
 		if mi:
 			mi.extra_cull_margin = 0.06 if spread > 0.0 else 0.0

@@ -130,7 +130,7 @@ func build_samples() -> void:
 		# Les deux bouts de la crémaillère
 		var fm := model as FinochiettoModel
 		for bx in [-0.5, 0.5]:
-			samples.append([model.transform * Vector3(bx * fm.rack_len, fm.arm_len, FinochiettoModel.BAR_Z), "body"])
+			samples.append([model.transform * Vector3(bx * fm.rack_len, fm.arm_len, fm.bar_z), "body"])
 	if id == "bistouri":
 		# Ventre de la lame (sous l'axe)
 		samples.append([tip_local + Vector3(0, -0.0035, -0.012), "blade"])

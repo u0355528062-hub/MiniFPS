@@ -194,7 +194,7 @@ func build() -> void:
 		_slot_labels.append(nm)
 
 	# --- Aide des commandes (F1)
-	_help = UIKit.label("ZQSD : marcher  ·  Souris : regarder  ·  Clic : prendre / appuyer / serrer  ·  Clic droit : précision\nMolette : lever / baisser  ·  R : reposer  ·  1-7 : instrument  ·  Ctrl : se pencher  ·  V : vue anatomique  ·  Échap : pause", 14, UIKit.TEXT_DIM)
+	_help = UIKit.label("ZQSD : marcher  ·  Souris : regarder  ·  Clic : prendre / appuyer / serrer  ·  Clic droit : précision\nMolette : lever / baisser  ·  R : reposer  ·  1-9, 0 : instrument  ·  Ctrl : se pencher  ·  V : vue anatomique  ·  Échap : pause", 14, UIKit.TEXT_DIM)
 	var hsb := UIKit.box(Color(0.02, 0.04, 0.05, 0.55), 8, Color(1, 1, 1, 0.04), 1, 10)
 	hsb.shadow_size = 0
 	_help.add_theme_stylebox_override("normal", hsb)

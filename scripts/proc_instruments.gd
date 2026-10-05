@@ -21,8 +21,9 @@ static func build(kind: String) -> Node3D:
 		"finochietto":
 			return FinochiettoModel.new()
 		"ecarteur_sternal":
-			# Valves longues et peu profondes, grande crémaillère
-			return FinochiettoModel.new(0.075, 0.075, 0.25, 0.03)
+			# Valves longues et peu profondes ; crémaillère et bras haut au-dessus de la peau (le
+			# sternum est sous 1 cm de peau et de graisse)
+			return FinochiettoModel.new(0.062, 0.062, 0.17, 0.028, -0.03)
 		"scie_sternale":
 			return SternalSawModel.new()
 		"bistouri_electrique":
