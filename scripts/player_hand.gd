@@ -25,6 +25,7 @@ var auto_lift := 0.0
 var press_mode := "press"
 var press_max := 0.006
 var press_speed := 0.045
+var press_rel := false  ## press_max compté depuis la peau (le fond de la brèche est déjà plus bas)
 var depth := 0.0
 var on_patient := false  ## la pointe est posée sur le patient (sinon, instrument tenu devant soi)
 var aim_point := Vector3.ZERO
@@ -37,10 +38,11 @@ var _blend := 0.0
 var _hint := ""
 
 
-func set_press_mode(mode: String, pmax: float, speed := 0.045) -> void:
+func set_press_mode(mode: String, pmax: float, speed := 0.045, relative := false) -> void:
 	press_mode = mode
 	press_max = pmax
 	press_speed = speed
+	press_rel = relative
 
 
 func squeeze_value() -> float:
@@ -78,6 +80,9 @@ func screen_aim() -> Vector2:
 ## Surface visée (peau dans la fenêtre du champ, sinon champ ou peau) : relief du patient.
 func _surface_y(x: float, z: float) -> float:
 	if patient and patient.in_window(x, z):
+		var floor_y := patient.breach_floor(x, z)
+		if floor_y > -INF:
+			return floor_y
 		return Patient.body_height(x, z)
 	return Patient.top_height(x, z)
 
@@ -129,8 +134,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			take_requested.emit(self, hovered)
 		elif k.physical_keycode == KEY_R and held:
 			put_back_requested.emit(self)
-		elif k.physical_keycode >= KEY_1 and k.physical_keycode <= KEY_9:
-			var i := k.physical_keycode - KEY_1
+		elif k.physical_keycode >= KEY_0 and k.physical_keycode <= KEY_9:
+			# 1-9 : instruments 1 à 9 ; 0 : le dixième
+			var i := 9 if k.physical_keycode == KEY_0 else k.physical_keycode - KEY_1
 			if i < instruments.size():
 				request_index(i)
 
@@ -187,7 +193,10 @@ func _process(delta: float) -> void:
 		var pressing := _clicking() and not swallow_click
 		on_patient = target_pt != Vector3.INF
 		if pressing and press_mode != "none" and on_patient:
-			depth = move_toward(depth, press_max, press_speed * delta)
+			var pm := press_max
+			if press_rel:
+				pm = maxf(0.002, press_max - (Patient.body_height(target_pt.x, target_pt.z) - target_pt.y))
+			depth = move_toward(depth, pm, press_speed * delta)
 		elif press_mode != "hold" or not on_patient:
 			depth = move_toward(depth, 0.0, 0.1 * delta)
 		var want: Transform3D
@@ -240,7 +249,7 @@ func _process(delta: float) -> void:
 		else:
 			held.global_transform = _xf
 			held.tip_depth = -1.0
-		held.set_squeeze(squeeze_value() if held.has_jaws or held.is_syringe else 0.0)
+		held.set_squeeze(squeeze_value() if held.has_jaws or held.is_syringe or held.model_squeeze else 0.0)
 		if on_patient:
 			_after_place(patient)
 		_set_hint("")

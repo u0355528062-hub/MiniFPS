@@ -1,7 +1,7 @@
 class_name Player
 extends CharacterBody3D
 ## Joueur à la première personne : ZQSD (ou WASD, flèches) pour marcher, souris pour regarder,
-## Maj pour aller plus vite, Ctrl pour se pencher (regard plus près du patient).
+## Maj pour aller plus vite, Ctrl pour se pencher au-dessus du patient (on voit au fond d'une plaie).
 ## Clic droit maintenu : précision (zoom, souris ralentie, profondeur de champ) pour les gestes fins.
 
 signal pause_requested
@@ -9,7 +9,8 @@ signal view_mode_requested
 signal continue_requested
 
 const EYE := 1.66
-const CROUCH := 0.32
+const LEAN_DOWN := 0.1  ## se pencher : la tête descend un peu...
+const LEAN_FWD := 0.32  ## ... et passe au-dessus de la table
 const WALK := 1.35
 const RUN := 2.6
 
@@ -20,6 +21,7 @@ var enabled := true  ## faux pendant les menus
 var precision := 0.0  ## 0..1 (zoom de précision)
 var crouch := 0.0
 var sim_look := Vector2.INF  ## tests : orientation imposée (lacet, tangage en radians)
+var sim_lean := -1.0  ## tests : penché imposé (0..1), -1 = touche Ctrl
 
 var _yaw := 0.0
 var _pitch := -0.35
@@ -92,10 +94,22 @@ func _apply_look() -> void:
 	head.rotation.x = _pitch
 
 
+## Tests : se pencher (0..1) tout de suite, sans transition (la visée qui suit en tient compte).
+func snap_lean(v: float) -> void:
+	sim_lean = v
+	crouch = v
+	var lean := smoothstep(0.0, 1.0, crouch)
+	head.position = Vector3(0, EYE - LEAN_DOWN * lean, -LEAN_FWD * lean)
+
+
 ## Orientation imposée (robots de test, cinématique).
 func look_towards(p: Vector3) -> void:
+	# Le corps se tourne vers le point (la tête penchée reste dans cet alignement), puis l'œil
+	# s'incline vers lui
+	var dh := p - global_position
+	_yaw = atan2(-dh.x, -dh.z)
+	_apply_look()
 	var d := p - camera.global_position
-	_yaw = atan2(-d.x, -d.z)
 	_pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), deg_to_rad(-86), deg_to_rad(80))
 	_apply_look()
 
@@ -130,6 +144,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	# Se pencher, précision, balancement de la tête
 	var want_crouch := 1.0 if active and _key(KEY_CTRL) else 0.0
+	if sim_lean >= 0.0:
+		want_crouch = sim_lean
 	crouch = move_toward(crouch, want_crouch, delta * 3.5)
 	var want_prec := 1.0 if active and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) else 0.0
 	precision = move_toward(precision, want_prec, delta * 4.0)
@@ -142,7 +158,8 @@ func _physics_process(delta: float) -> void:
 		_bob_t = lerpf(_bob_t, roundf(_bob_t / PI) * PI, delta * 4.0)
 	var amp := 0.012 * clampf(hspeed / WALK, 0.0, 1.5) * (1.0 - pe)
 	_bob = Vector3(cos(_bob_t * 0.5) * amp * 0.6, -absf(sin(_bob_t)) * amp, 0.0)
-	head.position = Vector3(0, EYE - CROUCH * smoothstep(0.0, 1.0, crouch), 0) + _bob
+	var lean := smoothstep(0.0, 1.0, crouch)
+	head.position = Vector3(0, EYE - LEAN_DOWN * lean, -LEAN_FWD * lean) + _bob
 	# Profondeur de champ en précision : l'arrière-plan s'estompe derrière le point visé
 	if _attrs:
 		var aim := hand.aim_distance()

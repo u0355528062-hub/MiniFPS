@@ -41,6 +41,7 @@ var tip_depth := -1.0
 var correction := 0.0  ## de combien l'instrument a été remonté pour ne pas traverser
 var squeeze := 0.0  ## 0 = ouvert, 1 = fermé (mâchoires)
 var has_jaws := false
+var model_squeeze := false  ## modèle procédural animé par le serrage (scie, clamp...)
 var jaw_type := 0
 var pivot_local := Vector3.ZERO
 # Seringue
@@ -102,6 +103,7 @@ func _setup(scale_to: float) -> void:
 	_overlay.set_shader_parameter("strength", 0.0)
 	if JAWS.has(_src_file):
 		_articulate(JAWS[_src_file])
+	model_squeeze = model.has_method("set_squeeze")
 	if _src_file == "seringue":
 		_setup_syringe()
 	for m in _meshes:
@@ -124,10 +126,11 @@ func build_samples() -> void:
 		"langenbeck", "roux":
 			tag = "hook"
 	samples.append([tip_local, tag])
-	if id == "finochietto":
+	if model is FinochiettoModel:
 		# Les deux bouts de la crémaillère
-		for bx in [-0.075, 0.075]:
-			samples.append([model.transform * Vector3(bx, FinochiettoModel.ARM_LEN, FinochiettoModel.BAR_Z), "body"])
+		var fm := model as FinochiettoModel
+		for bx in [-0.5, 0.5]:
+			samples.append([model.transform * Vector3(bx * fm.rack_len, fm.arm_len, FinochiettoModel.BAR_Z), "body"])
 	if id == "bistouri":
 		# Ventre de la lame (sous l'axe)
 		samples.append([tip_local + Vector3(0, -0.0035, -0.012), "blade"])
@@ -329,6 +332,9 @@ static func _components(world: PackedVector3Array, index: PackedInt32Array) -> P
 ## 0 = mâchoires ouvertes, 1 = fermées.
 func set_squeeze(v: float) -> void:
 	squeeze = clampf(v, 0.0, 1.0)
+	if model_squeeze:
+		model.call("set_squeeze", squeeze)
+		return
 	if not has_jaws or absf(squeeze - _jaw_shown) < 0.002:
 		return
 	_jaw_shown = squeeze

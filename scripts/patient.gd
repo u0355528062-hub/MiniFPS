@@ -103,6 +103,23 @@ var ap_t1 := 0.0
 var ap_w0 := 0.0
 var ap_spread := 0.0
 var ap_depth := 0.045
+var ap_fall := Vector2(0.014, 0.085)
+var ap_deep := Vector2(0.045, 0.075)
+var ap_side := Vector2.ONE
+var ap_lift := Vector2.ZERO
+var _ap_slopes := PackedVector2Array()
+const LIFT_FALL := Vector2(0.03, 0.11)  ## soulèvement d'un bord : s'estompe entre ces distances
+
+
+## Écarteur à mammaire : soulève le bord gauche (lift.x) ou droit (lift.y) de l'incision, peau et
+## paroi ensemble (la brèche doit être définie : set_aperture).
+func set_edge_lift(lift: Vector2) -> void:
+	ap_lift = lift
+	for m in anatomy_mats:
+		m.set_shader_parameter("ap_lift", lift)
+	for m in [zone_mat, wall_mat, skin_mat]:
+		if m:
+			m.set_shader_parameter("lift_lr", lift)
 var heart_squeeze := 0.0
 var beat_gain := 1.0  ## force des battements du cœur (0 : arrêt)
 var beat_now := 0.0  ## dilatation du cœur à cet instant (le shader la reçoit aussi)
@@ -1028,7 +1045,8 @@ func _aperture_hits(box: AABB) -> bool:
 
 ## Thoracotomie : brèche le long du tracé `path` (points de la peau), `h` = part de l'écartement en
 ## chaque point (0 aux bouts), coupée de t0 à t1, demi-largeur coupée w0, écartement `spread`.
-func set_aperture(path: PackedVector3Array, h: PackedFloat32Array, t0: float, t1: float, w0: float, spread: float, depth := 0.045) -> void:
+func set_aperture(path: PackedVector3Array, h: PackedFloat32Array, t0: float, t1: float, w0: float, spread: float, depth := 0.045,
+		fall := Vector2(0.014, 0.085), deep := Vector2(0.045, 0.075), side := Vector2.ONE, lift := Vector2.ZERO, wall_vis := 0.0) -> void:
 	ap_path = path
 	ap_h = h
 	ap_t0 = t0
@@ -1036,6 +1054,10 @@ func set_aperture(path: PackedVector3Array, h: PackedFloat32Array, t0: float, t1
 	ap_w0 = w0
 	ap_spread = spread
 	ap_depth = depth
+	ap_fall = fall
+	ap_deep = deep
+	ap_side = side
+	ap_lift = lift
 	var n := mini(path.size(), 10)
 	var pts := PackedVector4Array()
 	pts.resize(10)
@@ -1047,6 +1069,7 @@ func set_aperture(path: PackedVector3Array, h: PackedFloat32Array, t0: float, t1
 		var x := path[i].x
 		var z := path[i].z
 		slopes[i] = Vector2((body_height(x + e, z) - body_height(x - e, z)) / (2.0 * e), (body_height(x, z + e) - body_height(x, z - e)) / (2.0 * e))
+	_ap_slopes = slopes
 	for m in anatomy_mats:
 		m.set_shader_parameter("ap_pts", pts)
 		m.set_shader_parameter("ap_slope", slopes)
@@ -1056,11 +1079,88 @@ func set_aperture(path: PackedVector3Array, h: PackedFloat32Array, t0: float, t1
 		m.set_shader_parameter("ap_w0", w0)
 		m.set_shader_parameter("ap_spread", spread)
 		m.set_shader_parameter("ap_depth", depth)
+		m.set_shader_parameter("ap_fall", fall)
+		m.set_shader_parameter("ap_deep", deep)
+		m.set_shader_parameter("ap_side", side)
+		m.set_shader_parameter("ap_lift", lift)
+		m.set_shader_parameter("ap_wall_vis", wall_vis)
 	# La paroi repoussée sort de la boîte de ses maillages : marge de visibilité
 	for part in SPREAD_PARTS:
 		var mi: MeshInstance3D = _part_meshes.get(part)
 		if mi:
 			mi.extra_cull_margin = 0.06 if spread > 0.0 else 0.0
+
+
+## Où se trouve, la paroi écartée, le point p de la paroi au repos (même calcul que le shader).
+func breach_displace(p: Vector3) -> Vector3:
+	if ap_path.size() < 2 or (ap_spread <= 0.0 and ap_lift == Vector2.ZERO):
+		return p
+	var best := INF
+	var rx := 0.0
+	var ry := 0.0
+	var rw := 0.0
+	var dir := Vector2.ZERO
+	var slope := Vector2.ZERO
+	for k in mini(ap_path.size(), 10) - 1:
+		var a := ap_path[k]
+		var b := ap_path[k + 1]
+		var ab := Vector2(b.x - a.x, b.z - a.z)
+		var av := Vector2(p.x - a.x, p.z - a.z)
+		var t := clampf(av.dot(ab) / maxf(ab.length_squared(), 1e-10), 0.0, 1.0)
+		var d := (av - ab * t).length()
+		if d < best:
+			best = d
+			var sgn := 1.0 if ab.y * av.x - ab.x * av.y >= 0.0 else -1.0
+			dir = Vector2(ab.y, -ab.x).normalized() * sgn
+			slope = _ap_slopes[k].lerp(_ap_slopes[k + 1], t) if _ap_slopes.size() > k + 1 else Vector2.ZERO
+			rx = d * sgn
+			ry = lerpf(a.y, b.y, t) - p.y
+			rw = lerpf(ap_h[k], ap_h[k + 1], t)
+	var dw := (1.0 - smoothstep(ap_deep.x, ap_deep.y, ry)) * smoothstep(-0.03, -0.01, ry)
+	var w := rw * (1.0 - smoothstep(ap_fall.x, ap_fall.y, absf(rx))) * dw
+	var wl := rw * (1.0 - smoothstep(LIFT_FALL.x, LIFT_FALL.y, absf(rx))) * dw
+	var plus := rx >= 0.0
+	var dxz := dir * ap_spread * w * (ap_side.x if plus else ap_side.y)
+	return p + Vector3(dxz.x, slope.dot(dxz) + wl * (ap_lift.x if plus else ap_lift.y), dxz.y)
+
+
+var _floor_cache := {}
+
+
+## Thorax ouvert : hauteur de ce qu'on voit au fond de la brèche en (x, z) — cœur, gros
+## vaisseaux, foie — ou -INF hors de la brèche. La visée s'y pose (sinon on viserait la peau
+## « absente » au-dessus du trou et l'instrument arriverait à côté).
+func breach_floor(x: float, z: float) -> float:
+	if ap_path.size() < 2 or ap_spread < 0.01:
+		return -INF
+	var best := INF
+	var gap := 0.0
+	for k in ap_path.size() - 1:
+		var a := Vector2(ap_path[k].x, ap_path[k].z)
+		var b := Vector2(ap_path[k + 1].x, ap_path[k + 1].z)
+		var ab := b - a
+		var av := Vector2(x, z) - a
+		var t := clampf(av.dot(ab) / maxf(ab.length_squared(), 1e-10), 0.0, 1.0)
+		var d := (av - ab * t).length()
+		if d < best:
+			best = d
+			var plus := ab.y * av.x - ab.x * av.y >= 0.0
+			gap = ap_w0 + ap_spread * lerpf(ap_h[k], ap_h[k + 1], t) * (ap_side.x if plus else ap_side.y)
+	if best > gap:
+		return -INF
+	var key := Vector2i(roundi(x * 500.0), roundi(z * 500.0))
+	if _floor_cache.has(key):
+		return _floor_cache[key]
+	var top := body_height(x, z)
+	var y := top - 0.06
+	for n in 260:
+		var yy := top - 0.015 - n * 0.0005
+		var lab: int = EchoView.sample(Vector3(x, yy, z))[0]
+		if lab == 2 or lab == 3 or lab == 6:
+			y = yy
+			break
+	_floor_cache[key] = y
+	return y
 
 
 ## Point du tracé de la brèche (t de 0 à 1, à intervalles égaux entre les points).
@@ -1111,6 +1211,26 @@ func set_heart_wound(c: Vector3, dir: Vector3, half_len: float, closed: float) -
 			m.set_shader_parameter("heart_wound", Vector4(c.x, c.y, c.z, half_len))
 			m.set_shader_parameter("heart_wound_dir", dir.normalized())
 			m.set_shader_parameter("heart_wound_closed", closed)
+
+
+## Fibrillation ventriculaire (0..1) : la surface du cœur frémit.
+func set_fibrillation(v: float) -> void:
+	for part in ["Coeur", "Coronaires"]:
+		for m in _mats_by_part.get(part, []):
+			m.set_shader_parameter("fibrillation", v)
+
+
+## Cœur arrêté par la cardioplégie froide (0..1) : flasque et plus pâle.
+func set_heart_cold(v: float) -> void:
+	for part in ["Coeur", "Coronaires"]:
+		for m in _mats_by_part.get(part, []):
+			m.set_shader_parameter("cold", v)
+
+
+## Artère mammaire gauche prélevée : on cache celle de l'atlas (le greffon la remplace).
+func set_lima_hidden(v: bool) -> void:
+	for m in _mats_by_part.get("Mammaires", []):
+		m.set_shader_parameter("hide_left", 1.0 if v else 0.0)
 
 
 ## Le cœur comprimé entre les mains (massage interne), 0..1.

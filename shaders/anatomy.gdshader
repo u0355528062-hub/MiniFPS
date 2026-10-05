@@ -55,6 +55,12 @@ uniform float ap_t1 = 0.0;
 uniform float ap_w0 = 0.0;
 uniform float ap_spread = 0.0;
 uniform float ap_depth = 0.045;
+uniform vec2 ap_fall = vec2(0.014, 0.085);  // l'écartement s'estompe entre ces distances au tracé
+uniform vec2 ap_deep = vec2(0.045, 0.075);  // ... et entre ces profondeurs sous la peau
+uniform vec2 ap_side = vec2(1.0, 1.0);  // part de l'écartement de chaque côté du tracé (+, -)
+uniform vec2 ap_lift = vec2(0.0, 0.0);  // soulèvement de chaque bord (écarteur à mammaire)
+uniform vec2 ap_lift_fall = vec2(0.03, 0.11);  // ... qui s'estompe entre ces distances au tracé
+uniform float ap_wall_vis = 0.0;  // la face interne de la paroi se voit plus loin du bord
 uniform float spreadable = 0.0;
 uniform float wall_tissue = 0.0;  // 1 : muscles, intercostaux, plèvre ; 2 : nerfs et vaisseaux de la paroi
 uniform float cavity_blood = 0.0;  // hémothorax : du sang stagne au fond de la cavité ouverte
@@ -70,6 +76,9 @@ uniform vec3 heart_wound_dir = vec3(1.0, 0.0, 0.0);
 uniform float heart_wound_closed = 0.0;
 // Massage cardiaque : compression du cœur entre les mains (0..1)
 uniform float squeeze = 0.0;
+uniform float fibrillation = 0.0;  // le cœur frémit (fibrillation ventriculaire)
+uniform float cold = 0.0;  // cœur arrêté par la cardioplégie froide : flasque, plus pâle
+uniform float hide_left = 0.0;  // artère mammaire gauche prélevée (remplacée par le greffon)
 
 varying vec3 wpos;
 varying vec3 wnorm;
@@ -114,6 +123,11 @@ void vertex() {
 	}
 	if (beat_c != vec3(0.0)) {
 		v = beat_c + (v - beat_c) * (1.0 + beat);
+		if (fibrillation > 0.0) {
+			// Fibrillation : la surface ondule vite et sans ordre
+			float f = sin(TIME * 37.0 + v.x * 260.0 + v.z * 190.0) * sin(TIME * 23.0 + v.y * 310.0);
+			v += NORMAL * f * 0.0009 * fibrillation;
+		}
 		// Compression d'avant en arrière (le cœur s'aplatit entre les mains)
 		vec3 r = v - beat_c;
 		v = beat_c + vec3(r.x * (1.0 + 0.08 * squeeze), r.y * (1.0 - 0.32 * squeeze), r.z * (1.0 + 0.1 * squeeze));
@@ -124,13 +138,17 @@ void vertex() {
 		vec2 dir;
 		vec2 slope;
 		vec4 nr = ap_near(wp0, dir, slope);
-		float fall = 1.0 - smoothstep(0.014, 0.085, abs(nr.x));
-		float deep = 1.0 - smoothstep(0.045, 0.075, nr.y);
+		float fall = 1.0 - smoothstep(ap_fall.x, ap_fall.y, abs(nr.x));
+		float deep = 1.0 - smoothstep(ap_deep.x, ap_deep.y, nr.y);
 		float shallow = smoothstep(-0.03, -0.01, nr.y);
-		float amount = ap_spread * nr.w * fall * deep * shallow;
-		// On glisse le long de la paroi (même profondeur sous la peau), pas à l'horizontale
+		float w = nr.w * fall * deep * shallow;
+		bool plus = nr.x >= 0.0;
+		float amount = ap_spread * w * (plus ? ap_side.x : ap_side.y);
+		// On glisse le long de la paroi (même profondeur sous la peau), pas à l'horizontale ; un
+		// bord peut aussi être soulevé (charnière en dehors)
 		vec2 dxz = dir * amount;
-		vec3 off = vec3(dxz.x, dot(slope, dxz), dxz.y);
+		float wl = nr.w * (1.0 - smoothstep(ap_lift_fall.x, ap_lift_fall.y, abs(nr.x))) * deep * shallow;
+		vec3 off = vec3(dxz.x, dot(slope, dxz) + wl * (plus ? ap_lift.x : ap_lift.y), dxz.y);
 		v += inverse(mat3(MODEL_MATRIX)) * off;
 	}
 	VERTEX = v;
@@ -155,7 +173,8 @@ void fragment() {
 		vec2 dir;
 		vec2 slope;
 		vec4 nr = ap_near(wpos, dir, slope);
-		float gap = ap_w0 + ap_spread * nr.w;
+		float gap = ap_w0 + ap_spread * nr.w * (nr.x >= 0.0 ? ap_side.x : ap_side.y);
+		float lifted = max(ap_lift.x, ap_lift.y);
 		bool along = nr.z >= ap_t0 - 0.02 && nr.z <= ap_t1 + 0.02;
 		open_depth = nr.y;
 		// Nerfs et vaisseaux intercostaux : coupés un peu plus profond (rien ne pend dans la brèche)
@@ -169,8 +188,8 @@ void fragment() {
 		}
 		// Ce qu'on voit par la brèche : un cône qui s'élargit en profondeur (regard oblique)
 		// (la paroi elle-même ne se voit que sur les bords de la brèche)
-		float cone = wall_tissue > 0.5 ? 0.0 : max(nr.y, 0.0) * 0.7;
-		in_open = along && nr.y > -0.01 && abs(nr.x) < gap * 1.15 + 0.012 + cone;
+		float cone = wall_tissue > 0.5 ? ap_wall_vis : max(nr.y, 0.0) * 0.7;
+		in_open = along && nr.y > -0.01 - lifted && abs(nr.x) < gap * 1.15 + 0.012 + cone;
 	}
 	if (show_all < 0.5) {
 		vec3 d = wpos - reveal_c;
@@ -180,6 +199,9 @@ void fragment() {
 		if (!in_reveal && !in_open) {
 			discard;
 		}
+	}
+	if (hide_left > 0.5 && rpos.z > 0.004) {
+		discard;
 	}
 	if (pc_w > 0.0 && seg_dist(rpos, pc_a, pc_b) < pc_w) {
 		discard;
@@ -218,6 +240,10 @@ void fragment() {
 			vec4 ves = tri_tex(vessels, wpos, n0, tex_scale * 0.5);
 			col = mix(col, vec3(0.5, 0.06, 0.08), clamp(ves.g * vessel_amount, 0.0, 1.0) * 0.6);
 			col = mix(col, vec3(0.3, 0.06, 0.2), clamp(ves.r * vessel_amount, 0.0, 1.0) * 0.4);
+		}
+		if (cold > 0.0) {
+			// Cœur arrêté et refroidi : plus pâle, moins de sang dans le muscle
+			col = mix(col, col * vec3(1.15, 0.92, 0.95) + vec3(0.06, 0.03, 0.04), cold * 0.6);
 		}
 		if (tense > 0.0) {
 			// Péricarde distendu : le sang en dessous le teinte en bleu violacé, tendu et luisant

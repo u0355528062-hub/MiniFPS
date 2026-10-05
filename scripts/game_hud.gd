@@ -176,17 +176,18 @@ func build() -> void:
 	_hotbar.offset_top = -22
 	_hotbar.offset_bottom = -22
 	root.add_child(_hotbar)
+	var narrow := instruments.size() > 8
 	for i in instruments.size():
 		var slot := PanelContainer.new()
-		slot.custom_minimum_size = Vector2(128, 64)
+		slot.custom_minimum_size = Vector2(108 if narrow else 128, 64)
 		slot.add_theme_stylebox_override("panel", UIKit.box(UIKit.PANEL, 10, Color(1, 1, 1, 0.06), 1, 8))
 		var v := UIKit.vbox(2)
 		slot.add_child(v)
-		var num := UIKit.label(str(i + 1), 13, UIKit.TEXT_DIM, true)
+		var num := UIKit.label(str((i + 1) % 10) if i < 10 else "", 13, UIKit.TEXT_DIM, true)
 		v.add_child(num)
-		var nm := UIKit.label(_short(instruments[i].label), 15, UIKit.TEXT)
+		var nm := UIKit.label(_short(instruments[i].label), 14 if narrow else 15, UIKit.TEXT)
 		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		nm.custom_minimum_size.x = 112
+		nm.custom_minimum_size.x = 92 if narrow else 112
 		v.add_child(nm)
 		_hotbar.add_child(slot)
 		_slots.append(slot)

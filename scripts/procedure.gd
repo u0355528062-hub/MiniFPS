@@ -210,7 +210,7 @@ func _on_take(hand: SurgeonHand, inst: Instrument) -> void:
 	hand.take(inst)
 	Sfx.play("prise", inst.global_position, -6.0)
 	var req := required_id()
-	if running and req != "" and inst.id != req:
+	if running and req != "" and inst.id != req and current().get("kind", "") not in ["pick", "pump"]:
 		var good: Instrument = tray.instruments[req]
 		_toast("Pas celui-là : prends « %s »" % good.label, false)
 		Sfx.play("erreur", Vector3.INF, -6.0)
@@ -273,6 +273,7 @@ func _process(delta: float) -> void:
 		"cutline": _tick_cutline(s, delta)
 		"crank": _tick_crank(s, delta)
 		"pump": _tick_pump(s, delta)
+		"pick": _tick_pick(s, delta)
 	if step >= 0 and step < steps.size() and current() == s:
 		_update_markers(s)
 	if not show_markers:
@@ -287,6 +288,7 @@ func _setup_hands(s: Dictionary) -> void:
 	var pmax := 0.005
 	var speed := 0.045
 	var axis := Vector3.ZERO
+	var relative := false
 	match s["kind"]:
 		"mark":
 			pmax = 0.004
@@ -341,6 +343,7 @@ func _setup_hands(s: Dictionary) -> void:
 			mode = "hold"
 			pmax = s.get("depth", 0.02) + 0.003
 			speed = 0.03
+			relative = true
 		"crank":
 			mode = "none"
 			target = s["target"].call()
@@ -349,7 +352,7 @@ func _setup_hands(s: Dictionary) -> void:
 		h.assist_target = target if ok else Vector3.INF
 		h.assist_axis = axis if ok else Vector3.ZERO
 		if h.has_method("set_press_mode"):
-			h.call("set_press_mode", mode, pmax, speed)
+			h.call("set_press_mode", mode, pmax, speed, relative)
 
 
 ## Zones où les instruments peuvent entrer pour ce geste.
@@ -453,6 +456,8 @@ func _update_markers(s: Dictionary) -> void:
 			marker2.show_at(path[path.size() - 1], "ARRIVÉE", 0.5)
 		"pump":
 			marker.show_at(s["target"].call(), s.get("label", ""), s.get("ring", 1.2))
+		"pick":
+			marker.show_at(_pick_target(s), s.get("label", ""), s.get("ring", 0.9))
 		"suture":
 			var pair := _suture_pair(s)
 			if not pair.is_empty():
@@ -744,7 +749,10 @@ func _tick_insert(s: Dictionary, _delta: float) -> void:
 		Sfx.loop("ecarte", tipp, 0.4 if along > 0.005 else 0.0)
 		if s.has("progress"):
 			s["progress"].call(clampf(along / depth, 0.0, 1.0))
-		_caption("%s : %d cm sur %d" % [s.get("what", "Drain enfoncé"), int(along * 100.0), int(depth * 100.0)])
+		if depth < 0.03:
+			_caption("%s : %d mm sur %d" % [s.get("what", "Enfoncé"), int(along * 1000.0), int(depth * 1000.0)])
+		else:
+			_caption("%s : %d cm sur %d" % [s.get("what", "Drain enfoncé"), int(along * 100.0), int(depth * 100.0)])
 		if along >= depth:
 			_done(h, false)
 			_complete_step()
@@ -984,7 +992,7 @@ func _tick_cutline(s: Dictionary, _delta: float) -> void:
 			t1 = t
 		st["t0"] = t0
 		st["t1"] = t1
-		Sfx.loop("ciseaux_coupe", tipp, 0.4)
+		Sfx.loop(s.get("sound", "ciseaux_coupe"), tipp, 0.4 if not s.has("sound") else 0.8)
 		if s.has("on_progress"):
 			s["on_progress"].call(t0, t1)
 		_caption("%s : %d %%" % [s.get("what", "Coupé"), int((t1 - t0) * 100.0)])
@@ -1071,6 +1079,30 @@ func _tick_pump(s: Dictionary, delta: float) -> void:
 	if n2 >= s.get("need", 30) and r >= 80.0 and r <= 140.0:
 		_done(null, false)
 		_complete_step(s.get("done_msg", ""))
+
+
+## Retirer un instrument posé dans le patient (clamp, canule) : main vide, on le vise, clic.
+func _tick_pick(s: Dictionary, _delta: float) -> void:
+	var inst: Instrument = tray.instruments[s["inst"]]
+	var tgt := _pick_target(s)
+	for h in hands:
+		if h.held != null:
+			_caption("Pose ce que tu tiens (touche R) : on retire « %s » à la main" % inst.label)
+			continue
+		if h is PlayerHand and _flat((h as PlayerHand).aim_point, tgt) > s.get("near", 0.05):
+			_caption(s.get("hint", "Vise « %s » et clique pour le retirer" % inst.label))
+			continue
+		if h.pressing():
+			_done(h, false)
+			_complete_step(s.get("done_msg", ""))
+			return
+
+
+func _pick_target(s: Dictionary) -> Vector3:
+	if s.has("target"):
+		return s["target"].call()
+	var inst: Instrument = tray.instruments[s["inst"]]
+	return inst.tip_global()
 
 
 ## Saute directement à l'étape n (tests, captures) en appliquant les étapes précédentes.

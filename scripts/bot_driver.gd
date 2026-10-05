@@ -130,7 +130,7 @@ func do_step() -> void:
 	await cleanup()
 	var s: Dictionary = proc.steps[si]
 	want_axis = Vector3.ZERO
-	if s["inst"] != "":
+	if s["inst"] != "" and s["kind"] not in ["pick", "pump"]:
 		await take(s["inst"])
 		if held_id() != s["inst"]:
 			fail("impossible de prendre %s" % s["inst"])
@@ -298,7 +298,10 @@ func do_step() -> void:
 			squeeze(1.0)
 			for i in 260:
 				var t := minf(1.0, i / 180.0)
-				await tip_to(Procedure.path_point(proc.cut_path(s), t), 2)
+				var target := Procedure.path_point(proc.cut_path(s), t)
+				await tip_to(target, 2)
+				if OS.get_cmdline_user_args().has("--debug") and i % 20 == 0:
+					print("DEBUG coupe t=%.2f cible=%s %s" % [t, target, debug_state()])
 				if proc.step != si:
 					break
 			squeeze(0.0)
@@ -328,6 +331,18 @@ func do_step() -> void:
 				await _wait(0.3)
 				if proc.step != si:
 					break
+		"pick":
+			# Main vide : viser l'instrument posé, cliquer
+			var tgt: Vector3 = proc._pick_target(s)
+			await aim_hand(tgt)
+			for i in 40:
+				squeeze(1.0)
+				await _frames(3)
+				squeeze(0.0)
+				await _frames(3)
+				if proc.step != si:
+					break
+				await aim_hand(proc._pick_target(s))
 		"suture":
 			var pairs: Array = s["pairs"].call()
 			for k in range(proc.st.get("k", 0), pairs.size()):

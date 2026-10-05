@@ -24,6 +24,10 @@ var _pvc_queue := 0
 ## Arrêt cardiaque : activité électrique lente sans pouls (ni saturation ni tension mesurables) ;
 ## chaque compression du massage crée une onde de pression
 var arrest := false
+var bypass := false  ## circulation extracorporelle : pression non pulsée, pas de saturation lue
+var asystole := false  ## cœur arrêté par la cardioplégie : tracé plat, pas d'alarme sous CEC
+var vf := false  ## fibrillation ventriculaire : tracé anarchique, pas de pouls
+var map_bypass := 64  ## pression artérielle moyenne sous CEC
 var _art := 0.0
 var _art_t := 10.0
 
@@ -79,8 +83,15 @@ func _process(delta: float) -> void:
 		spo2 = move_toward(spo2, target_spo2, delta * 1.2)
 	_art_t += delta
 	_art = maxf(0.0, _art - delta * 2.2)
-	# Alarme de désaturation (ou d'arrêt cardiaque)
-	if arrest:
+	# Alarme de désaturation (ou d'arrêt cardiaque, de fibrillation)
+	if vf:
+		_alarm_t -= delta
+		if _alarm_t <= 0.0:
+			_alarm_t = 0.6
+			Sfx.play("bip_alarme", global_position, -5.0, 1.3)
+	elif bypass:
+		pass
+	elif arrest:
 		_alarm_t -= delta
 		if _alarm_t <= 0.0:
 			_alarm_t = 0.9
@@ -91,7 +102,10 @@ func _process(delta: float) -> void:
 			_alarm_t = 1.4
 			Sfx.play("bip_alarme", global_position, -8.0)
 	_beat_t += delta
-	var period := 60.0 / heart_rate
+	if asystole or vf:
+		_beat_t = 0.0
+		return
+	var period := 60.0 / maxf(heart_rate, 1.0)
 	if _beat_t >= period:
 		_beat_t -= period
 		beat_count += 1
@@ -128,6 +142,12 @@ func beat_amp() -> float:
 ## Forme de l'ECG, t secondes après le début du battement.
 func ecg_shape(t: float) -> float:
 	var v := 0.0
+	if vf:
+		# Fibrillation : ondulations rapides, irrégulières, sans complexe
+		var g := Time.get_ticks_msec() / 1000.0
+		return 0.32 * sin(TAU * 5.3 * g) + 0.22 * sin(TAU * 7.7 * g + 1.3) + 0.14 * sin(TAU * 11.1 * g + 0.4)
+	if asystole:
+		return 0.0
 	if arrest:
 		# Activité électrique sans pouls : complexes larges, lents, de faible amplitude
 		v += 0.42 * exp(-pow((t - 0.12) / 0.05, 2.0)) - 0.16 * exp(-pow((t - 0.34) / 0.09, 2.0))
@@ -183,7 +203,11 @@ class MonitorScreen:
 			var t := _since_beat
 			ecg[head] = monitor.ecg_shape(t) + randf_range(-0.015, 0.015)
 			var pt := t - 0.22
-			if monitor.arrest:
+			if monitor.bypass:
+				pleth[head] = 0.35 + 0.012 * sin(_resp * 9.0)
+			elif monitor.vf or monitor.asystole:
+				pleth[head] = 0.0
+			elif monitor.arrest:
 				pleth[head] = monitor.art_wave()
 			else:
 				pleth[head] = (0.85 * exp(-pow((pt - 0.12) / 0.09, 2.0)) + 0.3 * exp(-pow((pt - 0.36) / 0.08, 2.0))) if pt > 0.0 else 0.0
@@ -208,11 +232,18 @@ class MonitorScreen:
 		draw_string(font, Vector2(16, 395), "CO2", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1.0, 0.85, 0.2))
 		var x0 := 600.0
 		draw_string(font, Vector2(x0, 34), "FC", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.25, 1.0, 0.4))
-		draw_string(font, Vector2(x0, 120), str(int(round(monitor.heart_rate))), HORIZONTAL_ALIGNMENT_LEFT, -1, 92, Color(0.25, 1.0, 0.4))
+		var hr_txt := "---" if monitor.vf else ("0" if monitor.asystole else str(int(round(monitor.heart_rate))))
+		draw_string(font, Vector2(x0, 120), hr_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 92, Color(1, 0.3, 0.3) if monitor.vf else Color(0.25, 1.0, 0.4))
 		draw_string(font, Vector2(x0, 226), "SpO2 %", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.3, 0.85, 1.0))
-		draw_string(font, Vector2(x0, 300), "--" if monitor.arrest else str(int(monitor.spo2)), HORIZONTAL_ALIGNMENT_LEFT, -1, 72, Color(0.3, 0.85, 1.0))
-		draw_string(font, Vector2(x0, 344), "PNI mmHg", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.4, 0.4))
-		draw_string(font, Vector2(x0, 384), "--/--" if monitor.arrest else "%d/%d" % [monitor.sys, monitor.dia], HORIZONTAL_ALIGNMENT_LEFT, -1, 38, Color(1, 0.4, 0.4))
+		var no_pulse := monitor.arrest or monitor.vf or monitor.bypass
+		draw_string(font, Vector2(x0, 300), "--" if no_pulse else str(int(monitor.spo2)), HORIZONTAL_ALIGNMENT_LEFT, -1, 72, Color(0.3, 0.85, 1.0))
+		draw_string(font, Vector2(x0, 344), "PAM mmHg" if monitor.bypass else "PNI mmHg", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.4, 0.4))
+		var bp := str(monitor.map_bypass) if monitor.bypass else ("--/--" if monitor.arrest or monitor.vf else "%d/%d" % [monitor.sys, monitor.dia])
+		draw_string(font, Vector2(x0, 384), bp, HORIZONTAL_ALIGNMENT_LEFT, -1, 38, Color(1, 0.4, 0.4))
+		if monitor.bypass:
+			draw_string(font, Vector2(170, 30), "CEC  ·  %s" % ("CŒUR ARRÊTÉ" if monitor.asystole else "EN MARCHE"), HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1.0, 0.7, 0.2))
+		elif monitor.vf and fmod(Time.get_ticks_msec() / 1000.0, 1.0) < 0.6:
+			draw_string(font, Vector2(170, 30), "FIBRILLATION VENTRICULAIRE", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 0.25, 0.25))
 		if monitor.arrest and fmod(Time.get_ticks_msec() / 1000.0, 1.0) < 0.6:
 			draw_string(font, Vector2(170, 30), "PAS DE POULS", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 0.25, 0.25))
 		draw_string(font, Vector2(x0, 430), "FR %d   T° 37,9" % int(round(monitor.resp_rate)), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1.0, 0.85, 0.2))

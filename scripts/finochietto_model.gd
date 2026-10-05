@@ -4,33 +4,40 @@ extends Node3D
 ## bout de l'incision ; deux bras parallèles à l'incision (le long de -Y) portent les valves
 ## courbes qui crochètent les côtes au milieu de la plaie (valves vers +Z, dans le thorax). Le
 ## champ reste dégagé. Une manivelle fait glisser les bras ; set_spread(d) écarte les valves de d.
+## Mêmes pièces, autres mesures : écarteur sternal (valves longues et courtes, grande crémaillère).
 
 const BAR_Z := -0.010  ## crémaillère et bras, au-dessus de la peau une fois posé
-const BLADE_DEPTH := 0.043
-const BLADE_LEN := 0.056  ## longueur des valves, le long de l'incision
-const ARM_LEN := 0.062  ## de la crémaillère au milieu des valves
 
+var blade_depth := 0.043
+var blade_len := 0.056  ## longueur des valves, le long de l'incision
+var arm_len := 0.062  ## de la crémaillère au milieu des valves
+var rack_len := 0.15
 var spread := 0.012
 var _arm_a: Node3D
 var _arm_b: Node3D
 var _crank: Node3D
 
 
-func _init() -> void:
+func _init(p_blade_len := 0.056, p_arm_len := 0.062, p_rack_len := 0.15, p_blade_depth := 0.043) -> void:
+	blade_len = p_blade_len
+	arm_len = p_arm_len
+	rack_len = p_rack_len
+	blade_depth = p_blade_depth
 	var steel := _steel(Color(0.80, 0.82, 0.85), 0.16)
 	var satin := _steel(Color(0.64, 0.66, 0.70), 0.34)
 	# Crémaillère : barre plate, dents tournées vers les bras, butées aux deux bouts
-	MeshUtil.box_instance(self, Vector3(0.15, 0.012, 0.0065), Vector3(0, ARM_LEN, BAR_Z), satin, "Cremaillere")
-	for k in 34:
-		MeshUtil.box_instance(self, Vector3(0.0016, 0.003, 0.0062), Vector3(-0.066 + k * 0.004, ARM_LEN - 0.0072, BAR_Z), steel, "Dent")
+	MeshUtil.box_instance(self, Vector3(rack_len, 0.012, 0.0065), Vector3(0, arm_len, BAR_Z), satin, "Cremaillere")
+	var teeth := int((rack_len - 0.018) / 0.004)
+	for k in teeth:
+		MeshUtil.box_instance(self, Vector3(0.0016, 0.003, 0.0062), Vector3(-rack_len * 0.5 + 0.009 + k * 0.004, arm_len - 0.0072, BAR_Z), steel, "Dent")
 	for sx in [-1.0, 1.0]:
-		MeshUtil.box_instance(self, Vector3(0.006, 0.018, 0.009), Vector3(sx * 0.073, ARM_LEN, BAR_Z), satin, "Butee")
+		MeshUtil.box_instance(self, Vector3(0.006, 0.018, 0.009), Vector3(sx * (rack_len * 0.5 - 0.002), arm_len, BAR_Z), satin, "Butee")
 	_arm_a = _arm(steel, satin, -1.0)
 	_arm_b = _arm(steel, satin, 1.0)
 	# Manivelle sur le chariot du bras mobile : moyeu, bras, poignée noire verticale
 	_crank = Node3D.new()
 	_crank.name = "Manivelle"
-	_crank.position = Vector3(0, ARM_LEN, BAR_Z - 0.0095)
+	_crank.position = Vector3(0, arm_len, BAR_Z - 0.0095)
 	_arm_b.add_child(_crank)
 	var hub := MeshUtil.cylinder_instance(_crank, 0.0068, 0.008, Vector3.ZERO, steel, "Moyeu")
 	hub.rotation_degrees.x = 90
@@ -51,32 +58,33 @@ func _arm(steel: Material, satin: Material, side: float) -> Node3D:
 	var a := Node3D.new()
 	a.name = "Bras%s" % ("A" if side < 0.0 else "B")
 	add_child(a)
-	MeshUtil.box_instance(a, Vector3(0.018, 0.022, 0.014), Vector3(0, ARM_LEN, BAR_Z), satin, "Chariot")
-	MeshUtil.box_instance(a, Vector3(0.0085, ARM_LEN - 0.006, 0.0062), Vector3(side * 0.0012, ARM_LEN * 0.5, BAR_Z), steel, "Bras")
+	MeshUtil.box_instance(a, Vector3(0.018, 0.022, 0.014), Vector3(0, arm_len, BAR_Z), satin, "Chariot")
+	MeshUtil.box_instance(a, Vector3(0.0085, arm_len - 0.006, 0.0062), Vector3(side * 0.0012, arm_len * 0.5, BAR_Z), steel, "Bras")
 	# Articulation de la valve au bout du bras, puis le montant qui descend vers la valve
 	var knuckle := MeshUtil.cylinder_instance(a, 0.0052, 0.012, Vector3(side * 0.0012, 0.0, BAR_Z), satin, "Articulation")
 	knuckle.rotation_degrees.z = 90
 	MeshUtil.box_instance(a, Vector3(0.0075, 0.016, 0.011), Vector3(side * 0.0012, 0, BAR_Z + 0.0085), steel, "Montant")
 	var blade := MeshInstance3D.new()
 	blade.name = "Valve"
-	blade.mesh = blade_mesh(side)
+	blade.mesh = blade_mesh(side, blade_len, blade_depth)
 	blade.material_override = steel
 	a.add_child(blade)
 	return a
 
 
 ## Valve : plaque de 2,4 mm, creusée du côté de la côte, lèvre tournée vers l'extérieur en bas.
-static func blade_mesh(side: float) -> ArrayMesh:
+static func blade_mesh(side: float, length := 0.056, depth := 0.043) -> ArrayMesh:
 	var prof := PackedVector2Array()
+	var bottom := depth - 0.005  # début de la lèvre
 	for i in 9:
 		var t := i / 8.0
-		prof.append(Vector2(-0.003 * sin(PI * t), -0.003 + t * 0.041))
+		prof.append(Vector2(-0.003 * sin(PI * t), -0.003 + t * (bottom + 0.003)))
 	for i in range(1, 6):
 		var th := PI - PI * 0.5 * i / 5.0
-		prof.append(Vector2(0.0045 + 0.0045 * cos(th), 0.038 + 0.0045 * sin(th)))
-	prof.append(Vector2(0.0088, 0.0425))
+		prof.append(Vector2(0.0045 + 0.0045 * cos(th), bottom + 0.0045 * sin(th)))
+	prof.append(Vector2(0.0088, bottom + 0.0045))
 	var ht := 0.0012
-	var hy := BLADE_LEN * 0.5
+	var hy := length * 0.5
 	var n := prof.size()
 	var outer: Array[Vector3] = []
 	var inner: Array[Vector3] = []

@@ -45,9 +45,9 @@ static func surface(p: Vector3) -> float:
 		var top := Patient.top_height(p.x, p.z)
 		if top > 0.0:
 			return top + patient.breath_offset(p.x, p.z)
-	var m := InstrumentTray.MAYO_POS
-	if absf(p.x - m.x) < 0.26 and absf(p.z - m.z) < 0.22:
-		return InstrumentTray.TRAY_Y + 0.003
+	for m in InstrumentTray.TABLES:
+		if absf(p.x - m.x) < 0.26 and absf(p.z - m.z) < 0.22:
+			return InstrumentTray.TRAY_Y + 0.003
 	return -INF
 
 

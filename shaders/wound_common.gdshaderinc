@@ -14,6 +14,9 @@ uniform vec4 press_a = vec4(0.0); // x, z, rayon, profondeur : peau enfoncée pa
 uniform vec4 press_b = vec4(0.0);
 uniform vec4 bleb = vec4(0.0); // x, z, rayon, hauteur : bouton d'anesthésie
 uniform float breath_now = 0.0; // soulèvement actuel du thorax (m)
+// Écarteur à mammaire : un bord de l'incision est soulevé (v < 0, v > 0), charnière en dehors
+uniform vec2 lift_lr = vec2(0.0);
+uniform vec2 lift_fall = vec2(0.03, 0.11);
 
 // Thorax qui se soulève en respirant (patient couché sur le côté, tête vers +X)
 // Zone du thorax qui se soulève en respirant (dépend de la position du patient)
@@ -61,6 +64,21 @@ float height_at(vec2 xz) {
 	return textureLod(height_map, (xz - patch_min) / patch_size, 0.0).r;
 }
 
+// Soulèvement d'un bord de l'incision (et de toute la paroi de ce côté).
+float hemi_lift(vec2 xz) {
+	if (lift_lr.x <= 0.0 && lift_lr.y <= 0.0) {
+		return 0.0;
+	}
+	vec2 q = xz - (inc_a + inc_b) * 0.5;
+	vec2 d = normalize(inc_b - inc_a);
+	float u = dot(q, d);
+	float v = dot(q, vec2(-d.y, d.x));
+	float half_len = length(inc_b - inc_a) * 0.5;
+	float along = 1.0 - smoothstep(half_len * 0.75, half_len * 1.1, abs(u));
+	float across = 1.0 - smoothstep(lift_fall.x, lift_fall.y, abs(v));
+	return (v < 0.0 ? lift_lr.x : lift_lr.y) * along * across;
+}
+
 // Relief ajouté : peau enfoncée sous la pression, bouton d'anesthésie.
 float relief(vec2 xz) {
 	vec2 da = xz - press_a.xy;
@@ -70,6 +88,7 @@ float relief(vec2 xz) {
 	h -= press_b.w * exp(-dot(db, db) / max(press_b.z * press_b.z, 1e-6));
 	h += bleb.w * exp(-dot(dl, dl) / max(bleb.z * bleb.z, 1e-6));
 	h += breath_now * chest_mask(xz);
+	h += hemi_lift(xz);
 	return h;
 }
 

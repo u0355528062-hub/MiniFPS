@@ -46,6 +46,8 @@ func _ready() -> void:
 	streams["loop_aspiration"] = _loop_noise(1600.0, 0.4, 15, 3.0)
 	streams["loop_sifflement"] = _loop_noise(6200.0, 0.4, 16, 29.0)
 	streams["loop_ciseaux_coupe"] = _loop_noise(3200.0, 0.28, 17, 14.0)
+	streams["loop_scie"] = _saw_buzz()
+	streams["loop_bistouri_elec"] = _loop_noise(7000.0, 0.22, 19, 41.0)
 	for i in 10:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 1.5
@@ -119,6 +121,23 @@ func _process(delta: float) -> void:
 				p.play()
 		elif p.playing:
 			p.stop()
+
+
+## Scie sternale : moteur aigu (fondamentale et harmoniques) et crissement de l'os.
+func _saw_buzz() -> AudioStreamWAV:
+	var n := int(RATE * 1.0)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 23
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var motor := sin(TAU * 220.0 * t) * 0.35 + sin(TAU * 440.0 * t) * 0.22 + sin(TAU * 660.0 * t) * 0.12
+		lp += (rng.randf_range(-1, 1) - lp) * 0.35
+		var grind := lp * (0.6 + 0.4 * sin(TAU * 37.0 * t))
+		d[i] = motor * 0.5 + grind * 0.5
+	return _make_loop(d, 0.9)
 
 
 func _loop_noise(cutoff: float, gain: float, seed_value: int, wobble: float) -> AudioStreamWAV:

@@ -20,6 +20,23 @@ static func build(kind: String) -> Node3D:
 			return SeldingerModels.central_catheter()
 		"finochietto":
 			return FinochiettoModel.new()
+		"ecarteur_sternal":
+			# Valves longues et peu profondes, grande crémaillère
+			return FinochiettoModel.new(0.075, 0.075, 0.25, 0.03)
+		"scie_sternale":
+			return SternalSawModel.new()
+		"bistouri_electrique":
+			return CardiacModels.electrocautery()
+		"canule_aortique":
+			return CardiacModels.cannula(false)
+		"canule_veineuse":
+			return CardiacModels.cannula(true)
+		"canule_cardioplegie":
+			return CardiacModels.cardioplegia_needle()
+		"clamp_aortique":
+			return CrossClampModel.new()
+		"palettes":
+			return CardiacModels.internal_paddles()
 	return Node3D.new()
 
 

@@ -6,6 +6,8 @@ const TRAY_Y := 1.004
 
 ## Position de la table de Mayo (dépend de l'opération : toujours à droite du chirurgien)
 static var MAYO_POS := Vector3(0.62, 0.0, 0.56)
+## Centres de toutes les tables de Mayo (une seconde quand il y a beaucoup d'instruments)
+static var TABLES: Array[Vector3] = []
 
 var instruments: Dictionary = {}  # id -> Instrument
 var ordered: Array[Instrument] = []
@@ -17,26 +19,12 @@ var _steel := MeshUtil.mat(Color(0.86, 0.88, 0.9), 0.18, 1.0)
 
 func build(op: Operation) -> void:
 	MAYO_POS = op.tray_pos
-	var mayo: PackedScene = load("res://assets/models/table_mayo.glb")
-	var m: Node3D = mayo.instantiate()
-	m.position = MAYO_POS
-	add_child(m)
-
-	# Champ stérile bleu-vert sur le plateau
-	var drape := Tex.drape(Color(0.2, 0.4, 0.5))
-	var cloth := MeshInstance3D.new()
-	cloth.mesh = MeshUtil.height_grid(MAYO_POS.x - 0.26, MAYO_POS.z - 0.22, 0.52, 0.44, 30, 26, func(x: float, z: float) -> float:
-		var ex := maxf(absf(x - MAYO_POS.x) - 0.235, 0.0)
-		var ez := maxf(absf(z - MAYO_POS.z) - 0.195, 0.0)
-		var e := maxf(ex, ez)
-		return TRAY_Y - 0.003 - e * 2.6 + 0.0008 * sin(x * 140.0) * sin(z * 90.0))
-	cloth.material_override = drape
-	add_child(cloth)
-
+	TABLES.clear()
+	# Côté de la table d'opération où se trouve la table de Mayo : +Z (à gauche du patient) ou -Z
+	var side := -1.0 if MAYO_POS.z < 0.0 else 1.0
 	var n: int = op.catalog.size()
 	var made: Array[Instrument] = []
 	var widths: Array[float] = []
-	var total := 0.0
 	for i in n:
 		var c: Array = op.catalog[i]
 		var rot: Vector3 = c[5] if c.size() > 5 else Vector3.ZERO
@@ -50,25 +38,43 @@ func build(op: Operation) -> void:
 		made.append(inst)
 		# Largeur réelle sur le plateau (un écarteur prend plus de place qu'un bistouri)
 		var box := inst._local_aabb()
-		var w := maxf(absf(cos(inst.tray_roll)) * box.size.x + absf(sin(inst.tray_roll)) * box.size.y, 0.04)
-		widths.append(w)
-		total += w
-	var gap := (0.44 - total) / maxf(n - 1, 1)
-	var cursor := MAYO_POS.x - 0.22
+		widths.append(maxf(absf(cos(inst.tray_roll)) * box.size.x + absf(sin(inst.tray_roll)) * box.size.y, 0.04))
+	# Beaucoup d'instruments : une seconde table de Mayo, à côté de la première (vers les pieds)
+	var groups: Array = [[]]
+	var acc := 0.0
 	for i in n:
-		var inst := made[i]
-		var x := cursor + widths[i] * 0.5
-		cursor += widths[i] + gap
-		# À plat, pointe vers la table d'opération (-Z), légèrement en éventail ; posé sur sa partie
-		# la plus basse (les valves d'un écarteur ne traversent pas le champ)
-		var roll := Basis(Vector3(0, 0, 1), inst.tray_roll)
-		var b := Basis(Vector3.UP, PI + deg_to_rad((i - n * 0.5) * 1.5)) * roll
-		var half := inst.length * 0.5
-		var rb := Transform3D(roll, Vector3.ZERO) * inst._local_aabb()
-		var lift := maxf(0.006, -rb.position.y + 0.0015)
-		inst.tray_transform = Transform3D(b, Vector3(x, TRAY_Y + lift, MAYO_POS.z + 0.01 - (0.2 - half) * 0.15))
-		inst.global_transform = inst.tray_transform
-		inst.build_samples()
+		if acc + widths[i] > 0.45 and not (groups[groups.size() - 1] as Array).is_empty():
+			groups.append([])
+			acc = 0.0
+		(groups[groups.size() - 1] as Array).append(i)
+		acc += widths[i] + 0.012
+	for g in groups.size():
+		var center := MAYO_POS + Vector3(-0.56 * g, 0, 0)
+		_mayo_table(center, side)
+		var idx: Array = groups[g]
+		var total := 0.0
+		for i in idx:
+			total += widths[i]
+		var gap := (0.44 - total) / maxf(idx.size() - 1, 1)
+		var cursor := center.x - 0.22
+		if idx.size() == 1:
+			cursor = center.x - widths[idx[0]] * 0.5
+		for j in idx.size():
+			var i: int = idx[j]
+			var inst := made[i]
+			var x := cursor + widths[i] * 0.5
+			cursor += widths[i] + gap
+			# À plat, pointe vers la table d'opération, légèrement en éventail ; posé sur sa partie
+			# la plus basse (les valves d'un écarteur ne traversent pas le champ)
+			var roll := Basis(Vector3(0, 0, 1), inst.tray_roll)
+			var b := Basis(Vector3.UP, (PI if side > 0.0 else 0.0) + deg_to_rad((j - idx.size() * 0.5) * 1.5)) * roll
+			var half := inst.length * 0.5
+			var rb := Transform3D(roll, Vector3.ZERO) * inst._local_aabb()
+			var lift := maxf(0.006, -rb.position.y + 0.0015)
+			inst.tray_transform = Transform3D(b, Vector3(x, TRAY_Y + lift, center.z + side * (0.01 - (0.2 - half) * 0.15)))
+			inst.global_transform = inst.tray_transform
+			inst.build_samples()
+	for inst in made:
 		instruments[inst.id] = inst
 		ordered.append(inst)
 
@@ -77,13 +83,32 @@ func build(op: Operation) -> void:
 	_props()
 
 
+## Une table de Mayo (pied et plateau) couverte d'un champ stérile, centrée en `center`.
+func _mayo_table(center: Vector3, side: float) -> void:
+	TABLES.append(center)
+	var mayo: PackedScene = load("res://assets/models/table_mayo.glb")
+	var m: Node3D = mayo.instantiate()
+	m.position = center
+	if side < 0.0:
+		m.rotation_degrees.y = 180.0
+	add_child(m)
+	var cloth := MeshInstance3D.new()
+	cloth.mesh = MeshUtil.height_grid(center.x - 0.26, center.z - 0.22, 0.52, 0.44, 30, 26, func(x: float, z: float) -> float:
+		var ex := maxf(absf(x - center.x) - 0.235, 0.0)
+		var ez := maxf(absf(z - center.z) - 0.195, 0.0)
+		var e := maxf(ex, ez)
+		return TRAY_Y - 0.003 - e * 2.6 + 0.0008 * sin(x * 140.0) * sin(z * 90.0))
+	cloth.material_override = Tex.drape(Color(0.2, 0.4, 0.5))
+	add_child(cloth)
+
+
 ## Pièces procédurales au bout de certains instruments.
 func _decorate(inst: Instrument) -> void:
 	match inst.id:
-		"finochietto":
+		"finochietto", "ecarteur_sternal":
 			# Pointe = milieu des valves (la crémaillère est au bout des bras) ; axe vertical
 			var mt := inst.model.transform
-			inst.tip_local = mt * Vector3(0, 0, FinochiettoModel.BLADE_DEPTH + 0.0015)
+			inst.tip_local = mt * Vector3(0, 0, (inst.model as FinochiettoModel).blade_depth + 0.0015)
 			inst.grip_local = mt * Vector3(0, 0, FinochiettoModel.BAR_Z)
 			inst.back_local = mt * Vector3(0, 0, FinochiettoModel.BAR_Z - 0.03)
 		"bistouri":
@@ -213,12 +238,13 @@ func _props() -> void:
 	# Cupule (antiseptique) et seringue sur le coin du plateau, instruments de réserve sur la table arrière
 	var cup: PackedScene = load("res://assets/models/cupule.glb")
 	var c: Node3D = cup.instantiate()
-	c.position = Vector3(MAYO_POS.x + 0.17, TRAY_Y + 0.02, MAYO_POS.z + 0.16)
+	var side := -1.0 if MAYO_POS.z < 0.0 else 1.0
+	c.position = Vector3(MAYO_POS.x + 0.17, TRAY_Y + 0.02, MAYO_POS.z + side * 0.16)
 	add_child(c)
 	var iod := MeshUtil.cylinder_instance(c, 0.028, 0.002, Vector3(0, 0.0, 0), MeshUtil.mat(Color(0.35, 0.12, 0.02), 0.08), "Betadine")
 	iod.position = Vector3(0, 0.006, 0)
 	var syr: PackedScene = load("res://assets/models/seringue.glb")
 	var s: Node3D = syr.instantiate()
-	s.position = Vector3(MAYO_POS.x - 0.15, TRAY_Y + 0.008, MAYO_POS.z + 0.17)
+	s.position = Vector3(MAYO_POS.x - 0.15, TRAY_Y + 0.008, MAYO_POS.z + side * 0.17)
 	s.rotation_degrees = Vector3(90, 0, 80)
 	add_child(s)

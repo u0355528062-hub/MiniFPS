@@ -17,6 +17,9 @@ func setup(p_player: Player, p_proc: Procedure, p_patient: Patient, p_tray: Inst
 	prefix = "DESKTEST"
 	hand.test_mode = true
 	hand.sim_click = 0
+	# Chirurgien à droite du patient (chirurgie cardiaque) : le robot se place du même côté
+	if p_proc.op.player_spawn.z < 0.0:
+		home = Vector3(p_proc.op.player_spawn.x, 0.0, p_proc.op.player_spawn.z)
 	player.position = home
 
 
@@ -34,6 +37,10 @@ func aim(p: Vector3) -> void:
 	var y := hand._surface_y(p.x, p.z)
 	var surf := Vector3(p.x, y, p.z) if y > 0.0 else p
 	player.look_towards(surf)
+	if OS.get_cmdline_user_args().has("--debugaim"):
+		var cam := player.camera.global_position
+		var fwd := -player.camera.global_basis.z
+		print("DEBUGAIM cam=%s fwd=%s voulu=%s visé=%s" % [cam, fwd, (surf - cam).normalized(), hand._aim_patient(hand.screen_aim())])
 
 
 func _settle() -> void:
@@ -51,7 +58,7 @@ func take(inst_id: String) -> void:
 		return
 	player.position = home
 	var idx := tray.ordered.find(tray.instruments[inst_id])
-	key(KEY_1 + idx)
+	key(KEY_0 if idx == 9 else KEY_1 + idx)
 	await _frames(3)
 
 
@@ -65,11 +72,21 @@ func put_back_all() -> void:
 
 
 func tip_to(p: Vector3, frames_n := 12) -> void:
+	# Cible au fond d'une plaie (cœur, vaisseaux) : on se penche au-dessus du patient pour la voir.
+	# Le long d'un trajet (aiguille, drain), c'est le point d'entrée qu'il faut voir.
+	var seen := p
+	if hand.assist_axis != Vector3.ZERO and hand.held and hand.tract_weight(p) > 0.5:
+		seen = hand.assist_target
+	var lean := 1.0 if seen.y < Patient.body_height(seen.x, seen.z) - 0.025 and patient.in_window(seen.x, seen.z) else 0.0
+	if lean != player.sim_lean:
+		player.snap_lean(lean)
 	# Le long d'un trajet (pince, drain) : on vise l'orifice et on règle la profondeur d'enfoncement
 	if hand.assist_axis != Vector3.ZERO and hand.held and hand.tract_weight(p) > 0.5:
 		var at0 := hand.assist_target
 		var along := (p - at0).dot(hand.assist_axis)
 		player.look_towards(at0)
+		if OS.get_cmdline_user_args().has("--debug"):
+			print("DEBUG trajet cam=", player.camera.global_position, " cible=", at0, " visée=", hand.aim_point, " penché=", player.crouch)
 		hand.lift = hand.depth - PlayerHand.HOVER - along
 		if frames_n > 4:
 			await _settle()
