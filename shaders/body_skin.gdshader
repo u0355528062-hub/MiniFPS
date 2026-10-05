@@ -2,7 +2,7 @@
 // reçoit le badigeon, le bouton d'anesthésie et l'enfoncement sous les instruments ; elle laisse la
 // place à la zone fendue de l'incision. Le thorax se soulève à chaque respiration.
 shader_type spatial;
-render_mode cull_disabled;
+render_mode cull_disabled, sss_mode_skin;
 
 #include "res://shaders/noise.gdshaderinc"
 #include "res://shaders/wound_common.gdshaderinc"
@@ -13,7 +13,7 @@ uniform float table_top = 0.80;
 uniform vec3 reveal_c = vec3(0.0);
 uniform vec3 reveal_axis = vec3(0.0, -1.0, 0.0);
 uniform float reveal_r = 0.0;
-uniform float atlas_lift = 1.14006; // repère de l'atlas : x = lift - Y, y = -Z - 0.004, z = X + 1.275
+
 
 varying vec3 wpos;
 varying vec3 wnorm;
@@ -74,8 +74,9 @@ void fragment() {
 	float spec;
 	vec3 nw;
 	skin_shade(wpos, n0, p, topw, 1.0, 0.0, col, rough, spec, nw);
+	skin_marks(wpos, wnorm, p, col, rough, nw);
 	// Tête : cheveux ras, sourcils, paupières fermées (cils), lèvres
-	vec3 za = vec3(atlas_lift - wpos.y, -wpos.z - 0.004, wpos.x + 1.275);
+	vec3 za = atlas_pos(wpos);
 	if (za.z > 1.45 && abs(za.x) < 0.11) {
 		float n1 = bb_noise(wpos * 900.0);
 		float n2 = bb_noise(wpos * 220.0);
@@ -120,5 +121,8 @@ void fragment() {
 	ROUGHNESS = rough;
 	SPECULAR = spec;
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
-	SSS_STRENGTH = 0.22;
+	SSS_STRENGTH = 0.3;
+	// Duvet et film gras : léger voile clair sur les bords (lumière rasante)
+	RIM = 0.12;
+	RIM_TINT = 0.6;
 }

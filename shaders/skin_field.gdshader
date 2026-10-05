@@ -2,7 +2,7 @@
 // déformation est calculée ici, rien sur le processeur). UV = (u, v) au repos, UV2.x = côté.
 // Le reste de la peau est dessiné par le corps (body_skin.gdshader), même aspect.
 shader_type spatial;
-render_mode cull_disabled;
+render_mode cull_disabled, sss_mode_skin;
 
 #include "res://shaders/noise.gdshaderinc"
 #include "res://shaders/wound_common.gdshaderinc"
@@ -41,9 +41,12 @@ void fragment() {
 	float spec;
 	vec3 nw;
 	skin_shade(rest3, wn, rest3.xz, 1.0, edge_d, open_here, col, rough, spec, nw);
+	skin_marks(rest3, wn, rest3.xz, col, rough, nw);
 	ALBEDO = col;
 	ROUGHNESS = rough;
 	SPECULAR = spec;
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
-	SSS_STRENGTH = 0.22;
+	SSS_STRENGTH = 0.3;
+	RIM = 0.12;
+	RIM_TINT = 0.6;
 }

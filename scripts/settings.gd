@@ -96,9 +96,17 @@ func apply_graphics(env: Environment, vp: Viewport) -> void:
 	RenderingServer.directional_soft_shadow_filter_set_quality(sq)
 	RenderingServer.positional_soft_shadow_filter_set_quality(sq)
 	vp.positional_shadow_atlas_size = [2048, 4096, 4096, 8192][q]
-	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X, Viewport.MSAA_4X][q]
-	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if q < 2 else Viewport.SCREEN_SPACE_AA_SMAA
 	vp.scaling_3d_scale = clampf(render_scale, 0.5, 1.0)
+	if vp.scaling_3d_scale < 0.99:
+		# Rendu sous-échantillonné : FSR 2 reconstruit l'image (et lisse les bords) à partir des
+		# images précédentes, bien plus net qu'un simple agrandissement
+		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
+		vp.msaa_3d = Viewport.MSAA_DISABLED
+		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+	else:
+		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+		vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X, Viewport.MSAA_4X][q]
+		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if q < 2 else Viewport.SCREEN_SPACE_AA_SMAA
 	vp.mesh_lod_threshold = [4.0, 2.0, 1.0, 0.5][q]
 	vp.anisotropic_filtering_level = Viewport.ANISOTROPY_16X if q >= 2 else Viewport.ANISOTROPY_4X
 	changed.emit()

@@ -1,8 +1,17 @@
 # Bloc Urgences — simulateur chirurgical à la première personne
 
-Jeu PC (Godot 4.7, Forward+) : en salle de déchocage, tu poses un **drain thoracique** à Karim,
-31 ans, victime d'un accident de moto (pneumothorax droit compressif). Vue à la première personne,
-clavier et souris, anatomie réelle.
+Jeu PC (Godot 4.7, Forward+) : gestes d'urgence et de chirurgie du thorax en salle de
+déchocage, vue à la première personne, clavier et souris, anatomie réelle. Le menu propose les
+interventions :
+
+| Intervention | Patient | État |
+|---|---|---|
+| **Drain thoracique** | Karim, 31 ans, moto — pneumothorax droit compressif | jouable |
+| **Exsufflation à l'aiguille** | Thomas, 24 ans, voiture — pneumothorax suffocant gauche | jouable |
+| Péricardiocentèse | tamponnade, sous échographie | bientôt |
+| Voie veineuse centrale | choc, veine sous-clavière (Seldinger) | bientôt |
+| Thoracotomie de sauvetage | arrêt cardiaque après une plaie | bientôt |
+| Pontage coronarien | infarctus, cœur arrêté sous machine | bientôt |
 
 ## Télécharger et jouer (Windows)
 
@@ -28,7 +37,7 @@ Configuration conseillée : carte graphique compatible Vulkan. La qualité graph
 | Masquer le texte de l'étape / l'aide | H / F1 |
 | Pause, options | Échap |
 
-## L'intervention
+## Drain thoracique
 
 1. **Repérage** — trouver le 5e espace intercostal dans le triangle de sécurité (ligne axillaire
    moyenne) et le marquer au feutre. Le point est jugé sur l'anatomie réelle : trop bas (foie,
@@ -45,18 +54,38 @@ Configuration conseillée : carte graphique compatible Vulkan. La qualité graph
 
 Bilan final : note (S à D), temps, erreurs, précision du repère et de l'incision, compte rendu.
 
+## Exsufflation à l'aiguille
+
+Patient couché sur le dos, collier cervical, masque à haute concentration, scope ; la marque de
+la ceinture de sécurité barre le thorax.
+
+1. **Repérage** — côté gauche : 2e espace intercostal sur la ligne médio-claviculaire (ou 4e-5e
+   espace sur la ligne axillaire), juste au-dessus de la côte du dessous. Le point est jugé sur
+   les vraies côtes du patient (côté, espace, distance au sternum et à la côte).
+2. **Désinfection** — chlorhexidine sur le point marqué.
+3. **Ponction** — aiguille-cathéter 14G sur seringue de sérum : on avance perpendiculairement
+   à la peau en tirant le piston (clic maintenu) ; des bulles d'air remontent dans la seringue
+   quand la plèvre est franchie, l'air sort en sifflant, le poumon se regonfle, la saturation et
+   la tension remontent. Trop profond : erreur.
+4. **Laisser le cathéter** — on retire l'aiguille, le cathéter souple reste en place.
+
 ## Anatomie et graphismes
 
 - Corps et organes issus de l'atlas **Z-Anatomy** (CC BY-SA 4.0, dérivé de BodyParts3D) :
   peau remaillée, côtes, cartilages, sternum, vertèbres, muscles du thorax, intercostaux,
-  plèvre, poumons, cœur, gros vaisseaux, nerfs, diaphragme, foie. Patient posé dans Blender
-  (décubitus latéral gauche, bras droit levé) sur un matelas à dépression moulé sous le corps,
-  avant-bras gauche sur une planche à bras ; champ opératoire simulé en tissu, collé autour de la
-  fenêtre.
+  plèvre, poumons, cœur, gros vaisseaux, nerfs, diaphragme, foie. Deux positions posées dans
+  Blender : décubitus latéral gauche, bras droit levé, sur un matelas à dépression (drain) ; sur
+  le dos, bras le long du corps, tête sur un anneau de gel (autres gestes). Repères mesurés sur
+  l'atlas : côtes et espaces intercostaux, plèvre, sternum, clavicules, vaisseaux.
+- Champ opératoire et drap simulés en tissu ; le bord adhésif colle le champ à plat autour de la
+  fenêtre. Câbles du scope, tuyau d'oxygène, tubulure de perfusion et tuyau du brassard simulés
+  comme des cordes : ils reposent sur le patient, pendent au bord de la table, traînent au sol.
 - Les tissus internes n'apparaissent que dans la plaie ; la vue anatomique (V) les montre tous.
   Le poumon droit est affaissé vers son hile et se regonfle quand le drain est posé ; le cœur bat.
-- Peau avec diffusion sous la surface, badigeon, plaie dont les bords s'écartent et se
-  détendent, parois de la plaie (derme, graisse), sang qui perle derrière la lame.
+- Peau avec diffusion sous la surface (mode peau), grain et teint irrégulier, aréoles,
+  ecchymose de la ceinture, cheveux, sourcils et paupières dessinés sur l'atlas, badigeon, plaie
+  dont les bords s'écartent et se détendent, parois de la plaie (derme, graisse), sang qui perle
+  derrière la lame.
 - Éclairage de bloc (scialytiques, plafond soufflant), occlusion ambiante, éclairage indirect,
   réflexions, brouillard volumétrique léger, profondeur de champ en mode précision.
 
@@ -67,6 +96,7 @@ godot --headless --path . -- --autotest      # un robot fait toute l'opération
 godot --headless --path . -- --desktest      # un robot joue au clavier et à la souris
 godot --headless --path . -- --chaos=3       # actions au hasard, puis le robot termine
 godot --headless --path . -- --restarttest   # fin de partie → rejouer
+godot --headless --path . -- --op=exsufflation --autotest   # même chose pour une autre intervention
 ```
 
 Captures : `--shot=fichier.png --view=menu|briefing|player|field|overview|xray|end`.

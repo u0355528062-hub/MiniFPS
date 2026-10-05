@@ -32,13 +32,16 @@ const POSES := {
 		"drape_glb": "res://assets/models/champ.glb", "drape_map": "res://assets/data/champ_hauteur.bin",
 		"landmarks": "", "chest_x": Vector4(-0.34, -0.16, 0.08, 0.2), "chest_z": Vector2(0.1, 0.2),
 		"chest_h": Vector2(0.10, 0.30), "collapse": "PoumonD", "hilum": Vector3(0.03, 1.165, -0.01),
-		"heart": Vector3(0.015, 1.12, 0.03)},
+		"heart": Vector3(0.015, 1.12, 0.03),
+		# Repère de l'atlas (visage, cheveux) : x = -y + 1.14006, y = -z - 0.004, z = x + 1.275
+		"atlas": [Vector4(0, -1, 0, 1.14006), Vector4(0, 0, -1, -0.004), Vector4(1, 0, 0, 1.275)]},
 	"dos": {"glb": "res://assets/models/patient_dos.glb", "skin_map": "res://assets/data/peau_dos_hauteur.bin",
 		"drape_glb": "res://assets/models/drap_dos.glb", "drape_map": "res://assets/data/drap_dos_hauteur.bin",
 		"landmarks": "res://assets/data/patient_dos.json", "ribs": "res://assets/data/cotes_dos.bin",
 		"chest_x": Vector4(-0.36, -0.2, 0.08, 0.2),
 		"chest_z": Vector2(0.1, 0.2), "chest_h": Vector2(0.06, 0.16), "collapse": "PoumonG",
-		"hilum": Vector3(0.03, 0.95, 0.06), "heart": Vector3(-0.03, 0.95, 0.03)},
+		"hilum": Vector3(0.03, 0.95, 0.06), "heart": Vector3(-0.03, 0.95, 0.03),
+		"atlas": [Vector4(0, 0, 1, 0), Vector4(0, -1, 0, 0.95031), Vector4(1, 0, 0, 1.29927)]},
 }
 static var pose_id := "lateral"
 static var _maps_pose := ""
@@ -81,6 +84,8 @@ var breath_rate := 30.0
 var breath_b := 0.0
 var _breath_t := 0.0
 var hole_limit := 0.006
+var belt := Vector4.ZERO  ## marque de la ceinture de sécurité (segment x0 z0 x1 z1), nulle = aucune
+var antiseptic := "betadine"  ## "betadine" (brune) ou "chlorhexidine" (alcoolique colorée, rose orangé)
 var skin_y := 1.29  ## hauteur de la peau au centre de l'incision
 
 var skin_mat: ShaderMaterial  ## peau du corps entier
@@ -326,6 +331,7 @@ func build() -> void:
 	props.name = "Equipement"
 	add_child(props)
 	props.build()
+	Cable.save_cache()
 	set_opening(0.0)
 
 
@@ -365,6 +371,15 @@ func _skin_material(sh: Shader) -> ShaderMaterial:
 	m.set_shader_parameter("win_min", WINDOW_MIN)
 	m.set_shader_parameter("win_max", WINDOW_MAX)
 	m.set_shader_parameter("frame_on", 1.0 if pose_id == "lateral" else 0.0)
+	m.set_shader_parameter("belt", belt)
+	if antiseptic == "chlorhexidine":
+		m.set_shader_parameter("anti_thin", Vector3(0.62, 0.2, 0.15))
+		m.set_shader_parameter("anti_thick", Vector3(0.48, 0.07, 0.06))
+		m.set_shader_parameter("anti_ring", Vector3(0.4, 0.05, 0.045))
+	var at: Array = POSES[pose_id]["atlas"]
+	m.set_shader_parameter("atlas_rx", at[0])
+	m.set_shader_parameter("atlas_ry", at[1])
+	m.set_shader_parameter("atlas_rz", at[2])
 	m.set_shader_parameter("zone_u", zone_u)
 	m.set_shader_parameter("skin_albedo", _tex("skin_albedo"))
 	m.set_shader_parameter("skin_normal", _tex("skin_normal"))
@@ -603,6 +618,11 @@ func _build_drape() -> void:
 	drape_mat.set_shader_parameter("height_map", height_tex)
 	drape_mat.set_shader_parameter("patch_min", PATCH_MIN)
 	drape_mat.set_shader_parameter("patch_size", PATCH_SIZE)
+	# Hauteur de la peau de tout le corps : le bord adhésif colle le drap à plat autour de la fenêtre
+	var img := Image.create_from_data(_nx, _nz, false, Image.FORMAT_RF, _skin_h.to_byte_array())
+	drape_mat.set_shader_parameter("body_map", ImageTexture.create_from_image(img))
+	drape_mat.set_shader_parameter("body_min", Vector2(_x0, _z0))
+	drape_mat.set_shader_parameter("body_cells", Vector3(_nx, _nz, _step))
 	for mi in drape.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).material_override = drape_mat
 

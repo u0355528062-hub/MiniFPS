@@ -30,7 +30,7 @@ func _init() -> void:
 	patient_line = "Thomas R., 24 ans — accident de voiture"
 	urgency = "URGENCE VITALE"
 	intro_title = "Salle de déchocage"
-	intro_text = "Choc du thorax contre le volant. Il étouffe et pâlit à vue d'œil : plus aucun bruit respiratoire à gauche, thorax gauche distendu, trachée déviée vers la droite, veines du cou gonflées, tension qui s'effondre.\n\nC'est un pneumothorax suffocant gauche : l'air comprimé écrase le poumon et le cœur. Pas le temps d'une radio ni d'un drain : fais sortir l'air tout de suite avec une aiguille. Le drain suivra."
+	intro_text = "Choc frontal, ceinture attachée : la sangle a marqué le thorax de l'épaule gauche à la hanche droite. Il étouffe et pâlit à vue d'œil : plus aucun bruit respiratoire à gauche, thorax gauche distendu, trachée déviée vers la droite, veines du cou gonflées, tension qui s'effondre.\n\nC'est un pneumothorax suffocant gauche : l'air comprimé écrase le poumon et le cœur. Pas le temps d'une radio ni d'un drain : fais sortir l'air tout de suite avec une aiguille. Le drain suivra."
 	imaging_tex = ""
 	imaging_text = "Pas de radio : un pneumothorax suffocant se reconnaît à l'examen et se traite tout de suite.\n\n•  aucun bruit respiratoire à gauche\n•  thorax gauche distendu, sonore\n•  trachée déviée vers la droite\n•  veines du cou gonflées\n•  choc : 78 / 44"
 	scan_text = "PAS DE RADIO\nDiagnostic à l'examen :\npneumothorax suffocant gauche"
@@ -59,6 +59,9 @@ func configure_patient(p: Patient) -> void:
 	p.WOUND_DEPTH = 0.01
 	p.breathe_amp = 0.006
 	p.hole_limit = 0.003
+	# Conducteur ceinturé : la sangle passait de l'épaule gauche à la hanche droite
+	p.belt = Vector4(0.13, 0.17, -0.42, -0.15)
+	p.antiseptic = "chlorhexidine"
 
 
 func build_extras() -> void:
@@ -203,8 +206,9 @@ func _leave_catheter(hand: SurgeonHand, instant: bool) -> void:
 	monitor.sys = 106
 	monitor.dia = 66
 	patient.heart_rate = 108.0
-	if hand:
-		hand.release_parked()
+	# L'aiguille et la seringue retournent sur la table (le cathéter reste dans le thorax)
+	if hand and hand.held == inst:
+		hand.put_back()
 
 
 func process(delta: float) -> void:

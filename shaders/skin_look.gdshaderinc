@@ -14,10 +14,14 @@ uniform vec2 bleed = vec2(1.0, 0.0);
 uniform float show_guide = 1.0;
 uniform float stitched = 0.0;
 uniform float iodine_wet = 1.0;
+// Couleur de l'antiseptique (film fin, couche épaisse, bord) : bétadine brune par défaut
+uniform vec3 anti_thin = vec3(0.5, 0.22, 0.09);
+uniform vec3 anti_thick = vec3(0.3, 0.09, 0.035);
+uniform vec3 anti_ring = vec3(0.22, 0.06, 0.025);
 uniform float bleb_pale = 0.0;
 uniform vec2 win_min = vec2(-0.085, -0.08);
 uniform vec2 win_max = vec2(0.085, 0.08);
-uniform vec3 skin_tint : source_color = vec3(0.95, 0.86, 0.82);
+uniform vec3 skin_tint : source_color = vec3(0.99, 0.95, 0.94);
 uniform vec3 drape_col : source_color = vec3(0.17, 0.42, 0.53); // couleur du champ (bord adhésif)
 uniform float frame_on = 1.0; // 0 : pas de champ fenêtré (urgence), pas de bord adhésif
 uniform vec3 pen_mark = vec3(0.0); // x, z, visible : point marqué au feutre
@@ -42,17 +46,79 @@ void apply_frame(float frame, vec2 p, vec3 wn, inout vec3 col, inout float rough
 	nw = normalize(mix(nw, wn, frame));
 }
 
+// Repère de l'atlas (visage, cheveux, mamelons) : za.x = dot(rx.xyz, w) + rx.w, etc.
+uniform vec4 atlas_rx = vec4(0.0, -1.0, 0.0, 1.14006);
+uniform vec4 atlas_ry = vec4(0.0, 0.0, -1.0, -0.004);
+uniform vec4 atlas_rz = vec4(1.0, 0.0, 0.0, 1.275);
+// Marque de la ceinture de sécurité (accident de voiture) : segment x0 z0 x1 z1 (monde), nul = rien
+uniform vec4 belt = vec4(0.0);
+
+vec3 atlas_pos(vec3 w) {
+	return vec3(dot(atlas_rx.xyz, w) + atlas_rx.w, dot(atlas_ry.xyz, w) + atlas_ry.w, dot(atlas_rz.xyz, w) + atlas_rz.w);
+}
+
+// Détails propres au corps : aréoles et mamelons, signe de la ceinture
+void skin_marks(vec3 wp, vec3 wn, vec2 p, inout vec3 col, inout float rough, inout vec3 nw) {
+	vec3 za = atlas_pos(wp);
+	// Aréoles et mamelons (absents du maillage de l'atlas) : 4e espace intercostal, un peu en
+	// dehors de la ligne médio-claviculaire ; petit dôme en relief, grain des tubercules
+	if (za.y < -0.02 && abs(za.z - 1.271) < 0.03) {
+		for (int k = 0; k < 2; k++) {
+			vec2 d = vec2(za.x - (k == 0 ? -0.098 : 0.098), za.z - 1.271);
+			float r = length(d * vec2(1.0, 1.1));
+			float nb = bb_noise(wp * 520.0);
+			float areola = 1.0 - smoothstep(0.0105, 0.0128 + 0.0012 * nb, r);
+			float papilla = 1.0 - smoothstep(0.0026, 0.0040, r);
+			col = mix(col, col * vec3(0.80, 0.60, 0.58) * (0.94 + 0.12 * nb), areola * 0.9);
+			col = mix(col, col * vec3(0.84, 0.66, 0.64), papilla);
+			float s2 = 0.0034 * 0.0034;
+			vec2 g = -d * exp(-dot(d, d) / s2) * (2.0 * 0.0024 / s2);
+			g += -d * exp(-dot(d, d) / 0.00011) * (2.0 * 0.0006 / 0.00011) * areola;
+			nw = normalize(nw - (g.x * atlas_rx.xyz + g.y * atlas_rz.xyz));
+			rough = mix(rough, 0.44, areola);
+		}
+	}
+	// Signe de la ceinture : ecchymose rouge violacé en bande, plus foncée par plaques, trame de la
+	// sangle imprimée dans la peau, éraflures au milieu
+	if (belt != vec4(0.0) && wn.y > 0.15) {
+		vec2 ab = belt.zw - belt.xy;
+		float bt = clamp(dot(p - belt.xy, ab) / dot(ab, ab), 0.0, 1.0);
+		vec2 across = normalize(vec2(-ab.y, ab.x));
+		float sd = dot(p - belt.xy, across);
+		float nn = bb_noise(wp * 55.0);
+		float band = 1.0 - smoothstep(0.014, 0.028, abs(sd) + (nn - 0.5) * 0.014);
+		band *= smoothstep(0.0, 0.1, bt) * (1.0 - smoothstep(0.88, 1.0, bt));
+		float weave = 0.5 + 0.5 * sin(sd * 3200.0);
+		float deep = smoothstep(0.35, 0.75, nn);
+		vec3 tint = mix(vec3(0.86, 0.62, 0.74), vec3(0.66, 0.42, 0.62), deep);
+		col *= mix(vec3(1.0), tint, band * (0.82 + 0.18 * weave));
+		// Liseré plus rouge au bord de l'ecchymose
+		float rim = band * (1.0 - band) * 4.0;
+		col *= mix(vec3(1.0), vec3(1.04, 0.86, 0.86), rim * 0.6);
+		// Éraflures : traînées fines dans le sens de la sangle
+		vec2 bdir = normalize(ab);
+		float along_m = dot(p - belt.xy, bdir);
+		float streak = bb_noise(vec3(along_m * 35.0, sd * 900.0, 3.7));
+		float abr = band * smoothstep(0.7, 0.8, streak) * (1.0 - smoothstep(0.005, 0.012, abs(sd))) * step(0.3, bt) * step(bt, 0.7);
+		col = mix(col, vec3(0.42, 0.06, 0.05), abr * 0.55);
+		rough = mix(rough, 0.32, abr);
+	}
+}
+
 void skin_shade(vec3 wp, vec3 wn, vec2 p, float top, float edge_d, float open_here,
 		out vec3 col, out float rough, out float spec, out vec3 nw) {
 	float sc = 1.0 / 0.065;
-	col = tri_col(skin_albedo, wp, wn, sc).rgb * skin_tint;
-	col *= 0.94 + 0.1 * tri_tex(blood_tex, wp, wn, 3.0).r;
-	// Teint irrégulier : marbrures légèrement rosées, zones plus pâles
-	float mot = tri_tex(mottle, wp, wn, 3.2).r;
-	col *= mix(vec3(0.97, 1.0, 1.01), vec3(1.05, 0.95, 0.93), smoothstep(0.35, 0.8, mot));
-	rough = 0.58 + 0.36 * tri_tex(skin_rough, wp, wn, sc).r;
-	spec = 0.16;
-	nw = tri_normal(skin_normal, wp, wn, sc, 0.55);
+	// Grain de la peau : les petites taches de la texture sont adoucies (de loin la peau est unie,
+	// sans motif qui se répète) ; le relief fin des pores vient des cartes de normales
+	vec3 grain = tri_col(skin_albedo, wp, wn, sc).rgb;
+	col = mix(vec3(0.552, 0.282, 0.191), grain, 0.5) * skin_tint;
+	// Teint irrégulier à grande échelle : zones un peu plus rosées, d'autres plus pâles
+	float mot = tri_tex(mottle, wp, wn, 1.4).r;
+	col *= mix(vec3(0.985, 1.0, 1.01), vec3(1.035, 0.965, 0.955), smoothstep(0.3, 0.85, mot));
+	rough = 0.5 + 0.28 * tri_tex(skin_rough, wp, wn, sc).r;
+	spec = 0.32;
+	nw = tri_normal(skin_normal, wp, wn, sc, 0.42);
+	nw = tri_normal(skin_normal, wp + vec3(0.37), nw, sc * 3.3, 0.18);
 	float frame = drape_frame(p, wn);
 	if (top <= 0.0) {
 		apply_frame(frame, p, wn, col, rough, spec, nw);
@@ -93,8 +159,8 @@ void skin_shade(vec3 wp, vec3 wn, vec2 p, float top, float edge_d, float open_he
 	float streak = texture(blood_tex, vec2(p.x * 9.0 + p.y * 3.0, p.y * 40.0)).r;
 	float thick = clamp(iod * (0.75 + 0.5 * streak), 0.0, 1.0);
 	float ring = smoothstep(0.15, 0.4, iod) * (1.0 - smoothstep(0.4, 0.75, iod));
-	vec3 iod_col = mix(vec3(0.5, 0.22, 0.09), vec3(0.3, 0.09, 0.035), thick);
-	iod_col = mix(iod_col, vec3(0.22, 0.06, 0.025), ring * 0.5);
+	vec3 iod_col = mix(anti_thin, anti_thick, thick);
+	iod_col = mix(iod_col, anti_ring, ring * 0.5);
 	float iod_cov = smoothstep(0.05, 0.35, iod);
 	float lum = dot(col, vec3(0.3, 0.5, 0.2)) / 0.45;
 	col = mix(col, iod_col * lum, iod_cov * 0.88);

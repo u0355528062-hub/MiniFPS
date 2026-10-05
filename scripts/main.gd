@@ -129,6 +129,18 @@ func _ready() -> void:
 			if t != "" and t.begins_with("Approche"):
 				hud.toast(t, false))
 		procedure.step_changed.connect(func(_i: int) -> void: hud.required_id = procedure.required_id())
+	# Vignettage léger sur l'image 3D, sous le HUD et les menus
+	var vig_layer := CanvasLayer.new()
+	vig_layer.name = "Vignettage"
+	vig_layer.layer = 1
+	add_child(vig_layer)
+	var vig := ColorRect.new()
+	vig.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vm := ShaderMaterial.new()
+	vm.shader = preload("res://shaders/vignette.gdshader")
+	vig.material = vm
+	vig_layer.add_child(vig)
 	menus = Menus.new()
 	menus.name = "Menus"
 	menus.process_mode = Node.PROCESS_MODE_ALWAYS

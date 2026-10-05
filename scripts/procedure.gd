@@ -170,6 +170,10 @@ func _finish() -> void:
 	Contact.clear_zones()
 	for inst in tray.ordered:
 		inst.set_highlight(0)
+	# Les instruments encore en main retournent sur la table (main vide sur l'écran de fin)
+	for h in hands:
+		if h.held:
+			h.put_back()
 	Sfx.play("fin", Vector3.INF, -2.0)
 	for ui in uis:
 		ui.show_end(elapsed, errors, grade(), op.summary, error_log, quality)
