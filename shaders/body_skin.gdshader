@@ -76,7 +76,7 @@ void fragment() {
 	skin_shade(wpos, n0, p, topw, 1.0, 0.0, col, rough, spec, nw);
 	// Tête : cheveux ras, sourcils, paupières fermées (cils), lèvres
 	vec3 za = vec3(atlas_lift - wpos.y, -wpos.z - 0.004, wpos.x + 1.275);
-	if (za.z > 1.45) {
+	if (za.z > 1.45 && abs(za.x) < 0.11) {
 		float n1 = bb_noise(wpos * 900.0);
 		float n2 = bb_noise(wpos * 220.0);
 		float hairline = 1.600 + 0.064 * smoothstep(-0.015, -0.085, za.y) - 0.05 * smoothstep(0.03, 0.09, za.y);

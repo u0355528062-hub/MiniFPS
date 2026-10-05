@@ -330,20 +330,76 @@ func _patient_supports() -> void:
 		edge.rotation_degrees.z = 90
 		edge.position = Vector3(0.43, Patient.TABLE_TOP + 0.23, zz)
 		add_child(edge)
-	# Appui-bras rembourré sous le coude et l'avant-bras, sur une tige fixée au rail de la table
-	var pad_mat := MeshUtil.mat(Color(0.12, 0.13, 0.15), 0.6)
+	# Appui-bras : coussin de gel sous le coude et l'avant-bras droit (il en épouse le dessous), sur
+	# une tige fixée au rail de la table
 	var arm := Node3D.new()
 	arm.name = "AppuiBras"
 	add_child(arm)
-	var a := Vector3(0.30, 1.497, -0.045)
-	var b := Vector3(0.52, 1.617, 0.025)
-	var pad := MeshUtil.box_instance(arm, Vector3(0.12, 0.04, (b - a).length() + 0.06), (a + b) * 0.5, pad_mat, "Gouttiere")
-	pad.look_at_from_position((a + b) * 0.5, b, Vector3.UP)
+	var gel := MeshUtil.mat(Color(0.16, 0.42, 0.62), 0.22)
+	gel.clearcoat_enabled = true
+	gel.clearcoat = 0.5
+	var pad := MeshInstance3D.new()
+	pad.name = "Gouttiere"
+	pad.mesh = _forearm_pad()
+	pad.material_override = gel
+	arm.add_child(pad)
 	var steel := MeshUtil.mat(Color(0.78, 0.8, 0.82), 0.25, 0.9)
 	var pole_x := 0.42
 	MeshUtil.cylinder_instance(arm, 0.012, 1.52 - Patient.TABLE_TOP, Vector3(pole_x, (1.52 + Patient.TABLE_TOP) * 0.5, -0.27), steel, "Tige")
 	var bar := MeshUtil.cylinder_instance(arm, 0.01, 0.26, Vector3(pole_x, 1.52, -0.14), steel, "Bras")
 	bar.rotation_degrees.x = 90
+
+
+## Coussin allongé (section arrondie, bouts effilés) dont le dessus suit le dessous de l'avant-bras
+## droit levé, mesuré sur le modèle tous les 10 % de l'axe coude -> poignet.
+func _forearm_pad() -> ArrayMesh:
+	var a := Vector3(0.30, 0.0, -0.045)
+	var b := Vector3(0.52, 0.0, 0.025)
+	var under := [1.4358, 1.4502, 1.4781, 1.4984, 1.5142, 1.5261, 1.5420, 1.5609, 1.5830, 1.6003, 1.6140, 1.6259, 1.6375, 1.6426]
+	var t0 := -0.15
+	var dt := 0.1
+	var half_w := 0.05
+	var half_h := 0.016
+	var n := 40
+	var ring := 14
+	var path: Array[Vector3] = []
+	for k in n + 1:
+		var t := lerpf(-0.12, 1.12, float(k) / n)
+		var f := clampf((t - t0) / dt, 0.0, under.size() - 1.001)
+		var i := int(f)
+		var y: float = lerpf(under[i], under[i + 1], f - i)
+		var p := a.lerp(b, t)
+		path.append(Vector3(p.x, y - 0.004 - half_h, p.z))
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for k in n + 1:
+		var tan := (path[mini(k + 1, n)] - path[maxi(k - 1, 0)]).normalized()
+		var side := tan.cross(Vector3.UP).normalized()
+		var up := side.cross(tan).normalized()
+		var u := float(k) / n
+		var taper := sqrt(clampf(minf(u, 1.0 - u) / 0.07, 0.0, 1.0))
+		for r in ring:
+			var ang := TAU * r / ring
+			# Section en coussin : plus large que haute, coins arrondis
+			var c := cos(ang)
+			var sn := sin(ang)
+			var off := side * signf(c) * pow(absf(c), 0.6) * half_w + up * signf(sn) * pow(absf(sn), 0.6) * half_h
+			st.add_vertex(path[k] + off * maxf(taper, 0.02))
+	for k in n:
+		for r in ring:
+			var i0 := k * ring + r
+			var i1 := k * ring + (r + 1) % ring
+			var j0 := i0 + ring
+			var j1 := i1 + ring
+			# Sens horaire vu de l'extérieur (faces avant dans Godot)
+			st.add_index(i0)
+			st.add_index(i1)
+			st.add_index(j0)
+			st.add_index(i1)
+			st.add_index(j1)
+			st.add_index(j0)
+	st.generate_normals()
+	return st.commit()
 
 
 ## Murs et meubles solides pour le joueur.

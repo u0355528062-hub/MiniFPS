@@ -202,8 +202,8 @@ func _spo2_clip() -> void:
 	MeshUtil.box_instance(clip, Vector3(0.006, 0.002, 0.006), Vector3(0, 0.0175, 0.004), spo2_mat, "Diode")
 	spo2_light = OmniLight3D.new()
 	spo2_light.light_color = Color(1.0, 0.15, 0.1)
-	spo2_light.light_energy = 0.15
-	spo2_light.omni_range = 0.06
+	spo2_light.light_energy = 0.05
+	spo2_light.omni_range = 0.025
 	clip.add_child(spo2_light)
 	# Câble vers le moniteur
 	var start := clip.global_transform * Vector3(0, 0, -0.02)
@@ -267,7 +267,7 @@ func _ecg_wires() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	if spo2_light:
-		spo2_light.light_energy = 0.12 + 0.05 * sin(_t * 9.0)
+		spo2_light.light_energy = 0.04 + 0.015 * sin(_t * 9.0)
 	# Le ballon réservoir se vide un peu à chaque inspiration
 	if bag:
 		var b := 0.5 - 0.5 * cos(TAU * _t * breath_rate / 60.0)
