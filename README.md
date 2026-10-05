@@ -143,23 +143,28 @@ l'artère mammaire interne gauche sur l'IVA, cœur arrêté.
 4. **Artère mammaire** — l'aide soulève le bord gauche du sternum (la valve gauche se relève) ;
    au bistouri électrique (fumée), l'artère est décollée de haut en bas avec ses veines et sa
    graisse : c'est le greffon, coupé et clippé en bas.
-5. **Péricarde** — ouvert aux ciseaux de l'aorte au diaphragme ; quatre fils de suspension tirent
-   ses bords vers la peau : le cœur bat dans son berceau.
-6. **Canule aortique**, puis 7. **canule veineuse** dans l'oreillette droite — les lignes rouge
-   vif et sombre partent vers la machine : départ de la CEC (pompes à galets qui tournent,
-   débit 4,8 L/min ; le scope affiche la pression de la machine, on arrête de ventiler).
+5. **Péricarde** — ouvert aux ciseaux de l'aorte au diaphragme, largement (toute la face avant
+   du cœur, graisse dans les sillons des coronaires) ; quatre fils de suspension tirent ses bords
+   vers la peau : le cœur bat dans son berceau.
+6. **Canule aortique**, puis 7. **canule veineuse** dans l'oreillette droite — les tubulures
+   souples, rouge vif et sombre, sortent vers le haut du champ, passent sur l'épaule gauche et
+   pendent jusqu'à la machine : départ de la CEC (pompes à galets qui tournent, débit
+   4,8 L/min ; le scope affiche la pression de la machine, on arrête de ventiler).
 8. **Clampage** — clamp en travers de l'aorte, cardioplégie froide : le cœur ralentit, pâlit et
    s'arrête (asystolie au scope).
 9. **Artériotomie** — l'IVA ouverte au bistouri sur 6 mm, dans sa longueur.
-10. **Anastomose** — l'aide amène le greffon ; surjet au fil 8/0, six points entre le bout de la
-    mammaire et les bords de l'IVA.
+10. **Anastomose** — l'aide amène le greffon, couché sur la face avant du cœur ; surjet au fil
+    8/0, six points entre le bout de la mammaire et les bords de l'IVA.
 11. **Déclampage** — main nue sur le clamp : le sang chaud revient, le cœur se réchauffe… et
     fibrille (fibrillation ventriculaire au scope, le cœur tremble).
 12. **Choc interne** — palettes de part et d'autre du cœur, un clic : il repart en rythme régulier.
 13. **Décanulation** — la machine ralentit puis s'arrête, le cœur reprend la main ; les canules
     sont retirées.
-14. **Fermeture** — l'écarteur est retiré, cinq fils d'acier passent autour des deux moitiés du
-    sternum, puis sont serrés et torsadés : le sternum se referme.
+14. **Fermeture** — l'écarteur est retiré, la peau revient sur le sternum ; cinq fils d'acier
+    passent autour des deux moitiés, puis sont serrés et torsadés : le sternum se referme, la
+    peau est agrafée.
+
+Quand le repère de l'étape sort de l'écran, une flèche au bord de l'image indique où regarder.
 
 ## Anatomie et graphismes
 

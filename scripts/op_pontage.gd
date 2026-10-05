@@ -489,7 +489,7 @@ func _update_graft() -> void:
 	if _graft_route.is_empty():
 		# Trajet du greffon cousu : il sort de sous le bord gauche du sternum, entre dans le
 		# péricarde au-dessus de l'artère pulmonaire, puis se couche sur la face avant du cœur
-		_graft_route = PackedVector3Array([_tissue_top(0.062, 0.03, 5.0), _tissue_top(0.03, 0.042, 4.0), _tissue_top(0.004, 0.052, 3.5)])
+		_graft_route = PackedVector3Array([_tissue_top(0.062, 0.028, 7.0), _tissue_top(0.03, 0.04, 7.0), _tissue_top(0.004, 0.05, 6.0)])
 	var ctrl := PackedVector3Array([top, _graft_route[0], hf * _graft_route[1], hf * _graft_route[2], end])
 	var curve := Cable.smooth(ctrl, 5)
 	var n := curve.size()
@@ -1004,10 +1004,10 @@ func _staples() -> void:
 	var n := 12
 	for i in n:
 		var p := Procedure.path_point(sternum, (i + 0.5) / n)
-		var y := Patient.body_height(p.x, p.z) + 0.0012
+		var y := Patient.body_height(p.x, p.z) + 0.0018
 		var nrm := Patient.skin_normal(p.x, p.z)
-		var pts := PackedVector3Array([Vector3(p.x, y - 0.0018, -0.0032), Vector3(p.x, y - 0.0002, -0.0033), Vector3(p.x, y + 0.0003, -0.0022),
-			Vector3(p.x, y + 0.0004, 0.0), Vector3(p.x, y + 0.0003, 0.0022), Vector3(p.x, y - 0.0002, 0.0033), Vector3(p.x, y - 0.0018, 0.0032)])
+		var pts := PackedVector3Array([Vector3(p.x, y - 0.0032, -0.0032), Vector3(p.x, y - 0.0002, -0.0033), Vector3(p.x, y + 0.0003, -0.0022),
+			Vector3(p.x, y + 0.0004, 0.0), Vector3(p.x, y + 0.0003, 0.0022), Vector3(p.x, y - 0.0002, 0.0033), Vector3(p.x, y - 0.0032, 0.0032)])
 		var st := MeshInstance3D.new()
 		st.name = "Agrafe"
 		var sm := Cable.smooth(pts)
@@ -1019,6 +1019,7 @@ func _staples() -> void:
 		var c := Vector3(p.x, y, 0.0)
 		st.global_transform = Transform3D(b, c - b * c)
 		st.set_meta("base", st.global_transform)
+		st.set_meta("c", c)
 		_staple_nodes.append(st)
 
 
@@ -1043,7 +1044,7 @@ func process(delta: float) -> void:
 	# Les agrafes montent et descendent avec la peau (respiration)
 	for st in _staple_nodes:
 		var base: Transform3D = st.get_meta("base")
-		var c := base * Vector3.ZERO
+		var c: Vector3 = st.get_meta("c")
 		st.global_transform = base.translated(Vector3.UP * patient.breath_offset(c.x, c.z))
 	# Le bout du greffon suit les battements une fois cousu
 	if _graft and graft_on > 0.99 and patient.beat_gain > 0.0:
