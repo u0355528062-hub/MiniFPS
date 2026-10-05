@@ -52,7 +52,7 @@ func _init() -> void:
 	intro_title = "Salle de déchocage"
 	intro_text = "Chute de six mètres : bassin et fémur fracturés, il saigne à l'intérieur. Pâle, glacé, la tension baisse ; les veines des bras sont collabées, impossible d'y mettre un cathéter. Il faut une voie centrale pour transfuser vite.\n\nLe collier cervical empêche d'aller au cou : ce sera la veine sous-clavière gauche, sous la clavicule, par la technique de Seldinger (aiguille, guide, dilatateur, cathéter)."
 	imaging_tex = ""
-	imaging_text = "Choc hémorragique (fractures du bassin et du fémur). Pas d'accès veineux périphérique.\n\n•  tension 84 / 52, pouls 124\n•  veines des bras collabées\n•  collier cervical : jugulaire impossible\n•  table inclinée tête en bas : la veine se gonfle"
+	imaging_text = "Choc hémorragique (fractures du bassin et du fémur). Pas d'accès veineux périphérique.\n\n•  tension 84 / 52, pouls 124\n•  veines des bras collabées\n•  collier cervical : jugulaire impossible\n•  transfusion prête dès que la voie est posée"
 	scan_text = "RADIO DU BASSIN\nFracture du bassin\nfracture du fémur gauche"
 	header = "DÉCHOCAGE  ·  VOIE CENTRALE  ·  SOUS-CLAVIÈRE GAUCHE"
 	summary = "Le cathéter central est en place, sa pointe dans la veine cave supérieure : la transfusion passe à plein débit, la tension remonte."

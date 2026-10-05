@@ -130,7 +130,9 @@ func do_step() -> void:
 	await cleanup()
 	var s: Dictionary = proc.steps[si]
 	want_axis = Vector3.ZERO
-	if s["inst"] != "" and s["kind"] not in ["pick", "pump"]:
+	# Instrument déjà posé en place (écarteur à moitié ouvert par le joueur) : on continue main vide
+	var placed: bool = s["inst"] != "" and tray.instruments.has(s["inst"]) and tray.instruments[s["inst"]].parked
+	if s["inst"] != "" and s["kind"] not in ["pick", "pump"] and not placed:
 		await take(s["inst"])
 		if held_id() != s["inst"]:
 			fail("impossible de prendre %s" % s["inst"])

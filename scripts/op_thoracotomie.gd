@@ -474,6 +474,13 @@ func _rosc_done(instant: bool) -> void:
 # ---------------------------------------------------------------- Animation
 
 func process(delta: float) -> void:
+	# La manche de la main qui masse remonte jusqu'à l'épaule du joueur (sous la caméra) : le bras sort
+	# du bas de l'écran au lieu de s'arrêter en l'air
+	if _hand and _hand.visible:
+		for h in proc.hands:
+			if h is PlayerHand and (h as PlayerHand).camera:
+				var b := (h as PlayerHand).camera.global_basis
+				_hand.set_elbow((h as PlayerHand).camera.global_position - b.y * 0.3 + b.x * 0.17 + b.z * 0.05)
 	# Ce qui est posé sur le cœur suit ses battements et le massage (même déformation que le shader)
 	if _heart_follow:
 		var sq := patient.heart_squeeze

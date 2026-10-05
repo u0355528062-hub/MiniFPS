@@ -10,6 +10,7 @@ var player: Player
 var instruments: Array[Instrument] = []
 var required_id := ""
 var step_kind := ""  ## type du geste en cours (aide « mains nues » : manivelle, massage)
+var hand_prompt := ""  ## aide « main vide » propre à l'étape (clamp à fermer…), sinon celle de la manivelle
 
 var root: Control
 var _card: PanelContainer
@@ -152,8 +153,9 @@ func build() -> void:
 	_caption.anchor_bottom = 1.0
 	_caption.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_caption.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_caption.offset_top = -112
-	_caption.offset_bottom = -112
+	# Au-dessus du cadre d'aide des touches (en bas à gauche) : jamais de chevauchement
+	_caption.offset_top = -166
+	_caption.offset_bottom = -166
 	_caption.custom_minimum_size = Vector2(800, 0)
 	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_caption.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
@@ -225,8 +227,20 @@ func _unhandled_input(event: InputEvent) -> void:
 				_help.visible = not _help.visible
 
 
+## Nom court pour la barre d'instruments (le nom complet reste au survol et dans la consigne).
 static func _short(t: String) -> String:
-	return t.replace(" thoracique", "").replace(" dermographique", "").replace(" + fil 0", "").replace(" de lidocaïne 1 %", "")
+	var s := t
+	var par := s.find(" (")
+	if par > 0:
+		s = s.substr(0, par)
+	var plus := s.find(" + ")
+	if plus > 0:
+		s = s.substr(0, plus)
+	for pair in [[" thoracique", ""], [" dermographique", ""], [" de lidocaïne 1 %", " lidocaïne"],
+			[" de défibrillation", ""], ["Guide métallique à bout en J", "Guide en J"], [" sur seringue de 20 mL", ""],
+			[" sur seringue", ""], [" 3 voies", ""], [" de 8 cm", ""]]:
+		s = s.replace(pair[0], pair[1])
+	return s
 
 
 # ---------------------------------------------------------------- Interface de la procédure
@@ -377,7 +391,7 @@ func _process(_delta: float) -> void:
 	elif hand.held == null and step_kind == "pump":
 		pr = "Vise le cœur · Clic gauche en rythme pour comprimer"
 	elif hand.held == null and step_kind == "crank" and _crank_ready():
-		pr = "Vise l'écarteur · Clic gauche maintenu pour tourner la manivelle"
+		pr = hand_prompt if hand_prompt != "" else "Vise l'écarteur · Clic gauche maintenu pour tourner la manivelle"
 	_prompt.text = pr
 
 

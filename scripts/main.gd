@@ -133,7 +133,8 @@ func _ready() -> void:
 				hud.toast(t, false))
 		procedure.step_changed.connect(func(_i: int) -> void:
 			hud.required_id = procedure.required_id()
-			hud.step_kind = procedure.current().get("kind", ""))
+			hud.step_kind = procedure.current().get("kind", "")
+			hud.hand_prompt = procedure.current().get("hand_prompt", ""))
 	# Vignettage léger sur l'image 3D, sous le HUD et les menus
 	var vig_layer := CanvasLayer.new()
 	vig_layer.name = "Vignettage"

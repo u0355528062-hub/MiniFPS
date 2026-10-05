@@ -11,7 +11,7 @@ const CATALOG := [
 	{"id": "pericardiocentese", "name": "Péricardiocentèse", "tag": "Tamponnade : vider le sang autour du cœur, sous échographie.", "level": 2, "minutes": 5, "ready": true},
 	{"id": "voie_centrale", "name": "Voie veineuse centrale", "tag": "Choc : un cathéter dans la veine sous-clavière (technique de Seldinger).", "level": 2, "minutes": 7, "ready": true},
 	{"id": "thoracotomie", "name": "Thoracotomie de sauvetage", "tag": "Arrêt cardiaque après une plaie : ouvrir le thorax, masser le cœur.", "level": 3, "minutes": 8, "ready": true},
-	{"id": "pontage", "name": "Pontage coronarien", "tag": "Infarctus : cœur arrêté sous machine, nouvelle artère sur l'IVA.", "level": 3, "minutes": 20, "ready": true},
+	{"id": "pontage", "name": "Pontage coronarien", "tag": "Artère du cœur bouchée : cœur arrêté sous machine, nouveau branchement.", "level": 3, "minutes": 20, "ready": true},
 ]
 
 var id := ""
@@ -77,7 +77,13 @@ static func is_ready(op_id: String) -> bool:
 ## Réglages du patient avant sa construction (incision, fenêtre, plaie...).
 ## Temps de référence de l'intervention : une longue opération a droit à plus de temps.
 func reference_time() -> float:
-	return par_time if par_time > 0.0 else 90.0 + 45.0 * steps.size()
+	if par_time > 0.0:
+		return par_time
+	# La durée annoncée dans le menu
+	for e in CATALOG:
+		if e["id"] == id:
+			return float(e["minutes"]) * 60.0
+	return 90.0 + 45.0 * steps.size()
 
 
 func configure_patient(_p: Patient) -> void:

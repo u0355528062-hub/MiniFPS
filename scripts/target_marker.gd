@@ -7,6 +7,7 @@ var label: Label3D
 var _mat := StandardMaterial3D.new()
 var _t := 0.0
 var color := UIKit.ACCENT: set = set_color
+var label_below := false  ## étiquette sous l'anneau (second repère : ne chevauche pas le premier)
 
 
 func _init() -> void:
@@ -56,6 +57,12 @@ func show_at(p: Vector3, text := "", size := 1.0) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	# L'étiquette garde une taille lisible à l'écran quand on regarde de loin (jusqu'à 3 fois plus grande)
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam:
+		var k := clampf(cam.global_position.distance_to(global_position) / 0.38, 1.0, 3.0)
+		label.pixel_size = 0.0004 * k
+		label.position.y = (-0.024 if label_below else 0.03) * k
 	var s := 1.0 + 0.18 * sin(_t * 5.0)
 	ring.scale = Vector3(s, 1, s) * ring.scale.y
 	_mat.albedo_color.a = 0.55 + 0.35 * (0.5 + 0.5 * sin(_t * 5.0))

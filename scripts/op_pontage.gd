@@ -67,7 +67,7 @@ var _graft_t := 0.0
 func _init() -> void:
 	id = "pontage"
 	name = "Pontage coronarien"
-	tagline = "Infarctus : cœur arrêté sous machine, nouvelle artère sur l'IVA."
+	tagline = "Artère du cœur bouchée : cœur arrêté sous machine, nouveau branchement."
 	pose = "dos"
 	player_spawn = Vector3(0.0, 0.0, -0.58)
 	player_look = Vector3(0.0, 1.0, 0.02)
@@ -260,6 +260,7 @@ func define_steps() -> void:
 			"text": "Pose le clamp en travers de l'aorte ascendante, entre la canule et le cœur, et ferme-le (clic). Le perfusionniste injecte alors la cardioplégie froide : le cœur va s'arrêter.",
 			"label": "Clamp ici", "ring": 1.0, "target": func() -> Vector3: return aorta_clamp + Vector3.UP * aorta_r,
 			"near": 0.04, "seconds": 0.5, "what": "Clampage", "on_seat": _clamp_seat, "done": _clamp_done,
+			"hold_hint": "Maintiens le clic sur le clamp pour le fermer", "hand_prompt": "Vise le clamp · Clic gauche maintenu pour le fermer",
 			"done_msg": "Cardioplégie : le cœur s'arrête, flasque et froid"},
 		{"id": "arteriotomie", "kind": "cutline", "list": "Ouverture de l'IVA", "inst": "bistouri",
 			"title": "Ouvre l'IVA",

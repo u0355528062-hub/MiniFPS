@@ -128,3 +128,5 @@ func run(seed_value: int) -> void:
 			print("CHAOS : ", inst.id, " pas revenu sur la table (", inst.global_position, " au lieu de ", inst.tray_transform.origin, ", tenu : ", inst.held, ", parqué : ", inst.parked, ")")
 			ok = false
 	print("CHAOS %s graine %d : %s (étapes %d/%d, erreurs joueur %d, invariants violés %d)" % [proc.op.id, seed_value, "OK" if ok else "ÉCHEC", proc.step, proc.steps.size(), proc.errors, violations])
+	for e in proc.error_log:
+		print("CHAOS   erreur : ", e)

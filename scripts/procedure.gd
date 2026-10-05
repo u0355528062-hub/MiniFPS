@@ -39,6 +39,7 @@ var step := INTRO
 var elapsed := 0.0
 var errors := 0
 var error_log: Array[String] = []
+var penalty := 0.0  ## points retirés à la note (un mauvais instrument pris coûte moitié moins)
 var running := false
 var show_markers := true
 var parked: Array[Instrument] = []
@@ -62,6 +63,7 @@ var steps: Array:
 func setup() -> void:
 	marker = TargetMarker.new()
 	marker2 = TargetMarker.new()
+	marker2.label_below = true
 	add_child(marker)
 	add_child(marker2)
 	for h in hands:
@@ -156,7 +158,7 @@ func _complete_step(msg := "") -> void:
 
 ## Note finale : S (parfait), A, B, C, D.
 func grade() -> String:
-	var pts := 100.0 - errors * 12.0
+	var pts := 100.0 - penalty
 	pts -= maxf(0.0, elapsed - op.reference_time()) / 12.0
 	pts += quality.get("bonus", 0.0)
 	if errors == 0 and pts >= 95.0:
@@ -193,6 +195,7 @@ func _error(msg: String, once_key := "") -> void:
 			return
 		st["err_" + once_key] = true
 	errors += 1
+	penalty += 12.0
 	error_log.append(msg)
 	_toast(msg, false)
 	Sfx.play("erreur", Vector3.INF, -6.0)
@@ -216,6 +219,7 @@ func _on_take(hand: SurgeonHand, inst: Instrument) -> void:
 		Sfx.play("erreur", Vector3.INF, -6.0)
 		if not _wrong_counted:
 			errors += 1
+			penalty += 6.0
 			error_log.append("Mauvais instrument pris : %s (au lieu de %s)" % [inst.label, good.label])
 			_wrong_counted = true
 
@@ -1042,7 +1046,7 @@ func _tick_crank(s: Dictionary, delta: float) -> void:
 				_complete_step(s.get("done_msg", ""))
 				return
 		elif inst.parked:
-			_caption("Maintiens le clic sur la manivelle : %d %%" % int(prog * 100.0))
+			_caption("%s : %d %%" % [s.get("hold_hint", "Maintiens le clic sur la manivelle"), int(prog * 100.0)])
 
 
 ## Massage cardiaque : clics rythmés (main vide) en visant le cœur ; « need » compressions à un
