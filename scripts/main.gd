@@ -32,6 +32,7 @@ var env: WorldEnvironment
 var op: Operation
 var args := {}
 var state := "menu"  ## menu, briefing, play, pause, end
+var _leaving := false  ## la scène va être rechargée (double clic : une seule fois)
 var _menu_cam: Camera3D
 var _menu_t := 0.0
 var _testing := false
@@ -253,9 +254,12 @@ func _process(delta: float) -> void:
 ## Une opération est choisie dans le menu : la même → briefing ; une autre → la scène est
 ## reconstruite pour elle (patient, salle, instruments), directement au briefing.
 func _choose_op(op_id: String) -> void:
+	if _leaving or state != "menu":
+		return
 	if op_id == op.id:
 		_go_briefing()
 		return
+	_leaving = true
 	selected_op = op_id
 	skip_menu = true
 	await menus.fade(true, 0.35)
@@ -313,6 +317,9 @@ func _resume() -> void:
 
 
 func _restart() -> void:
+	if _leaving:
+		return
+	_leaving = true
 	get_tree().paused = false
 	skip_menu = true
 	Procedure.restarts += 1
@@ -321,6 +328,9 @@ func _restart() -> void:
 
 
 func _to_main_menu() -> void:
+	if _leaving:
+		return
+	_leaving = true
 	get_tree().paused = false
 	skip_menu = false
 	await menus.fade(true, 0.35)

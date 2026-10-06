@@ -13,6 +13,23 @@ interventions :
 | **Thoracotomie de sauvetage** | Kevin, 22 ans, couteau — arrêt cardiaque par tamponnade | jouable |
 | **Pontage coronarien** | Gérard, 64 ans — angor instable, IVA bouchée à 95 % (cœur arrêté sous CEC) | jouable |
 
+## Nouveautés de la version 6
+
+- **Voie centrale** : champ stérile fenêtré posé par l'aide après la désinfection (fenêtre
+  centrée sur ton repère), prolongateurs du cathéter couchés sur le champ, transfusion qui part
+  à la fin ; plus de perfusion au bras (les veines sont introuvables : deux tentatives ratées).
+- **Pontage** : bourses de canulation (fil bleu + garrots rouges), nouées au retrait des canules.
+- **Note expliquée** : détail des points à l'écran de fin, chrono avec le temps de référence,
+  meilleur résultat de chaque intervention gardé et affiché au menu.
+- **Ergonomie** : rappel de la commande souris sous le viseur, retour au menu depuis le
+  briefing (Échap), constantes du briefing colorées selon leur gravité, aimantation des
+  orifices au-dessus de la peau (embase d'aiguille) en les regardant.
+- **Corrections** : instruments et câbles qui s'enfonçaient de quelques millimètres dans les
+  champs, taches sombres sur le bord adhésif des champs, carte de consigne qui ne rétrécissait
+  pas (et liste des étapes mal placée après H), aides fausses (« manivelle » au choc électrique,
+  « écarteur » pour le clamp), textes en désaccord avec les gestes (pince du péricarde, clamp,
+  dilatateur, drain), message de fin inadapté, double clic au menu qui rechargeait deux fois.
+
 ## Télécharger et jouer (Windows)
 
 1. Télécharge `telechargement/BlocUrgences-Windows.zip`.

@@ -24,6 +24,7 @@ var _options: Control
 var _end: Control
 var _options_back: Callable
 var _fade: ColorRect
+var _brief_go: Button
 
 
 func build(p_op: Operation) -> void:
@@ -60,6 +61,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if k == KEY_ESCAPE:
 			if _pause.visible:
 				resume_pressed.emit()
+				get_viewport().set_input_as_handled()
+			elif _brief.visible:
+				main_menu_pressed.emit()
 				get_viewport().set_input_as_handled()
 			elif _options.visible and _options_back.is_valid():
 				_options_back.call()
@@ -319,9 +323,13 @@ func _build_briefing() -> Control:
 	var row := UIKit.hbox(12)
 	row.alignment = BoxContainer.ALIGNMENT_END
 	v.add_child(row)
+	var back := UIKit.button("Retour au menu  (Échap)", 280)
+	back.pressed.connect(func() -> void: main_menu_pressed.emit())
+	row.add_child(back)
 	var go := UIKit.button("Commencer  (Espace)", 320)
 	go.pressed.connect(func() -> void: start_pressed.emit())
 	row.add_child(go)
+	_brief_go = go
 	return c
 
 
@@ -331,6 +339,8 @@ static func _level(critical: bool, worrying: bool) -> Color:
 
 func show_briefing() -> void:
 	_show(_brief, true)
+	if _brief_go:
+		_brief_go.grab_focus.call_deferred()
 
 
 # ---------------------------------------------------------------- Pause
