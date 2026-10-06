@@ -33,6 +33,7 @@ uniform vec3 body_cells = vec3(1.0, 1.0, 0.0025); // nx, nz, pas
 varying vec3 wpos;
 varying vec3 wnorm;
 varying float glued;
+varying float glue_k;
 
 float skin_at(vec2 xz) {
 	vec2 uv = ((xz - body_min) / body_cells.z + 0.5) / body_cells.xy;
@@ -51,6 +52,7 @@ void vertex() {
 	// grands triangles du drap simulé)
 	w += n * 0.003;
 	glued = 0.0;
+	glue_k = 0.0;
 	if (has_window > 0.5) {
 		vec2 outw = max(window_min - w.xz, w.xz - window_max);
 		float d = length(max(outw, vec2(0.0)));
@@ -65,9 +67,13 @@ void vertex() {
 				// Collé seulement sur le dessus du corps ; plus de jeu là où la peau est bombée
 				float k = (1.0 - smoothstep(frame_w * 0.5, frame_w, d)) * smoothstep(0.3, 0.55, ns.y);
 				w.y = mix(w.y, sy + 0.003 + 0.01 * (1.0 - ns.y), k);
-				ns *= dot(n, ns) < 0.0 ? -1.0 : 1.0;
-				n = normalize(mix(n, ns, k));
+				// Collé à plat : la normale devient celle de la peau (vers le haut), même là où un pli
+				// du drap simulé était retourné (sinon taches sombres sur le bord adhésif) ; la face du
+				// dessous, elle, n'est plus dessinée dans cette zone
+				vec3 nm = mix(n, ns, k);
+				n = dot(nm, nm) > 1e-6 ? normalize(nm) : ns;
 				glued = k * (1.0 - smoothstep(0.0, 0.016, d));
+				glue_k = k;
 			}
 		}
 	}
@@ -78,6 +84,11 @@ void vertex() {
 }
 
 void fragment() {
+	// Bord collé : les deux faces du non-tissé sont plaquées à la même hauteur ; la face du
+	// dessous (vue de dos) ne doit pas transparaître à travers celle du dessus
+	if (!FRONT_FACING && glue_k > 0.02) {
+		discard;
+	}
 	vec2 p = wpos.xz;
 	// Fenêtre : le drap y est retiré au niveau de la peau et au-dessus (plis compris) ; celui qui
 	// descend sur le flanc, sous la même verticale, reste

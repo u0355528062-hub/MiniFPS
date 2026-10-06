@@ -99,6 +99,12 @@ var spread_extra: Array = []  ## autres structures repoussées par l'écarteur (
 ## Champs propres à l'opération (pontage : grand drap collé autour d'une fenêtre sur le sternum et
 ## champ de tête jeté sur l'arceau) : "glb", "map" ; vide = champs habituels de la position
 var drape_override := {}
+var extra_drape: Node3D  ## champ fenêtré posé en cours d'intervention (caché jusque-là)
+var _extra_mat: ShaderMaterial
+var _extra_map := ""
+var _extra_win := [Vector2.ZERO, Vector2.ZERO]
+var _extra_shown := false
+var _extra_edge := 0.0  ## bord du champ ajouté côté tête (x)
 ## Thoracotomie : brèche le long de l'espace intercostal (points de la peau, part de l'écartement
 ## en chaque point), portion coupée t0..t1, demi-largeur coupée, écartement au milieu, profondeur
 var ap_path := PackedVector3Array()
@@ -294,6 +300,20 @@ static func use_drape_map(path: String) -> void:
 		return
 	_drape_src = path
 	_drape_h = _read_map(path) if ResourceLoader.exists(path) or FileAccess.file_exists(path) else PackedFloat32Array()
+
+
+## Ouvre la fenêtre dans la carte des champs : la peau y redevient la surface solide.
+static func cut_drape_window(wmin: Vector2, wmax: Vector2) -> void:
+	if _drape_h.is_empty():
+		return
+	_drape_src += "#fenetre"  # la carte en mémoire n'est plus celle du fichier
+	var i0 := maxi(0, int(ceil((wmin.x - _x0) / _step)))
+	var i1 := mini(_nx - 1, int(floor((wmax.x - _x0) / _step)))
+	var j0 := maxi(0, int(ceil((wmin.y - _z0) / _step)))
+	var j1 := mini(_nz - 1, int(floor((wmax.y - _z0) / _step)))
+	for j in range(j0, j1 + 1):
+		for i in range(i0, i1 + 1):
+			_drape_h[j * _nx + i] = -1.0
 
 
 static func _read_map(path: String) -> PackedFloat32Array:
@@ -705,20 +725,9 @@ func _build_drape() -> void:
 	drape.name = "Champs"
 	add_child(drape)
 	if windowed_drape():
-		drape_mat = Tex.drape(Color(0.17, 0.42, 0.53), WINDOW_MIN, WINDOW_MAX, breathe_amp)
+		drape_mat = _drape_material(Color(0.17, 0.42, 0.53), WINDOW_MIN, WINDOW_MAX)
 	else:
-		drape_mat = Tex.drape(Color(0.80, 0.84, 0.86), Vector2.ZERO, Vector2.ZERO, breathe_amp)
-	drape_mat.set_shader_parameter("chest_x", CHEST_X)
-	drape_mat.set_shader_parameter("chest_z", CHEST_Z)
-	drape_mat.set_shader_parameter("chest_h", CHEST_H)
-	drape_mat.set_shader_parameter("height_map", height_tex)
-	drape_mat.set_shader_parameter("patch_min", PATCH_MIN)
-	drape_mat.set_shader_parameter("patch_size", PATCH_SIZE)
-	# Hauteur de la peau de tout le corps : le bord adhésif colle le drap à plat autour de la fenêtre
-	var img := Image.create_from_data(_nx, _nz, false, Image.FORMAT_RF, _skin_h.to_byte_array())
-	drape_mat.set_shader_parameter("body_map", ImageTexture.create_from_image(img))
-	drape_mat.set_shader_parameter("body_min", Vector2(_x0, _z0))
-	drape_mat.set_shader_parameter("body_cells", Vector3(_nx, _nz, _step))
+		drape_mat = _drape_material(Color(0.80, 0.84, 0.86), Vector2.ZERO, Vector2.ZERO)
 	var head_mat: ShaderMaterial = null
 	for mi in drape.find_children("*", "MeshInstance3D", true, false):
 		var m: ShaderMaterial = drape_mat
@@ -732,6 +741,67 @@ func _build_drape() -> void:
 		(mi as MeshInstance3D).material_override = m
 
 
+func _drape_material(color: Color, win_min: Vector2, win_max: Vector2) -> ShaderMaterial:
+	var m := Tex.drape(color, win_min, win_max, breathe_amp)
+	m.set_shader_parameter("chest_x", CHEST_X)
+	m.set_shader_parameter("chest_z", CHEST_Z)
+	m.set_shader_parameter("chest_h", CHEST_H)
+	m.set_shader_parameter("height_map", height_tex)
+	m.set_shader_parameter("patch_min", PATCH_MIN)
+	m.set_shader_parameter("patch_size", PATCH_SIZE)
+	# Hauteur de la peau de tout le corps : le bord adhésif colle le drap à plat autour de la fenêtre
+	var img := Image.create_from_data(_nx, _nz, false, Image.FORMAT_RF, _skin_h.to_byte_array())
+	m.set_shader_parameter("body_map", ImageTexture.create_from_image(img))
+	m.set_shader_parameter("body_min", Vector2(_x0, _z0))
+	m.set_shader_parameter("body_cells", Vector3(_nx, _nz, _step))
+	return m
+
+
+## Champ fenêtré posé en cours d'intervention (voie centrale : après la désinfection, comme au bloc).
+## Construit caché ; reveal_extra_drape() le fait tomber sur le patient et la fenêtre devient la
+## seule peau accessible.
+func add_extra_drape(glb: String, map: String, win_min: Vector2, win_max: Vector2, head_edge: float) -> void:
+	if not ResourceLoader.exists(glb):
+		return
+	extra_drape = (load(glb) as PackedScene).instantiate()
+	extra_drape.name = "ChampFenetre"
+	extra_drape.visible = false
+	add_child(extra_drape)
+	_extra_mat = _drape_material(Color(0.17, 0.42, 0.53), win_min, win_max)
+	for mi in extra_drape.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).material_override = _extra_mat
+	_extra_map = map
+	_extra_win = [win_min, win_max]
+	_extra_edge = head_edge
+
+
+## shift : décalage de la fenêtre (le point de ponction marqué n'est pas toujours au même endroit) ;
+## le bord adhésif est recollé autour de la nouvelle fenêtre par le shader du champ.
+func reveal_extra_drape(instant: bool, shift := Vector2.ZERO) -> void:
+	if extra_drape == null or _extra_shown:
+		return
+	extra_drape.visible = view_mode == 0
+	_extra_shown = true
+	WINDOW_MIN = _extra_win[0] + shift
+	WINDOW_MAX = _extra_win[1] + shift
+	_extra_mat.set_shader_parameter("window_min", WINDOW_MIN)
+	_extra_mat.set_shader_parameter("window_max", WINDOW_MAX)
+	for m in [skin_mat, zone_mat]:
+		if m:
+			m.set_shader_parameter("win_min", WINDOW_MIN)
+			m.set_shader_parameter("win_max", WINDOW_MAX)
+			m.set_shader_parameter("frame_on", 1.0)
+	use_drape_map(_extra_map)
+	cut_drape_window(WINDOW_MIN, WINDOW_MAX)
+	if props and props.has_method("hide_under_drape"):
+		props.hide_under_drape(_extra_edge)
+	if not instant:
+		# Le champ tombe sur le patient
+		extra_drape.position.y = 0.14
+		var tw := create_tween()
+		tw.tween_property(extra_drape, "position:y", 0.0, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+
 # ---------------------------------------------------------------- Vue anatomique
 
 ## 0 : normale  ·  1 : peau fantôme, muscles visibles  ·  2 : squelette, poumons, cœur
@@ -743,6 +813,8 @@ func set_view_mode(m: int) -> void:
 	walls.visible = normal
 	if drape:
 		drape.visible = normal
+	if extra_drape:
+		extra_drape.visible = normal and _extra_shown
 	for st in stitches:
 		st.visible = normal
 	for part in _mats_by_part:
@@ -937,6 +1009,8 @@ func set_breathe(v: float) -> void:
 		props.breath_rate = breath_rate
 	if drape_mat:
 		drape_mat.set_shader_parameter("breathe", v)
+	if _extra_mat:
+		_extra_mat.set_shader_parameter("breathe", v)
 
 
 ## Zone du thorax qui se soulève en respirant (même formule que les shaders).
@@ -1000,6 +1074,8 @@ func _process(delta: float) -> void:
 	breath_b = 0.5 - 0.5 * cos(TAU * _breath_t)
 	if drape_mat:
 		drape_mat.set_shader_parameter("breath_b", breath_b)
+	if _extra_mat and _extra_shown:
+		_extra_mat.set_shader_parameter("breath_b", breath_b)
 	var tl := maxf(rest_open, maxf(held_l, drive_l))
 	var tr := maxf(rest_open, maxf(held_r, drive_r))
 	var sl := _spring(open_l, _vel_l, tl, 520.0 if drive_l >= 0.0 else 170.0, 0.85 if drive_l >= 0.0 else 0.32, dt)

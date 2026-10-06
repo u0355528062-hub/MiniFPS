@@ -23,6 +23,7 @@ var summary := ""  ## phrase de l'écran de fin
 var header := "BLOC 2"  ## bandeau du panneau
 var scan_text := ""  ## négatoscope (imagerie du patient)
 var breath_rate := 14.0  ## respirations par minute
+var ventilated := false  ## intubé, ventilé au ballon ou par la machine (briefing : « Ventilation »)
 var surgeon_spot := Vector3(0.12, 0.0, 0.6)
 var tray_pos := Vector3(0.62, 0.0, 0.56)
 var with_dish := false

@@ -9,7 +9,10 @@ var hand: PlayerHand
 var player: Player
 var instruments: Array[Instrument] = []
 var required_id := ""
-var step_kind := ""  ## type du geste en cours (aide « mains nues » : manivelle, massage)
+var step_kind := "":  ## type du geste en cours (aide « mains nues » : manivelle, massage)
+	set(v):
+		step_kind = v
+		_work_t = 0.0
 var hand_prompt := ""  ## aide « main vide » propre à l'étape (clamp à fermer…), sinon celle de la manivelle
 
 var root: Control
@@ -38,6 +41,24 @@ var _current_step := -1
 var _details := true
 var marker: TargetMarker  ## repère de l'endroit où agir (flèche au bord de l'écran s'il est hors champ)
 var _arrow: OffscreenArrow
+var _work_t := 0.0  ## temps passé à travailler (clic) pendant l'étape : l'aide à la souris s'efface
+
+## Ce que fait la souris pendant le geste, l'instrument posé sur le patient.
+const ACTION_PROMPTS := {
+	"mark": "Clic gauche · pose le feutre sur la peau",
+	"paint": "Clic maintenu · frotte la peau",
+	"incise": "Clic maintenu · appuie la lame et suis le pointillé",
+	"inject": "Clic maintenu · pique et pousse le piston",
+	"spread": "Clic maintenu · pousse la pince fermée · relâche : elle s'ouvre",
+	"insert": "Clic maintenu · pousse dans l'axe du trajet",
+	"suture": "Clic · pique au premier point, puis ressors au second",
+	"needle": "Clic maintenu · l'aiguille avance en aspirant",
+	"withdraw": "Molette vers le haut, ou R · retire l'aiguille",
+	"aspirate": "Clic maintenu · tire le piston",
+	"probe": "Clic maintenu · appuie la sonde sur la peau",
+	"thread": "Clic maintenu · pousse sur le guide",
+	"cutline": "Clic maintenu · coupe en avançant le long de la ligne",
+}
 
 
 func build() -> void:
@@ -357,10 +378,12 @@ func _crank_ready() -> bool:
 	return false
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if hand == null:
 		return
 	_update_arrow()
+	if hand.held and hand.on_patient and hand.squeeze_value() > 0.0:
+		_work_t += delta
 	for i in _slots.size():
 		var inst := instruments[i]
 		var held := hand.held == inst
@@ -388,6 +411,9 @@ func _process(_delta: float) -> void:
 		pr = "Clic gauche · Prendre  « %s »" % hand.hovered.label
 	elif hand.held and not hand.on_patient and hand.held.id == required_id:
 		pr = "Vise la zone sur le patient"
+	elif hand.held and hand.held.id == required_id and _work_t < 1.5:
+		# Rappel de la commande du geste ; il s'efface dès qu'on a commencé
+		pr = ACTION_PROMPTS.get(step_kind, "")
 	elif hand.held == null and step_kind == "pump":
 		pr = "Vise le cœur · Clic gauche en rythme pour comprimer"
 	elif hand.held == null and step_kind == "crank" and _crank_ready():

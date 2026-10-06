@@ -478,6 +478,15 @@ func _take_shot() -> void:
 			menus.show_briefing()
 			cam = player.camera
 		"end":
+			if args.has("demo_score"):
+				# Capture de l'écran de fin avec des pénalités (vérification de la mise en page)
+				procedure.elapsed = procedure.op.reference_time() + 60.0
+				procedure.errors = 2
+				procedure.penalty = 30.0
+				procedure.error_log.assign(["Trop bas : reste à 1-2 cm sous la clavicule, sinon l'aiguille n'arrive pas sous l'os.",
+					"Mauvais instrument pris : Dilatateur (au lieu de Aiguille 18G sur seringue)",
+					"Le guide est entré dans le cœur : extrasystoles ! Il ne faut pas dépasser 20 cm."])
+				procedure.quality["bonus"] = 4.0
 			procedure.skip_to(procedure.steps.size())
 			await get_tree().create_timer(2.2).timeout
 			cam = player.camera

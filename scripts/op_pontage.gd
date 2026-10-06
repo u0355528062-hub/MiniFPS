@@ -56,6 +56,7 @@ var _graft_route := PackedVector3Array()  ## points de passage du greffon cousu 
 var _lines: Array[MeshInstance3D] = []
 var _wires: Array[Node3D] = []
 var _stays: Array[Node3D] = []
+var _purses := {}  ## bourses de canulation : id de la canule → nœud
 var _staple_nodes: Array[Node3D] = []
 var _thread_mat: StandardMaterial3D
 var _wire_mat: StandardMaterial3D
@@ -82,6 +83,7 @@ func _init() -> void:
 	header = "BLOC CARDIAQUE  ·  PONTAGE AORTO-CORONAIRE"
 	summary = "Le cœur bat, l'artère mammaire irrigue l'IVA. Le sternum est fermé aux fils d'acier ; il part en réanimation, réveillé dans quelques heures."
 	breath_rate = 12.0
+	ventilated = true
 	vitals = {"hr": 72.0, "spo2": 98.0, "sys": 132, "dia": 78, "temp": 36.6}
 	catalog = [
 		["bistouri", "Bistouri lame 15", "manche_bistouri", 90.0, 0.0],
@@ -257,7 +259,7 @@ func define_steps() -> void:
 			"done_msg": "Départ de la CEC : la machine fait le travail du cœur et des poumons"},
 		{"id": "clampage", "kind": "crank", "list": "Clampage aortique", "inst": "clamp_aortique",
 			"title": "Clampe l'aorte",
-			"text": "Pose le clamp en travers de l'aorte ascendante, entre la canule et le cœur, et ferme-le (clic). Le perfusionniste injecte alors la cardioplégie froide : le cœur va s'arrêter.",
+			"text": "Pose le clamp en travers de l'aorte ascendante, entre la canule et le cœur, et ferme-le (clic maintenu). Le perfusionniste injecte alors la cardioplégie froide : le cœur va s'arrêter.",
 			"label": "Clamp ici", "ring": 1.0, "target": func() -> Vector3: return aorta_clamp + Vector3.UP * aorta_r,
 			"near": 0.04, "seconds": 0.5, "what": "Clampage", "on_seat": _clamp_seat, "done": _clamp_done,
 			"hold_hint": "Maintiens le clic sur le clamp pour le fermer", "hand_prompt": "Vise le clamp · Clic gauche maintenu pour le fermer",
@@ -533,6 +535,7 @@ func _peri_done(_h: SurgeonHand, _instant: bool) -> void:
 	# Bords suspendus : grande fenêtre sur le cœur et l'aorte
 	patient.set_pericardium(0.0, pc_a.lerp(pc_b, -0.1), pc_a.lerp(pc_b, 1.08), PERI_W)
 	_stay_sutures()
+	_place_purses()
 
 
 ## Fils de suspension : quatre points sur les bords du péricarde ouvert, tirés et noués sur le bord
@@ -565,6 +568,76 @@ func _stay_sutures() -> void:
 		root.add_child(th)
 		_stays.append(th)
 		MeshUtil.cylinder_instance(th, 0.0018, 0.0016, p3 + Vector3.UP * 0.0008, mat, "Noeud")
+
+
+## Bourses de canulation, posées par l'aide une fois le péricarde ouvert : surjet circulaire de
+## polypropylène bleu autour de l'endroit où entrera chaque canule (aorte, auricule droite), les
+## deux brins passés dans un garrot de caoutchouc rouge qui remonte hors du thorax.
+func _place_purses() -> void:
+	for n in _purses.values():
+		(n as Node3D).queue_free()
+	_purses.clear()
+	_purses["canule_aortique"] = _purse(aorta_top, 0.0065, root, Vector3(0.55, 0.8, 0.25), false)
+	_purses["canule_veineuse"] = _purse(ra_point, 0.0075, _heart_follow, Vector3(0.15, 0.75, -0.65), false)
+
+
+## Retrait de la canule : l'aide serre la bourse (le trou se ferme) et la noue ; garrot retiré.
+func _tie_purse(inst_id: String) -> void:
+	var old: Node3D = _purses.get(inst_id)
+	if old == null or old.get_meta("tied", false):
+		return
+	var parent := old.get_parent() as Node3D
+	var c: Vector3 = old.get_meta("center")
+	old.queue_free()
+	_purses[inst_id] = _purse(c, 0.0022, parent, Vector3.UP, true)
+
+
+func _purse(center: Vector3, radius: float, parent: Node3D, out: Vector3, tied: bool) -> Node3D:
+	var node := Node3D.new()
+	node.name = "Bourse"
+	node.set_meta("center", center)
+	node.set_meta("tied", tied)
+	parent.add_child(node)
+	var n := 8
+	for k in n:
+		# Chaque point : le fil passe sur la paroi (visible), puis dessous jusqu'au point suivant
+		var pts := PackedVector3Array()
+		for m in 5:
+			var a := TAU * (k + 0.1 + 0.5 * m / 4.0) / n
+			pts.append(_tissue_top(center.x + cos(a) * radius, center.z + sin(a) * radius, 0.45))
+		var bite := MeshInstance3D.new()
+		bite.mesh = MeshUtil.tube(pts, _radii(pts.size(), 0.0004), 5)
+		bite.material_override = _thread_mat
+		node.add_child(bite)
+	var o := out.normalized()
+	var start := _tissue_top(center.x + o.x * radius, center.z + o.z * radius, 0.6)
+	if tied:
+		# Nœud et deux bouts coupés courts
+		MeshUtil.sphere_instance(node, 0.0014, start + Vector3.UP * 0.0008, _thread_mat, "Noeud")
+		for sd in [-1.0, 1.0]:
+			var tail := PackedVector3Array([start + Vector3.UP * 0.001, start + Vector3(0.002 * sd, 0.004, 0.0025)])
+			var t := MeshInstance3D.new()
+			t.mesh = MeshUtil.tube(tail, _radii(2, 0.00035), 4)
+			t.material_override = _thread_mat
+			node.add_child(t)
+		return node
+	# Garrot : tube de caoutchouc rouge enfilé sur les deux brins, qui sort du thorax
+	var g0 := start + o * 0.008
+	var g1 := g0 + o * 0.055
+	for sd in [-1.0, 1.0]:
+		var side: Vector3 = o.cross(Vector3.FORWARD).normalized() * 0.0006 * sd
+		var brin := PackedVector3Array([start + side, start + side + o * 0.004, g0 + side])
+		var b := MeshInstance3D.new()
+		b.mesh = MeshUtil.tube(brin, _radii(3, 0.0004), 4)
+		b.material_override = _thread_mat
+		node.add_child(b)
+	var rubber := MeshUtil.mat(Color(0.6, 0.13, 0.09), 0.45)
+	var tube := MeshInstance3D.new()
+	tube.name = "Garrot"
+	tube.mesh = MeshUtil.tube(PackedVector3Array([g0, g0.lerp(g1, 0.5), g1]), _radii(3, 0.0022), 10)
+	tube.material_override = rubber
+	node.add_child(tube)
+	return node
 
 
 ## Point du bord du péricarde ouvert (à PERI_W du tracé), à t le long du tracé, du côté `side`.
@@ -868,6 +941,7 @@ func _remove_cannula(inst_id: String, instant: bool) -> void:
 	var inst := instrument(inst_id)
 	if not inst.parked:
 		return
+	_tie_purse(inst_id)
 	_show_cannula_body(inst, true)
 	proc.parked.erase(inst)
 	if instant:

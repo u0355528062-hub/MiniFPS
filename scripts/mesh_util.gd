@@ -145,6 +145,21 @@ static func cylinder_instance(parent: Node3D, radius: float, height: float, pos:
 	return mi
 
 
+static func sphere_instance(parent: Node3D, radius: float, pos: Vector3, mat: Material, name := "Sphere") -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = radius
+	sm.height = radius * 2.0
+	sm.radial_segments = 12
+	sm.rings = 6
+	mi.mesh = sm
+	mi.material_override = mat
+	mi.position = pos
+	mi.name = name
+	parent.add_child(mi)
+	return mi
+
+
 static func mat(color: Color, rough := 0.5, metal := 0.0) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color

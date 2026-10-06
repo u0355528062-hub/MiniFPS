@@ -14,6 +14,8 @@ var breath_rate := 14.0
 var _t := 0.0
 var _obstacles: Array = []  ## sphères que les câbles contournent (ballon réservoir, collier…)
 var _collar_dims := {}
+var _under: Array[Node] = []  ## posé sur le corps : passe sous un champ posé par-dessus
+var _leads := []  ## fils des électrodes des épaules : [couleur, point au-dessus de l'épaule, suite du trajet]
 var options := {}  ## {"collar": false} : pas de collier ; {"draped": true} : sous les champs (bloc)
 
 
@@ -29,10 +31,29 @@ func build() -> void:
 	if options.get("draped", false):
 		# Au bloc, sous les champs : électrodes, oxymètre, perfusion et brassard sont cachés
 		return
+	var n0 := get_child_count()
 	_spo2_clip()
 	_iv_line()
 	_ecg()
 	_bp_cuff()
+	for i in range(n0, get_child_count()):
+		var c := get_child(i)
+		if c.name != "BoitierECG" and c.name != "CableTronc":
+			_under.append(c)
+
+
+## Champ stérile posé sur le patient (bord côté tête en edge_x) : électrodes, oxymètre, perfusion,
+## brassard et leurs câbles passent dessous ; les fils des épaules ressortent au bord du champ et
+## rejoignent le boîtier de l'ECG.
+func hide_under_drape(edge_x: float) -> void:
+	for n in _under:
+		(n as Node3D).visible = false
+	for ld in _leads:
+		var z: float = ld[1]
+		var start := Vector3(edge_x - 0.015, Patient.body_height(edge_x - 0.015, z) + 0.002, z)
+		var path := PackedVector3Array([start, start + Vector3(0.012, 0.003, 0.0)])
+		path.append_array(ld[2])
+		_cable(path, 0.03, 0.0016, _mat(ld[0], 0.55), "CableECGChamp", 2, 1, 0.018)
 
 
 func _mat(c: Color, rough := 0.5, metal := 0.0) -> StandardMaterial3D:
@@ -405,6 +426,8 @@ func _ecg() -> void:
 					_on(head_x + 0.08, -0.05, 0.003), yoke + Vector3(-0.01, 0, 0.015)])
 			2:  # flanc gauche : file sous le bord du drap
 				path.append_array([_on(-0.36, 0.098, 0.002), _on(-0.395, 0.096, -0.002)])
+		if i < 2:
+			_leads.append([cols[i], path[2].z, path.slice(3)])
 		var pb := 2 if i == 2 else 1
 		var c := _cable(path, 0.03, 0.0016, _mat(cols[i], 0.55), "CableECG", 2, pb, 0.018)
 		var d: Vector3 = (path[1] - path[0]).normalized()

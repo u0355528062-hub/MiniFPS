@@ -38,9 +38,11 @@ static func _zone_depth(p: Vector3, tag: String) -> float:
 
 
 ## Hauteur de la surface solide sous p (peau, champ, table, plateau), -INF s'il n'y a rien.
-static func surface(p: Vector3) -> float:
+## Un instrument entré par la fenêtre continue sous la peau dans la zone de son geste (tag), même
+## là où le champ recouvre la peau (aiguille de la voie centrale vers le creux sus-sternal).
+static func surface(p: Vector3, tag := "") -> float:
 	if patient:
-		if patient.in_window(p.x, p.z):
+		if is_skin(p, tag):
 			return Patient.body_height(p.x, p.z) + patient.breath_offset(p.x, p.z)
 		var top := Patient.top_height(p.x, p.z)
 		if top > 0.0:
@@ -52,13 +54,13 @@ static func surface(p: Vector3) -> float:
 
 
 ## Est-ce de la peau (on peut la creuser un peu, la piquer, l'inciser) ?
-static func is_skin(p: Vector3) -> bool:
-	return patient != null and patient.in_window(p.x, p.z)
+static func is_skin(p: Vector3, tag := "") -> bool:
+	return patient != null and (patient.in_window(p.x, p.z) or (tag != "" and _zone_depth(p, tag) > 0.0))
 
 
 ## Profondeur que la pointe peut atteindre sous la surface en p.
 static func allowance(p: Vector3, tag: String) -> float:
-	if not is_skin(p):
+	if not is_skin(p, tag):
 		return 0.0
 	var a := SOFT
 	# La plaie ouverte est un vrai trou : tout l'instrument peut y entrer
@@ -74,7 +76,7 @@ static func solve(inst: Instrument, xf: Transform3D) -> Transform3D:
 	var push := 0.0
 	for s in inst.samples:
 		var p: Vector3 = xf * (s[0] as Vector3)
-		var top := surface(p)
+		var top := surface(p, s[1])
 		if top == -INF:
 			continue
 		var pen := top - allowance(p, s[1]) - p.y
@@ -84,5 +86,5 @@ static func solve(inst: Instrument, xf: Transform3D) -> Transform3D:
 	out.origin.y += push
 	inst.correction = push
 	var tip := out * inst.tip_local
-	inst.tip_depth = Patient.body_height(tip.x, tip.z) + patient.breath_offset(tip.x, tip.z) - tip.y if is_skin(tip) else -1.0
+	inst.tip_depth = Patient.body_height(tip.x, tip.z) + patient.breath_offset(tip.x, tip.z) - tip.y if is_skin(tip, inst.samples[0][1]) else -1.0
 	return out

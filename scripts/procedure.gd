@@ -157,10 +157,18 @@ func _complete_step(msg := "") -> void:
 
 
 ## Note finale : S (parfait), A, B, C, D.
+## Points retirés pour le temps passé au-delà du temps de référence (1 point toutes les 12 s).
+func time_penalty() -> float:
+	return maxf(0.0, elapsed - op.reference_time()) / 12.0
+
+
+## Points sur 100 : erreurs (12), mauvais instruments (6), temps, bonus de précision.
+func score() -> float:
+	return 100.0 - penalty - time_penalty() + quality.get("bonus", 0.0)
+
+
 func grade() -> String:
-	var pts := 100.0 - penalty
-	pts -= maxf(0.0, elapsed - op.reference_time()) / 12.0
-	pts += quality.get("bonus", 0.0)
+	var pts := score()
 	if errors == 0 and pts >= 95.0:
 		return "S"
 	if pts >= 85.0:
@@ -184,6 +192,11 @@ func _finish() -> void:
 		if h.held:
 			h.put_back()
 	Sfx.play("fin", Vector3.INF, -2.0)
+	# Détail de la note pour l'écran de fin
+	quality["pen_errors"] = errors * 12.0
+	quality["pen_picks"] = maxf(0.0, penalty - errors * 12.0)
+	quality["pen_time"] = time_penalty()
+	quality["score"] = score()
 	for ui in uis:
 		ui.show_end(elapsed, errors, grade(), op.summary, error_log, quality)
 	finished.emit(elapsed, errors)
@@ -510,7 +523,12 @@ func _tick_mark(s: Dictionary, _delta: float) -> void:
 			_done(h, false, p)
 			_complete_step(verdict["msg"])
 			return
-		_error(verdict["msg"])
+		# Une marque au feutre se corrige : seule la première erreur de repérage compte
+		if st.has("err_mark"):
+			_toast(verdict["msg"], false)
+			Sfx.play("erreur", Vector3.INF, -10.0)
+		else:
+			_error(verdict["msg"], "mark")
 
 
 ## Badigeon : la compresse imbibée peint là où elle frotte la peau.

@@ -15,6 +15,9 @@ extends Operation
 ## clavicule) à partir du point marqué.
 
 const VEIN_SCALE := 1.6  ## veine dilatée (patient incliné tête en bas) : cible plus large
+const DRAPE_MIN := Vector2(0.04, 0.04)  ## fenêtre du champ simulé (avant décalage)
+const DRAPE_MAX := Vector2(0.13, 0.16)
+const DRAPE_C := (DRAPE_MIN + DRAPE_MAX) * 0.5
 
 var site := Vector3.ZERO  ## point de ponction (peau)
 var axis := Vector3.DOWN  ## trajet de l'aiguille
@@ -34,6 +37,8 @@ var _wire_in: MeshInstance3D
 var _wire_out: MeshInstance3D
 var _cath_in: MeshInstance3D
 var _cath_out: Node3D
+var _lumen_ends: Array[Vector3] = []  ## raccords des trois voies du cathéter (bout libre)
+var _transfusion: Node3D
 var _wire_mat: StandardMaterial3D
 var _cath_mat: StandardMaterial3D
 var _needle_left := false  ## l'aide a retiré l'aiguille
@@ -117,6 +122,9 @@ func build_extras() -> void:
 		var m := needle.model as CathlonModel
 		m.with_catheter = false
 		m.draws_blood = true
+	# Champ stérile fenêtré, posé après la désinfection : seule la zone préparée reste à nu
+	patient.add_extra_drape("res://assets/models/champ_vc.glb", "res://assets/data/champ_vc_hauteur.bin",
+		DRAPE_MIN, DRAPE_MAX, 0.152)
 	_wire_mat = MeshUtil.mat(Color(0.82, 0.84, 0.87), 0.18, 1.0)
 	_cath_mat = MeshUtil.mat(Color(0.95, 0.94, 0.9), 0.35)
 
@@ -140,7 +148,7 @@ func define_steps() -> void:
 			"text": "Chlorhexidine alcoolique en partant du point marqué vers l'extérieur, sous la clavicule et jusqu'à l'épaule : le guide et le cathéter passeront par là.",
 			"label": "Désinfecte ici", "ring": 2.0,
 			"area": func() -> Vector3: return site,
-			"done_msg": "Désinfecté"},
+			"done_msg": "Désinfecté : l'aide pose le champ stérile", "done": _drape_on},
 		{"id": "anesthesie", "kind": "inject", "list": "Anesthésie locale", "inst": "seringue",
 			"title": "Anesthésie locale",
 			"text": "Pique sur le repère et pousse le piston (clic maintenu) : un bouton gonfle sous la peau. Puis attends quelques secondes que la lidocaïne agisse.",
@@ -168,7 +176,7 @@ func define_steps() -> void:
 			"done": _wire_done, "done_msg": "Guide en place : l'aide retire l'aiguille en le tenant"},
 		{"id": "dilatation", "kind": "insert", "list": "Dilatation", "inst": "dilatateur",
 			"title": "Dilate le trajet",
-			"text": "Enfile le dilatateur sur le guide et pousse-le de 4 cm, dans l'axe de l'aiguille, en tournant légèrement : il élargit le passage jusqu'à la veine. Puis retire-le en laissant le guide.",
+			"text": "Enfile le dilatateur sur le guide et pousse-le de 4 cm dans l'axe de l'aiguille (clic maintenu) : il élargit le passage jusqu'à la veine. Il ressort ensuite, le guide reste en place.",
 			"label": "Sur le guide", "depth": 0.04, "axis": axis, "what": "Dilatateur",
 			"target": func() -> Vector3: return patient.live(site),
 			"zone_r": 0.01, "zone_depth": 0.06,
@@ -350,6 +358,19 @@ func _marked(_hand: SurgeonHand, _instant: bool, p: Variant) -> void:
 			s["text"] = "Sur le repère, l'aiguille à %d° de la peau, vers le creux au-dessus du sternum : elle glisse sous la clavicule. Maintiens le clic : elle avance en aspirant. Dès que du sang sombre revient dans la seringue, arrête : tu es dans la veine." % int(pitch)
 
 
+
+## L'aide pose le champ fenêtré sur la zone désinfectée, centré entre le point de ponction et
+## l'endroit où le cathéter sera fixé.
+func _drape_on(instant: bool) -> void:
+	var out_dir := Vector3(-axis.x, 0.0, -axis.z).normalized()
+	var c := site + out_dir * 0.015
+	var shift := Vector2(clampf(c.x - DRAPE_C.x, -0.05, 0.05), clampf(c.z - DRAPE_C.y, -0.05, 0.05))
+	patient.reveal_extra_drape(instant, shift)
+	if OS.get_cmdline_user_args().has("--debug"):
+		print("DEBUG champ site=", site, " axe=", axis, " fenêtre=", patient.WINDOW_MIN, "→", patient.WINDOW_MAX, " embase=", _hub())
+	if not instant:
+		Sfx.play("drap", site, -4.0)
+
 func anesthesia_started(wait: float) -> void:
 	var b := patient.bleb
 	if wait <= 0.0:
@@ -467,6 +488,7 @@ func _fix_point(i: int, instant: bool) -> void:
 
 
 func _fixed(_instant: bool) -> void:
+	_start_transfusion()
 	monitor.sys = 102
 	monitor.dia = 62
 	monitor.target_rate = 104.0
@@ -536,6 +558,7 @@ func _draw_catheter() -> void:
 func _build_cath_out() -> void:
 	if _cath_out:
 		_cath_out.queue_free()
+	_lumen_ends.clear()
 	_cath_out = Node3D.new()
 	_cath_out.name = "CatheterExterne"
 	root.add_child(_cath_out)
@@ -562,7 +585,54 @@ func _build_cath_out() -> void:
 		var cap := MeshUtil.cylinder_instance(_cath_out, 0.0035, 0.016, p2, hub, "Raccord")
 		var dirv := (p2 - p1).normalized()
 		cap.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, dirv)), p2 + dirv * 0.008)
+		_lumen_ends.append(p2 + dirv * 0.016)
 		MeshUtil.box_instance(_cath_out, Vector3(0.006, 0.005, 0.008), p1 + Vector3.UP * 0.002, hub, "Clamp")
+
+
+## La transfusion démarre : poche de concentré de globules rouges suspendue à la potence, à côté
+## du soluté ; la tubulure rouge pend de la chambre compte-gouttes, passe sur le champ au-dessus
+## de l'épaule et rejoint la voie distale du cathéter (raccord brun).
+func _start_transfusion() -> void:
+	if _transfusion or _lumen_ends.size() < 2:
+		return
+	_transfusion = Node3D.new()
+	_transfusion.name = "Transfusion"
+	root.add_child(_transfusion)
+	var top := PatientPropsDos.IV_BAG + Vector3(0.0, -0.01, 0.12)
+	var blood := MeshUtil.mat(Color(0.3, 0.012, 0.025), 0.22)
+	blood.clearcoat_enabled = true
+	blood.clearcoat = 0.9
+	blood.clearcoat_roughness = 0.1
+	MeshUtil.box_instance(_transfusion, Vector3(0.1, 0.15, 0.024), top + Vector3(0.0, -0.085, 0.0), blood, "PocheSang")
+	MeshUtil.box_instance(_transfusion, Vector3(0.1, 0.012, 0.004), top + Vector3(0.0, -0.004, 0.0), MeshUtil.mat(Color(0.92, 0.92, 0.9), 0.5), "Oeillet")
+	MeshUtil.box_instance(_transfusion, Vector3(0.062, 0.05, 0.001), top + Vector3(0.0, -0.075, 0.0125), MeshUtil.mat(Color(0.95, 0.95, 0.93), 0.7), "Etiquette")
+	var tag := Label3D.new()
+	tag.text = "CGR\nO RH−"
+	tag.font_size = 32
+	tag.pixel_size = 0.0004
+	tag.modulate = Color(0.1, 0.1, 0.12)
+	tag.outline_size = 0
+	tag.position = top + Vector3(0.0, -0.075, 0.0132)
+	_transfusion.add_child(tag)
+	# Chambre compte-gouttes (sang au fond) et tubulure
+	var drip := top + Vector3(0.0, -0.2, 0.0)
+	MeshUtil.cylinder_instance(_transfusion, 0.009, 0.05, drip, CardiacModels._clear(Color(0.9, 0.95, 1.0), 0.35), "ChambreGouttes")
+	MeshUtil.cylinder_instance(_transfusion, 0.0085, 0.016, drip + Vector3(0.0, -0.016, 0.0), blood, "SangChambre")
+	var start := drip + Vector3(0.0, -0.025, 0.0)
+	var end: Vector3 = _lumen_ends[1]
+	var out_dir := Vector3(-axis.x, 0.0, -axis.z).normalized()
+	var over := Cable.on_surface(0.2, -0.05, 0.004)
+	var near := Cable.on_surface(end.x + out_dir.x * 0.06, end.z + out_dir.z * 0.06, 0.003)
+	var pts := MeshUtil.bezier(start, start + Vector3(0.0, -0.45, 0.0), over + Vector3(0.25, 0.25, -0.3), over, 24)
+	pts.append_array(MeshUtil.bezier(over, over.lerp(near, 0.5) + Vector3.UP * 0.01, near, end, 14).slice(1))
+	var line := MeshInstance3D.new()
+	line.name = "TubulureSang"
+	line.mesh = _tube_mesh(pts, 0.0021)
+	var lm := MeshUtil.mat(Color(0.45, 0.02, 0.035), 0.12)
+	lm.clearcoat_enabled = true
+	lm.clearcoat = 0.8
+	line.material_override = lm
+	_transfusion.add_child(line)
 
 
 func _tube_mesh(pts: PackedVector3Array, r: float) -> ArrayMesh:

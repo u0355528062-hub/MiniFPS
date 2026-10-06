@@ -67,6 +67,7 @@ func _init() -> void:
 	header = "DÉCHOCAGE  ·  THORACOTOMIE  ·  ANTÉROLATÉRALE GAUCHE"
 	summary = "Le cœur bat à nouveau : 118 par minute, la tension remonte. Le thorax reste ouvert, il part au bloc où le chirurgien terminera la réparation et refermera."
 	breath_rate = 14.0
+	ventilated = true
 	vitals = {"hr": 34.0, "spo2": 0.0, "sys": 0, "dia": 0, "temp": 35.6}
 	catalog = [
 		["bistouri", "Bistouri lame 20", "manche_bistouri", 90.0, 0.0],
@@ -174,7 +175,7 @@ func define_steps() -> void:
 			"done": _spread_done, "done_msg": "Le péricarde est là : tendu, bleu de sang"},
 		{"id": "pericarde", "kind": "cutline", "list": "Péricarde", "inst": "ciseaux",
 			"title": "Ouvre le péricarde",
-			"text": "Le sac est tendu par le sang. Pince-le, puis coupe-le de la pointe du cœur vers le haut, en avant du nerf phrénique (clic maintenu en avançant). Attention au cœur dessous.",
+			"text": "Le sac est tendu par le sang. L'aide le soulève à la pince ; coupe-le de la pointe du cœur vers le haut, en avant du nerf phrénique (clic maintenu en avançant). Attention au cœur dessous.",
 			"label": "DÉPART", "a": func() -> Vector3: return pc_a, "b": func() -> Vector3: return pc_b,
 			"tol": 0.016, "need": 0.85, "depth": peri_depth, "what": "Péricarde ouvert",
 			"on_progress": _peri_progress, "done": _peri_done,

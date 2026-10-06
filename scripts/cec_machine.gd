@@ -82,6 +82,16 @@ func _init() -> void:
 	add_child(_screen)
 	# Bouteille de gaz et panier de tubulures
 	MeshUtil.cylinder_instance(self, 0.05, 0.5, Vector3(0.42, 1.0, -0.22), MeshUtil.mat(Color(0.95, 0.95, 0.95), 0.4), "Bouteille")
+	# Solide pour le joueur (on ne traverse pas la machine)
+	var body := StaticBody3D.new()
+	body.name = "Solide"
+	add_child(body)
+	var cs := CollisionShape3D.new()
+	var bx := BoxShape3D.new()
+	bx.size = Vector3(1.0, 1.7, 0.7)
+	cs.shape = bx
+	cs.position = Vector3(0.0, 0.85, 0.0)
+	body.add_child(cs)
 	_update_screen()
 
 

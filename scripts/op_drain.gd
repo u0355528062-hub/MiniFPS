@@ -142,7 +142,7 @@ func define_steps() -> void:
 			"done": _pleura_open, "done_msg": "Pschhh ! L'air s'échappe"},
 		{"id": "drain", "kind": "insert", "list": "Pose du drain", "inst": "drain",
 			"title": "Pose le drain",
-			"text": "Glisse le bout du drain dans le trajet et pousse-le de 9 cm : il remonte vers le sommet du poumon. Le moniteur va remonter.",
+			"text": "Glisse le bout du drain dans le trajet et pousse-le de 9 cm (clic maintenu) : il remonte vers le sommet du poumon. La saturation va remonter.",
 			"label": "Drain ici", "depth": 0.09, "axis": axis,
 			"target": func() -> Vector3: return patient.on_skin(c),
 			"progress": _drain_progress,

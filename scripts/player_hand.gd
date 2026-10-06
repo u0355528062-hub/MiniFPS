@@ -218,11 +218,20 @@ func _process(delta: float) -> void:
 					target = target.lerp(snapped, w * 0.85)
 			# Visée sur l'orifice d'un trajet (pince, drain) : la pointe s'enfonce le long du trajet
 			if assist_axis != Vector3.ZERO and assist_target != Vector3.INF:
-				var fl := Vector2(aim.x - assist_target.x, aim.z - assist_target.z).length()
+				var off := Vector3(aim.x - assist_target.x, 0.0, aim.z - assist_target.z)
+				# Un orifice au-dessus de la peau (embase d'une aiguille plantée) s'attrape en le
+				# regardant : on compte aussi la distance entre le repère et la ligne de visée
+				var from := camera.project_ray_origin(screen)
+				var dir := camera.project_ray_normal(screen)
+				var near := from + dir * maxf(0.0, (assist_target - from).dot(dir))
+				var ray_off := Vector3(near.x - assist_target.x, 0.0, near.z - assist_target.z)
+				if near.distance_to(assist_target) < off.length():
+					off = ray_off
+				var fl := off.length()
 				var we := 1.0 - smoothstep(0.014, 0.028, fl)
 				if we > 0.0:
 					var along := depth - lift - bot_lift - auto_lift - HOVER
-					var lateral := Vector3(aim.x - assist_target.x, 0.0, aim.z - assist_target.z) * 0.35
+					var lateral := off * 0.35
 					var deep := assist_target + lateral + assist_axis * along
 					target = target.lerp(deep, we)
 			_tip = target if _tip == Vector3.ZERO else _tip.lerp(target, 1.0 - exp(-delta * 24.0))

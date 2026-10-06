@@ -274,7 +274,18 @@ func _build_briefing() -> Control:
 	vit.add_theme_constant_override("h_separation", 24)
 	vit.add_theme_constant_override("v_separation", 6)
 	right.add_child(vit)
-	for row in [["Fréquence cardiaque", "%d /min" % int(op.vitals["hr"]), UIKit.WARN], ["Saturation (SpO₂)", "%d %%" % int(op.vitals["spo2"]), UIKit.BAD], ["Tension", "%d / %d" % [op.vitals["sys"], op.vitals["dia"]], UIKit.WARN], ["Respiration", "%d /min" % int(op.breath_rate), UIKit.WARN]]:
+	# Couleur selon la valeur : normale, inquiétante, critique ; non mesurable en arrêt cardiaque
+	var hr := float(op.vitals["hr"])
+	var spo2 := float(op.vitals["spo2"])
+	var sys := int(op.vitals["sys"])
+	var fr := op.breath_rate
+	var rows := [
+		["Fréquence cardiaque", "%d /min" % int(hr), _level(hr < 40.0 or hr > 130.0, hr < 55.0 or hr > 100.0)],
+		["Saturation (SpO₂)", ("%d %%" % int(spo2)) if spo2 > 0.0 else "non mesurable", _level(spo2 < 90.0, spo2 < 95.0)],
+		["Tension", ("%d / %d" % [sys, op.vitals["dia"]]) if sys > 0 else "imprenable", _level(sys < 80 or sys > 180, sys < 100 or sys > 150)],
+		["Ventilation (intubé)", "%d /min" % int(fr), UIKit.OK] if op.ventilated else
+			["Respiration", "%d /min" % int(fr), _level(fr > 30.0 or fr < 8.0, fr > 20.0 or fr < 10.0)]]
+	for row in rows:
 		vit.add_child(UIKit.label(row[0], 17, UIKit.TEXT_DIM))
 		vit.add_child(UIKit.label(row[1], 19, row[2], true))
 	right.add_child(UIKit.label("IMAGERIE", 14, UIKit.ACCENT, true))
@@ -301,6 +312,10 @@ func _build_briefing() -> Control:
 	go.pressed.connect(func() -> void: start_pressed.emit())
 	row.add_child(go)
 	return c
+
+
+static func _level(critical: bool, worrying: bool) -> Color:
+	return UIKit.BAD if critical else (UIKit.WARN if worrying else UIKit.OK)
 
 
 func show_briefing() -> void:
@@ -472,10 +487,27 @@ func show_end(elapsed: float, errors: int, grade: String, summary: String, log: 
 		grid.add_child(UIKit.label(stt[0], 13, UIKit.TEXT_DIM, true))
 	for stt in stats:
 		grid.add_child(UIKit.label(stt[1], 28, UIKit.TEXT, true))
+	if quality.has("score"):
+		# Comment la note est calculée : 100, moins les pénalités, plus les bonus de précision
+		var parts := "100"
+		var ne := int(round(float(quality["pen_errors"]) / 12.0))
+		if ne > 0:
+			parts += "  − %d (%d erreur%s)" % [int(quality["pen_errors"]), ne, "s" if ne > 1 else ""]
+		var np := int(round(float(quality["pen_picks"]) / 6.0))
+		if np > 0:
+			parts += "  − %d (%d mauvais instrument%s)" % [int(quality["pen_picks"]), np, "s" if np > 1 else ""]
+		if float(quality["pen_time"]) >= 0.5:
+			parts += "  − %d (temps au-delà de la référence)" % int(round(float(quality["pen_time"])))
+		if quality.get("bonus", 0.0) > 0.0:
+			parts += "  + %d (précision)" % int(quality["bonus"])
+		var pts := UIKit.label("POINTS   %s  =  %d" % [parts, int(round(float(quality["score"])))], 15, UIKit.TEXT_DIM)
+		pts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		pts.custom_minimum_size.x = 800
+		v.add_child(pts)
 	v.add_child(UIKit.label("COMPTE RENDU", 14, UIKit.ACCENT, true))
 	var lt := ""
 	if log.is_empty():
-		lt = "Aucune erreur. Geste propre, dans le bon espace, sans douleur pour le patient."
+		lt = "Aucune erreur : gestes sûrs, dans le bon ordre, au bon endroit."
 	else:
 		for e in log:
 			lt += "•  " + str(e) + "\n"

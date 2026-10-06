@@ -37,6 +37,7 @@ func _ready() -> void:
 	streams["ecarte"] = _squelch(0.35, 7)
 	streams["survol"] = _tone([[2400.0, 1.0]], 0.03, 0.002, 0.02, 0.06)
 	streams["clic"] = _tone([[1300.0, 1.0], [2600.0, 0.3]], 0.06, 0.002, 0.03, 0.12)
+	streams["drap"] = _swish()
 	streams["vue"] = _tone([[660.0, 1.0], [990.0, 0.5]], 0.18, 0.01, 0.1, 0.1)
 	# Sons continus (en boucle, volume réglé à chaque image par le geste)
 	streams["loop_badigeon"] = _loop_noise(900.0, 0.5, 11, 9.0)
@@ -314,6 +315,28 @@ func _noise(dur: float, cutoff: float, gain: float) -> AudioStreamWAV:
 		lp += (rng.randf_range(-1, 1) - lp) * a
 		d[i] = lp * _env(i, n, 0.01, dur * 0.6)
 	return _to_wav(d, gain * 3.0)
+
+
+## Champ qu'on déploie et qui retombe sur le patient : souffle de tissu qui monte puis s'étouffe,
+## froissé irrégulier.
+func _swish() -> AudioStreamWAV:
+	var dur := 0.8
+	var n := int(dur * RATE)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 21
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in n:
+		var t := float(i) / n
+		var a := 1.0 - exp(-TAU * lerpf(500.0, 2600.0, sin(PI * minf(t * 1.3, 1.0))) / RATE)
+		lp += (rng.randf_range(-1, 1) - lp) * a
+		lp2 += (lp - lp2) * a
+		var env := smoothstep(0.0, 0.3, t) * (1.0 - smoothstep(0.45, 1.0, t))
+		env *= 0.75 + 0.25 * sin(t * 61.0) * sin(t * 23.0)
+		d[i] = lp2 * env
+	return _to_wav(d, 1.1)
 
 
 func _bubbles() -> AudioStreamWAV:

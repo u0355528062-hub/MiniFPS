@@ -115,7 +115,8 @@ func _process(delta: float) -> void:
 		if pvc:
 			_pvc_queue -= 1
 		screen.beat()
-		Sfx.play("bip", global_position, -16.0, 1.0 if spo2 > 96 else 0.92)
+		# Comme un vrai oxymètre : le bip descend d'un ton à mesure que la saturation baisse
+		Sfx.play("bip", global_position, -16.0, clampf(1.0 - (97.0 - spo2) * 0.012, 0.72, 1.02) if spo2 > 0.0 else 1.0)
 
 
 ## Une compression du massage cardiaque : onde de pression sur la courbe de pouls.
