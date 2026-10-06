@@ -125,6 +125,7 @@ func _ready() -> void:
 		add_child(hud)
 		hud.build()
 		hud.marker = procedure.marker
+		hud.reference = op.reference_time()
 		procedure.uis.append(hud)
 		player.pause_requested.connect(_on_pause_key)
 		player.view_mode_requested.connect(_cycle_view)
@@ -134,7 +135,8 @@ func _ready() -> void:
 		procedure.step_changed.connect(func(_i: int) -> void:
 			hud.required_id = procedure.required_id()
 			hud.step_kind = procedure.current().get("kind", "")
-			hud.hand_prompt = procedure.current().get("hand_prompt", ""))
+			hud.hand_prompt = procedure.current().get("hand_prompt", "")
+			hud.action_prompt = procedure.current().get("action_prompt", ""))
 	# Vignettage léger sur l'image 3D, sous le HUD et les menus
 	var vig_layer := CanvasLayer.new()
 	vig_layer.name = "Vignettage"

@@ -197,6 +197,13 @@ func _finish() -> void:
 	quality["pen_picks"] = maxf(0.0, penalty - errors * 12.0)
 	quality["pen_time"] = time_penalty()
 	quality["score"] = score()
+	# Record personnel (pas pour les robots de test ni les captures)
+	var bot := false
+	for a in OS.get_cmdline_user_args():
+		for k in ["--autotest", "--desktest", "--chaos", "--restarttest", "--demo_score", "--shot"]:
+			bot = bot or a.begins_with(k)
+	if not bot:
+		quality["record"] = Records.submit(op.id, grade(), score(), elapsed)
 	for ui in uis:
 		ui.show_end(elapsed, errors, grade(), op.summary, error_log, quality)
 	finished.emit(elapsed, errors)

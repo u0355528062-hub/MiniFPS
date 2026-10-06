@@ -38,7 +38,9 @@ var _wire_out: MeshInstance3D
 var _cath_in: MeshInstance3D
 var _cath_out: Node3D
 var _lumen_ends: Array[Vector3] = []  ## raccords des trois voies du cathéter (bout libre)
+var _lumen_dirs: Array[Vector3] = []
 var _transfusion: Node3D
+var _transfusion_line: MeshInstance3D  ## suit la respiration (la poche, elle, reste à la potence)
 var _wire_mat: StandardMaterial3D
 var _cath_mat: StandardMaterial3D
 var _needle_left := false  ## l'aide a retiré l'aiguille
@@ -98,7 +100,7 @@ func configure_patient(p: Patient) -> void:
 	p.breathe_amp = 0.005
 	p.hole_limit = 0.003
 	p.antiseptic = "chlorhexidine"
-	p.props_options = {"ecg_lateral": true}
+	p.props_options = {"ecg_lateral": true, "iv": false}  # veines des bras introuvables
 
 
 func build_extras() -> void:
@@ -559,6 +561,7 @@ func _build_cath_out() -> void:
 	if _cath_out:
 		_cath_out.queue_free()
 	_lumen_ends.clear()
+	_lumen_dirs.clear()
 	_cath_out = Node3D.new()
 	_cath_out.name = "CatheterExterne"
 	root.add_child(_cath_out)
@@ -573,20 +576,26 @@ func _build_cath_out() -> void:
 	w.look_at_from_position(wing, wing + out_dir, Vector3.UP)
 	var cols := [Color(0.15, 0.35, 0.8), Color(0.55, 0.35, 0.2), Color(0.95, 0.95, 0.95)]
 	for i in 3:
+		# Trois prolongateurs souples couchés sur la peau puis sur le champ (corde simulée qui
+		# épouse le relief du drap), terminés par leur raccord de couleur ; un petit clamp au milieu
 		var side: Vector3 = perp * (i - 1) * 0.012
 		var p0 := wing + out_dir * 0.012
-		var p1 := Cable.on_surface(p0.x + out_dir.x * 0.05 + side.x, p0.z + out_dir.z * 0.05 + side.z, 0.0015)
-		var p2 := Cable.on_surface(p0.x + out_dir.x * 0.1 + side.x * 2.0 + 0.01, p0.z + out_dir.z * 0.1 + side.z * 2.0, 0.0015)
+		var p1 := Cable.on_surface(p0.x + out_dir.x * 0.05 + side.x, p0.z + out_dir.z * 0.05 + side.z, 0.0014)
+		var p2 := Cable.on_surface(p0.x + out_dir.x * 0.1 + side.x * 2.0 + 0.01, p0.z + out_dir.z * 0.1 + side.z * 2.0, 0.0014)
+		var pts := Cable.smooth(Cable.lay(PackedVector3Array([p0, p0 + out_dir * 0.006 + Vector3.UP * 0.001, p1, p2]), 0.04, 0.0012, 0.01, 2, 1, []))
 		var ext := MeshInstance3D.new()
-		ext.mesh = _tube_mesh(MeshUtil.bezier(p0, p0.lerp(p1, 0.5) + Vector3.UP * 0.004, p1, p2, 12), 0.0012)
+		ext.mesh = _tube_mesh(pts, 0.0012)
 		ext.material_override = _cath_mat
 		_cath_out.add_child(ext)
 		var hub := MeshUtil.mat(cols[i], 0.4)
-		var cap := MeshUtil.cylinder_instance(_cath_out, 0.0035, 0.016, p2, hub, "Raccord")
-		var dirv := (p2 - p1).normalized()
-		cap.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, dirv)), p2 + dirv * 0.008)
-		_lumen_ends.append(p2 + dirv * 0.016)
-		MeshUtil.box_instance(_cath_out, Vector3(0.006, 0.005, 0.008), p1 + Vector3.UP * 0.002, hub, "Clamp")
+		var n := pts.size()
+		var end := pts[n - 1]
+		var dirv := (end - pts[maxi(0, n - 3)]).normalized()
+		var cap := MeshUtil.cylinder_instance(_cath_out, 0.0035, 0.016, end, hub, "Raccord")
+		cap.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, dirv)), end + dirv * 0.008)
+		_lumen_ends.append(end + dirv * 0.016)
+		_lumen_dirs.append(dirv)
+		MeshUtil.box_instance(_cath_out, Vector3(0.006, 0.005, 0.008), pts[n >> 1] + Vector3.UP * 0.002, hub, "Clamp")
 
 
 ## La transfusion démarre : poche de concentré de globules rouges suspendue à la potence, à côté
@@ -598,7 +607,7 @@ func _start_transfusion() -> void:
 	_transfusion = Node3D.new()
 	_transfusion.name = "Transfusion"
 	root.add_child(_transfusion)
-	var top := PatientPropsDos.IV_BAG + Vector3(0.0, -0.01, 0.12)
+	var top := PatientPropsDos.IV_BAG + Vector3(0.0, 0.07, 0.12)
 	var blood := MeshUtil.mat(Color(0.3, 0.012, 0.025), 0.22)
 	blood.clearcoat_enabled = true
 	blood.clearcoat = 0.9
@@ -620,11 +629,16 @@ func _start_transfusion() -> void:
 	MeshUtil.cylinder_instance(_transfusion, 0.0085, 0.016, drip + Vector3(0.0, -0.016, 0.0), blood, "SangChambre")
 	var start := drip + Vector3(0.0, -0.025, 0.0)
 	var end: Vector3 = _lumen_ends[1]
-	var out_dir := Vector3(-axis.x, 0.0, -axis.z).normalized()
-	var over := Cable.on_surface(0.2, -0.05, 0.004)
-	var near := Cable.on_surface(end.x + out_dir.x * 0.06, end.z + out_dir.z * 0.06, 0.003)
-	var pts := MeshUtil.bezier(start, start + Vector3(0.0, -0.45, 0.0), over + Vector3(0.25, 0.25, -0.3), over, 24)
-	pts.append_array(MeshUtil.bezier(over, over.lerp(near, 0.5) + Vector3.UP * 0.01, near, end, 14).slice(1))
+	# La tubulure pend de la potence en boucle au bout de la table, monte sur le champ près de
+	# l'épaule droite, traverse le haut du thorax, fait une boucle et rejoint le raccord dans son
+	# axe (corde simulée, posée sur le drap)
+	var ld: Vector3 = _lumen_dirs[1]
+	var lp := Vector3(ld.x, 0.0, ld.z).normalized().cross(Vector3.UP)
+	var path := PackedVector3Array([start, start + Vector3(0.0, -0.06, 0.0), Vector3(0.8, 1.15, -0.44),
+		Vector3(0.5, 0.92, -0.34), Cable.on_surface(0.13, -0.2, 0.004), Cable.on_surface(0.02, -0.01, 0.004),
+		Cable.on_surface(end.x + ld.x * 0.09 + lp.x * 0.05, end.z + ld.z * 0.09 + lp.z * 0.05, 0.003),
+		end + ld * 0.03, end])
+	var pts := Cable.smooth(Cable.lay(path, 0.06, 0.0021, 0.025, 2, 2, []))
 	var line := MeshInstance3D.new()
 	line.name = "TubulureSang"
 	line.mesh = _tube_mesh(pts, 0.0021)
@@ -633,6 +647,7 @@ func _start_transfusion() -> void:
 	lm.clearcoat = 0.8
 	line.material_override = lm
 	_transfusion.add_child(line)
+	_transfusion_line = line
 
 
 func _tube_mesh(pts: PackedVector3Array, r: float) -> ArrayMesh:
@@ -643,6 +658,12 @@ func _tube_mesh(pts: PackedVector3Array, r: float) -> ArrayMesh:
 
 
 func process(_delta: float) -> void:
+	# Le cathéter fixé et la tubulure montent et descendent avec la peau (respiration)
+	var lift := patient.breath_offset(site.x, site.z)
+	if _cath_out:
+		_cath_out.position.y = lift
+	if _transfusion_line:
+		_transfusion_line.position.y = lift
 	# Parties internes visibles en vue anatomique seulement
 	if _wire_in:
 		_wire_in.visible = wire_len > 0.0 and patient.view_mode != 0

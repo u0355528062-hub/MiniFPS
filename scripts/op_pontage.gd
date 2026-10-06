@@ -229,6 +229,7 @@ func define_steps() -> void:
 			"what": "Sternum coupé", "enter": _apnea.bind(true), "on_progress": _saw_progress, "done": _saw_done,
 			"done_msg": "Sternum ouvert de haut en bas"},
 		{"id": "ecarteur", "kind": "crank", "list": "Écarteur sternal", "inst": "ecarteur_sternal",
+			"hint": "Présente l'écarteur entre les deux moitiés du sternum", "action_prompt": "Clic · pose l'écarteur dans la fente du sternum",
 			"title": "Écarte le sternum",
 			"text": "Pose l'écarteur entre les deux moitiés du sternum (la crémaillère vers les pieds), puis tourne la manivelle (clic maintenu) : le sternum s'ouvre progressivement, sans à-coups.",
 			"label": "Valves ici", "ring": 1.2, "target": _ret_tip, "near": 0.05, "seconds": 6.0,
@@ -258,6 +259,7 @@ func define_steps() -> void:
 			"depth": 0.03, "zone_r": 0.02, "zone_depth": 0.15, "what": "Canule enfoncée", "done": _vei_done,
 			"done_msg": "Départ de la CEC : la machine fait le travail du cœur et des poumons"},
 		{"id": "clampage", "kind": "crank", "list": "Clampage aortique", "inst": "clamp_aortique",
+			"hint": "Présente le clamp en travers de l'aorte, entre la canule et le cœur", "action_prompt": "Clic · pose le clamp en travers de l'aorte",
 			"title": "Clampe l'aorte",
 			"text": "Pose le clamp en travers de l'aorte ascendante, entre la canule et le cœur, et ferme-le (clic maintenu). Le perfusionniste injecte alors la cardioplégie froide : le cœur va s'arrêter.",
 			"label": "Clamp ici", "ring": 1.0, "target": func() -> Vector3: return aorta_clamp + Vector3.UP * aorta_r,
@@ -281,6 +283,7 @@ func define_steps() -> void:
 			"label": "Clamp", "near": 0.06, "done": _unclamp_done,
 			"done_msg": "Le sang revient… le cœur fibrille !"},
 		{"id": "choc", "kind": "crank", "list": "Défibrillation", "inst": "palettes",
+			"hint": "Pose les palettes de part et d'autre du cœur", "action_prompt": "Clic maintenu · choc électrique",
 			"title": "Choc électrique interne",
 			"text": "Fibrillation ventriculaire : le cœur tremble sans battre. Pose les palettes de part et d'autre du cœur et choque (clic).",
 			"label": "Cœur", "ring": 1.4, "target": func() -> Vector3: return Patient.HEART_C + Vector3.UP * 0.05,
@@ -575,6 +578,8 @@ func _stay_sutures() -> void:
 ## deux brins passés dans un garrot de caoutchouc rouge qui remonte hors du thorax.
 func _place_purses() -> void:
 	for n in _purses.values():
+		if (n as Node).has_meta("garrot"):
+			((n as Node).get_meta("garrot") as Node).queue_free()
 		(n as Node3D).queue_free()
 	_purses.clear()
 	_purses["canule_aortique"] = _purse(aorta_top, 0.0065, root, Vector3(0.55, 0.8, 0.25), false)
@@ -588,6 +593,8 @@ func _tie_purse(inst_id: String) -> void:
 		return
 	var parent := old.get_parent() as Node3D
 	var c: Vector3 = old.get_meta("center")
+	if old.has_meta("garrot"):
+		(old.get_meta("garrot") as Node).queue_free()
 	old.queue_free()
 	_purses[inst_id] = _purse(c, 0.0022, parent, Vector3.UP, true)
 
@@ -621,12 +628,18 @@ func _purse(center: Vector3, radius: float, parent: Node3D, out: Vector3, tied: 
 			t.material_override = _thread_mat
 			node.add_child(t)
 		return node
-	# Garrot : tube de caoutchouc rouge enfilé sur les deux brins, qui sort du thorax
-	var g0 := start + o * 0.008
-	var g1 := g0 + o * 0.055
+	# Garrot : tube de caoutchouc rouge enfilé sur les deux brins ; il sort du thorax par-dessus
+	# le bord de la plaie et se couche sur le champ (immobile, même si le cœur bat)
+	var flat := Vector3(o.x, 0.0, o.z).normalized()
+	var g0 := start + Vector3.UP * 0.008
+	var g3 := Cable.on_surface(center.x + flat.x * 0.11, center.z + flat.z * 0.11, 0.0025)
+	var top_y := maxf(g3.y, Patient.top_height(center.x + flat.x * 0.07, center.z + flat.z * 0.07)) + 0.012
+	var g1 := g0 + Vector3.UP * maxf(0.02, top_y - g0.y) * 0.8 + flat * 0.02
+	var g2 := Vector3(center.x + flat.x * 0.075, top_y, center.z + flat.z * 0.075)
+	var pts := MeshUtil.bezier(g0, g1, g2, g3, 18)
 	for sd in [-1.0, 1.0]:
-		var side: Vector3 = o.cross(Vector3.FORWARD).normalized() * 0.0006 * sd
-		var brin := PackedVector3Array([start + side, start + side + o * 0.004, g0 + side])
+		var side: Vector3 = flat.cross(Vector3.UP).normalized() * 0.0006 * sd
+		var brin := PackedVector3Array([start + side, start + side + Vector3.UP * 0.004, g0 + side])
 		var b := MeshInstance3D.new()
 		b.mesh = MeshUtil.tube(brin, _radii(3, 0.0004), 4)
 		b.material_override = _thread_mat
@@ -634,9 +647,10 @@ func _purse(center: Vector3, radius: float, parent: Node3D, out: Vector3, tied: 
 	var rubber := MeshUtil.mat(Color(0.6, 0.13, 0.09), 0.45)
 	var tube := MeshInstance3D.new()
 	tube.name = "Garrot"
-	tube.mesh = MeshUtil.tube(PackedVector3Array([g0, g0.lerp(g1, 0.5), g1]), _radii(3, 0.0022), 10)
+	tube.mesh = MeshUtil.tube(pts, _radii(pts.size(), 0.0022), 10)
 	tube.material_override = rubber
-	node.add_child(tube)
+	root.add_child(tube)
+	node.set_meta("garrot", tube)
 	return node
 
 

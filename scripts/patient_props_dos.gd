@@ -33,7 +33,10 @@ func build() -> void:
 		return
 	var n0 := get_child_count()
 	_spo2_clip()
-	_iv_line()
+	if options.get("iv", true):
+		_iv_line()
+	else:
+		_failed_iv()
 	_ecg()
 	_bp_cuff()
 	for i in range(n0, get_child_count()):
@@ -384,6 +387,20 @@ func _iv_line() -> void:
 	var path := PackedVector3Array([hub, hub + dir * 0.02 + Vector3.UP * 0.002, _on(p.x + 0.05, p.z - 0.035, 0.002),
 		_on(p.x + 0.12, -0.285, 0.002), Vector3(p.x + 0.25, 0.55, -0.36), Vector3(0.75, 0.62, -0.55), drip])
 	_cable(path, 0.05, 0.0021, _clear(Color(0.9, 0.95, 1.0, 0.55), 0.1), "Tubulure", 2, 1, 0.025)
+
+
+## Veines du bras introuvables (choc) : deux tentatives ratées, pansements ronds avec une tache
+## de sang au pli du coude et sur l'avant-bras droit.
+func _failed_iv() -> void:
+	for t in [0.6, 0.74]:
+		var sec := _arm_section("R", t)
+		var p: Vector3 = sec["c"]
+		var top := Vector3(p.x, float(sec["top"]), p.z)
+		var b := Basis(Quaternion(Vector3.UP, Patient.skin_normal(p.x, p.z)))
+		var plaster := MeshUtil.cylinder_instance(self, 0.011, 0.0012, top, _mat(Color(0.93, 0.88, 0.8), 0.8), "PansementRond")
+		plaster.global_transform = Transform3D(b, top + b.y * 0.0006)
+		var spot := MeshUtil.cylinder_instance(self, 0.0032, 0.0012, top, _mat(Color(0.5, 0.06, 0.06), 0.6), "TacheSang")
+		spot.global_transform = Transform3D(b, top + b.y * 0.0008)
 
 
 ## Électrodes de l'ECG (épaules et flanc gauche, le thorax reste libre pour les gestes) : les

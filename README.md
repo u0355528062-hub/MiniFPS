@@ -52,7 +52,8 @@ Configuration conseillée : carte graphique compatible Vulkan. La qualité graph
 6. **Pose du drain** — le drain remonte vers l'apex, le poumon se regonfle, l'oxygène remonte.
 7. **Fixation** — trois points au porte-aiguille.
 
-Bilan final : note (S à D), temps, erreurs, précision du repère et de l'incision, compte rendu.
+Bilan final : note (S à D), temps, erreurs, précision du repère et de l'incision, compte rendu
+(voir **Note** plus bas).
 
 ## Exsufflation à l'aiguille
 
@@ -94,13 +95,16 @@ sous-clavière gauche.
 1. **Repérage** — sous le milieu de la clavicule, à 1-2 cm de l'os. Le point est jugé sur la
    clavicule et les vaisseaux de l'atlas : sur l'os, trop bas, trop en dedans (l'aiguille
    plongerait vers le poumon), trajet qui croiserait l'artère…
-2. **Désinfection**, 3. **anesthésie locale** — il faut attendre qu'elle agisse avant de piquer.
+2. **Désinfection** — puis l'aide pose un champ stérile fenêtré (simulé en tissu) : la fenêtre,
+   centrée sur le point marqué, est la seule peau accessible ; électrodes, oxymètre, perfusion
+   et brassard passent dessous. 3. **Anesthésie locale** — il faut attendre qu'elle agisse.
 4. **Ponction** — l'aiguille glisse sous la clavicule vers le creux sus-sternal en aspirant ; le
    sang veineux sombre revient dans la seringue. Trop profond : artère et sommet du poumon.
 5. **Guide** — poussé dans l'aiguille (clic maintenu), 15 à 20 cm ; trop loin, il touche le
    cœur (extrasystoles). En vue anatomique (V), on le voit suivre la veine jusqu'au cœur.
 6. **Dilatateur**, 7. **cathéter** glissé sur le guide jusqu'à 16-19 cm (pointe dans la veine
-   cave supérieure), 8. **fixation** par deux points.
+   cave supérieure), 8. **fixation** par deux points ; la transfusion part (poche de sang sur la
+   potence, tubulure jusqu'à la voie distale du cathéter).
 
 ## Thoracotomie de sauvetage
 
@@ -146,7 +150,8 @@ l'artère mammaire interne gauche sur l'IVA, cœur arrêté.
 5. **Péricarde** — ouvert aux ciseaux de l'aorte au diaphragme, largement (toute la face avant
    du cœur, graisse dans les sillons des coronaires) ; quatre fils de suspension tirent ses bords
    vers la peau : le cœur bat dans son berceau.
-6. **Canule aortique**, puis 7. **canule veineuse** dans l'oreillette droite — les tubulures
+6. **Canule aortique**, puis 7. **canule veineuse** dans l'oreillette droite, chacune au milieu
+   d'une bourse (fil bleu passé tout autour, garrot de caoutchouc rouge) — les tubulures
    souples, rouge vif et sombre, sortent vers le haut du champ, passent sur l'épaule gauche et
    pendent jusqu'à la machine : départ de la CEC (pompes à galets qui tournent, débit
    4,8 L/min ; le scope affiche la pression de la machine, on arrête de ventiler).
@@ -159,12 +164,30 @@ l'artère mammaire interne gauche sur l'IVA, cœur arrêté.
     fibrille (fibrillation ventriculaire au scope, le cœur tremble).
 12. **Choc interne** — palettes de part et d'autre du cœur, un clic : il repart en rythme régulier.
 13. **Décanulation** — la machine ralentit puis s'arrête, le cœur reprend la main ; les canules
-    sont retirées.
+    sont retirées et les bourses nouées.
 14. **Fermeture** — l'écarteur est retiré, la peau revient sur le sternum ; cinq fils d'acier
     passent autour des deux moitiés, puis sont serrés et torsadés : le sternum se referme, la
     peau est agrafée.
 
 Quand le repère de l'étape sort de l'écran, une flèche au bord de l'image indique où regarder.
+Sous le viseur, une ligne rappelle ce que fait la souris pour le geste en cours (clic maintenu
+pour pousser, couper, frotter…) ; elle s'efface dès que le geste est commencé.
+
+## Note
+
+Chaque intervention part de 100 points :
+
+- **− 12** par erreur (repère faux — une seule fois par étape —, geste trop profond, organe
+  touché, anesthésie pas encore efficace…) ;
+- **− 6** par mauvais instrument pris ;
+- **− 1** toutes les 12 secondes au-delà du temps de référence (la durée affichée au menu) ;
+- **+ 4** si le repère au feutre est à moins de 6 mm du point idéal, **+ 3** si l'incision suit le
+  tracé à moins de 1,5 mm près.
+
+**S** : aucune erreur et au moins 95 points · **A** : 85 · **B** : 70 · **C** : 50 · **D** en
+dessous. L'écran de fin détaille le calcul. En jeu, le chrono affiche le temps de référence et
+passe à l'orange quand on le dépasse. Le meilleur résultat de chaque intervention (note et
+temps) est gardé et affiché sur sa carte au menu.
 
 ## Anatomie et graphismes
 

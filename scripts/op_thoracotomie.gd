@@ -168,6 +168,7 @@ func define_steps() -> void:
 			"what": "Intercostaux et plèvre ouverts", "on_progress": _wall_progress,
 			"done": _wall_done, "done_msg": "Plèvre ouverte : le poumon s'écarte"},
 		{"id": "ecarteur", "kind": "crank", "list": "Écarteur", "inst": "finochietto",
+			"action_prompt": "Clic · pose l'écarteur dans la brèche, valves sous les côtes",
 			"title": "Écarte les côtes",
 			"text": "Pose l'écarteur de Finochietto dans l'incision (les valves sous les côtes), puis tourne la manivelle (clic maintenu) : les côtes s'écartent de 8 cm.",
 			"label": "Valves ici", "ring": 1.0, "target": _seat_tip, "near": 0.05, "seconds": 7.0,

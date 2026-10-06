@@ -67,6 +67,10 @@ static var _rib_grid := [0, 0, 0.0, 0.0, 0.0025]
 static var _skin_h := PackedFloat32Array()
 static var _drape_h := PackedFloat32Array()
 static var _drape_src := ""  ## carte de hauteur des champs chargée
+static var _glue_on := false  ## bord adhésif autour d'une fenêtre (champ fenêtré)
+static var _glue_min := Vector2.ZERO
+static var _glue_max := Vector2.ZERO
+const GLUE_W := 0.045  ## largeur collée autour de la fenêtre (frame_w du shader des champs)
 static var _nx := 0
 static var _nz := 0
 static var _x0 := 0.0
@@ -364,9 +368,31 @@ static func body_height(x: float, z: float) -> float:
 	return TABLE_TOP if on_table(x, z) else -1.0
 
 
-## Dessus du champ stérile (-1 là où il n'y a pas de champ).
+## Dessus du champ stérile tel qu'il est dessiné (-1 là où il n'y a pas de champ) : la face du
+## dessus est écartée de 3 mm par le shader, et autour d'une fenêtre le bord adhésif est plaqué
+## sur la peau (même calcul que drape.gdshader). Instruments et câbles se posent dessus.
 static func drape_height(x: float, z: float) -> float:
-	return _sample(_drape_h, x, z)
+	var h := _sample(_drape_h, x, z)
+	if h <= 0.0:
+		return h
+	h += 0.003
+	if _glue_on:
+		var o := Vector2(maxf(maxf(_glue_min.x - x, x - _glue_max.x), 0.0), maxf(maxf(_glue_min.y - z, z - _glue_max.y), 0.0))
+		var d := o.length()
+		if d < GLUE_W:
+			var sy := _sample(_skin_h, x, z)
+			if sy > 0.0 and h > sy - 0.03:
+				var n := skin_normal(x, z)
+				var k := (1.0 - smoothstep(GLUE_W * 0.5, GLUE_W, d)) * smoothstep(0.3, 0.55, n.y)
+				h = lerpf(h, sy + 0.003 + 0.01 * (1.0 - n.y), k)
+	return h
+
+
+## Fenêtre autour de laquelle le champ est collé à la peau (pour drape_height).
+static func set_glue_window(on: bool, wmin := Vector2.ZERO, wmax := Vector2.ZERO) -> void:
+	_glue_on = on
+	_glue_min = wmin
+	_glue_max = wmax
 
 
 ## Surface solide la plus haute (peau ou champ posé dessus).
@@ -717,6 +743,7 @@ func windowed_drape() -> bool:
 ## Champ stérile simulé (tissu tombé sur le patient), fenêtre collée autour du site ; sur le dos,
 ## drap qui couvre le bas du corps (pas de champ : urgence), ou champs propres à l'opération.
 func _build_drape() -> void:
+	set_glue_window(false)
 	var path: String = drape_override.get("glb", POSES[pose_id]["drape_glb"])
 	if not ResourceLoader.exists(path):
 		return
@@ -728,6 +755,7 @@ func _build_drape() -> void:
 		drape_mat = _drape_material(Color(0.17, 0.42, 0.53), WINDOW_MIN, WINDOW_MAX)
 	else:
 		drape_mat = _drape_material(Color(0.80, 0.84, 0.86), Vector2.ZERO, Vector2.ZERO)
+	set_glue_window(windowed_drape(), WINDOW_MIN, WINDOW_MAX)
 	var head_mat: ShaderMaterial = null
 	for mi in drape.find_children("*", "MeshInstance3D", true, false):
 		var m: ShaderMaterial = drape_mat
@@ -793,6 +821,7 @@ func reveal_extra_drape(instant: bool, shift := Vector2.ZERO) -> void:
 			m.set_shader_parameter("frame_on", 1.0)
 	use_drape_map(_extra_map)
 	cut_drape_window(WINDOW_MIN, WINDOW_MAX)
+	set_glue_window(true, WINDOW_MIN, WINDOW_MAX)
 	if props and props.has_method("hide_under_drape"):
 		props.hide_under_drape(_extra_edge)
 	if not instant:

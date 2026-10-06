@@ -11,6 +11,9 @@ signal restart_pressed
 signal main_menu_pressed
 signal quit_pressed
 
+## Couleur de chaque note (médaille de fin, record au menu)
+const GRADE_COLORS := {"S": Color(1.0, 0.82, 0.3), "A": Color(0.35, 0.95, 0.55), "B": Color(0.22, 0.92, 0.82), "C": Color(1.0, 0.78, 0.3), "D": Color(1.0, 0.36, 0.33)}
+
 var op: Operation
 var root: Control
 var _dim: ColorRect
@@ -166,7 +169,7 @@ func _build_main() -> Control:
 	var b3 := UIKit.button("Quitter", 380)
 	b3.pressed.connect(func() -> void: quit_pressed.emit())
 	col.add_child(b3)
-	var foot := UIKit.label("Anatomie : atlas Z-Anatomy (CC BY-SA 4.0, d'après BodyParts3D)   ·   Version 5.0", 13, Color(1, 1, 1, 0.4))
+	var foot := UIKit.label("Anatomie : atlas Z-Anatomy (CC BY-SA 4.0, d'après BodyParts3D)   ·   Version 6.0", 13, Color(1, 1, 1, 0.4))
 	foot.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	foot.position = Vector2(90, -50)
 	c.add_child(foot)
@@ -218,6 +221,14 @@ func _op_card(e: Dictionary) -> Button:
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right.add_child(info)
+	# Meilleur résultat obtenu sur cette intervention
+	var rec: Dictionary = Records.best(e["id"]) if ready else {}
+	if not rec.is_empty():
+		var g: String = rec["grade"]
+		var bl := UIKit.label("RECORD  %s  ·  %s" % [g, UIKit.fmt_time(rec["time"])], 12, GRADE_COLORS.get(g, UIKit.TEXT), true)
+		bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		right.add_child(bl)
 	if ready:
 		var op_id: String = e["id"]
 		b.mouse_entered.connect(func() -> void: Sfx.play("survol", Vector3.INF, -22.0, 1.6))
@@ -465,7 +476,19 @@ func show_end(elapsed: float, errors: int, grade: String, summary: String, log: 
 	top.add_child(badge)
 	var info := UIKit.vbox(8)
 	top.add_child(info)
-	info.add_child(UIKit.label("INTERVENTION RÉUSSIE", 15, UIKit.OK, true))
+	var head := UIKit.hbox(12)
+	info.add_child(head)
+	# Patient sauvé dans tous les cas ; avec trop d'erreurs, le geste est à revoir
+	var good := grade in ["S", "A", "B"]
+	head.add_child(UIKit.label("INTERVENTION RÉUSSIE" if good else "INTERVENTION TERMINÉE  ·  GESTE À REVOIR", 15, UIKit.OK if good else UIKit.WARN, true))
+	if quality.get("record", false):
+		var rec := UIKit.label("NOUVEAU RECORD", 13, Color(0.05, 0.05, 0.05), true)
+		var rsb := UIKit.box(Color(1.0, 0.82, 0.3), 6, Color(0, 0, 0, 0), 0, 8)
+		rsb.shadow_size = 0
+		rsb.content_margin_top = 2
+		rsb.content_margin_bottom = 2
+		rec.add_theme_stylebox_override("normal", rsb)
+		head.add_child(rec)
 	info.add_child(UIKit.label(op.name, 36, UIKit.TEXT, true))
 	var s := UIKit.label(summary, 17, Color(0.85, 0.9, 0.92))
 	s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -497,7 +520,7 @@ func show_end(elapsed: float, errors: int, grade: String, summary: String, log: 
 		if np > 0:
 			parts += "  − %d (%d mauvais instrument%s)" % [int(quality["pen_picks"]), np, "s" if np > 1 else ""]
 		if float(quality["pen_time"]) >= 0.5:
-			parts += "  − %d (temps au-delà de la référence)" % int(round(float(quality["pen_time"])))
+			parts += "  − %d (temps)" % int(round(float(quality["pen_time"])))
 		if quality.get("bonus", 0.0) > 0.0:
 			parts += "  + %d (précision)" % int(quality["bonus"])
 		var pts := UIKit.label("POINTS   %s  =  %d" % [parts, int(round(float(quality["score"])))], 15, UIKit.TEXT_DIM)
@@ -541,7 +564,7 @@ class GradeBadge:
 	func _draw() -> void:
 		var c := size * 0.5
 		var r := minf(size.x, size.y) * 0.46
-		var col: Color = {"S": Color(1.0, 0.82, 0.3), "A": UIKit.OK, "B": UIKit.ACCENT, "C": UIKit.WARN, "D": UIKit.BAD}.get(grade, UIKit.TEXT)
+		var col: Color = Menus.GRADE_COLORS.get(grade, UIKit.TEXT)
 		draw_circle(c, r, Color(col, 0.12))
 		var k := clampf(_t / 0.8, 0.0, 1.0)
 		draw_arc(c, r, -PI * 0.5, -PI * 0.5 + TAU * k, 64, col, 5.0, true)

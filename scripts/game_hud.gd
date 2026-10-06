@@ -14,6 +14,8 @@ var step_kind := "":  ## type du geste en cours (aide « mains nues » : manivel
 		step_kind = v
 		_work_t = 0.0
 var hand_prompt := ""  ## aide « main vide » propre à l'étape (clamp à fermer…), sinon celle de la manivelle
+var action_prompt := ""  ## commande souris propre à l'étape (sinon celle du type de geste)
+var reference := 0.0  ## temps de référence de l'intervention (s) : affiché à côté du chrono
 
 var root: Control
 var _card: PanelContainer
@@ -244,6 +246,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_H:
 				_details = not _details
 				_text.visible = _details
+				_relayout()
 			KEY_F1:
 				_help.visible = not _help.visible
 
@@ -294,7 +297,15 @@ func _refresh_steps() -> void:
 		else:
 			l.text = "○  " + t
 			l.add_theme_color_override("font_color", UIKit.TEXT_DIM)
+	_relayout()
+
+
+## La carte de consigne reprend la taille de son texte (elle ne rétrécit pas toute seule) et la
+## liste des étapes se range juste dessous.
+func _relayout() -> void:
+	_card.reset_size()
 	await get_tree().process_frame
+	_card.reset_size()
 	_steps_box.position.y = _card.position.y + _card.size.y + 14
 
 
@@ -344,8 +355,12 @@ func toast(text: String, ok := true) -> void:
 
 func set_status(elapsed: float, errors: int) -> void:
 	var e := "aucune erreur" if errors == 0 else ("%d erreur%s" % [errors, "s" if errors > 1 else ""])
-	_status.text = "%s   ·   %s" % [UIKit.fmt_time(elapsed), e]
-	_status.add_theme_color_override("font_color", UIKit.TEXT if errors == 0 else UIKit.WARN)
+	# Temps de référence : au-delà, la note baisse (le chrono passe à l'orange)
+	var t := UIKit.fmt_time(elapsed)
+	if reference > 0.0:
+		t += " / " + UIKit.fmt_time(reference)
+	_status.text = "%s   ·   %s" % [t, e]
+	_status.add_theme_color_override("font_color", UIKit.TEXT if errors == 0 and (reference <= 0.0 or elapsed <= reference) else UIKit.WARN)
 
 
 func show_end(_elapsed: float, _errors: int, _grade: String, _summary: String, _log: Array, _quality: Dictionary) -> void:
@@ -408,12 +423,13 @@ func _process(delta: float) -> void:
 		_slot_labels[i].add_theme_color_override("font_color", UIKit.TEXT_DIM if inst.parked else UIKit.TEXT)
 	var pr := ""
 	if hand.held == null and hand.hovered:
-		pr = "Clic gauche · Prendre  « %s »" % hand.hovered.label
+		var verb := "Retirer" if step_kind == "pick" and hand.hovered.id == required_id and hand.hovered.parked else "Prendre"
+		pr = "Clic gauche · %s  « %s »" % [verb, hand.hovered.label]
 	elif hand.held and not hand.on_patient and hand.held.id == required_id:
 		pr = "Vise la zone sur le patient"
 	elif hand.held and hand.held.id == required_id and _work_t < 1.5:
 		# Rappel de la commande du geste ; il s'efface dès qu'on a commencé
-		pr = ACTION_PROMPTS.get(step_kind, "")
+		pr = action_prompt if action_prompt != "" else ACTION_PROMPTS.get(step_kind, "")
 	elif hand.held == null and step_kind == "pump":
 		pr = "Vise le cœur · Clic gauche en rythme pour comprimer"
 	elif hand.held == null and step_kind == "crank" and _crank_ready():
