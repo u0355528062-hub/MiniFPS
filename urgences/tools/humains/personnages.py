@@ -170,4 +170,17 @@ PERSONNAGES = {
     "p_femme_blouse": _p("p_femme_blouse", 0.0, 0.70, 0.55, "claire", "gris", "attache", patient_blouse()),
     "p_homme_blouse": _p("p_homme_blouse", 1.0, 0.55, 0.6, "mate", "noir", "court", patient_blouse(),
                          origines={"caucasian": 0.5, "african": 0.5}, barbe=0.4),
+    # --- Collègues et secouristes -----------------------------------------------------------------
+    "brancardier_paul": _p("brancardier_paul", 1.0, 0.5, 0.6, "moyenne", "brun", "court", soignant("pyjama_blanc"),
+                           barbe=0.5, muscle=0.65),
+    "ide_julien": _p("ide_julien", 1.0, 0.42, 0.45, "claire", "blond", "court", soignant("pyjama_bleu"), barbe=0.2),
+    "interne_ines": _p("interne_ines", 0.0, 0.40, 0.45, "mate", "noir", "attache", soignant("pyjama_bordeaux"),
+                       origines={"caucasian": 0.4, "african": 0.3, "asian": 0.3}),
+    "pompier_1": _p("pompier_1", 1.0, 0.45, 0.5, "claire", "chatain", "court",
+                    soignant("tenue_pompier", manches=1.95, chaussures="baskets_noires"), barbe=0.3, muscle=0.7),
+    "pompier_2": _p("pompier_2", 1.0, 0.5, 0.55, "brune", "noir", "court",
+                    soignant("tenue_pompier", manches=1.95, chaussures="baskets_noires"), origines={"african": 1.0},
+                    barbe=0.2, muscle=0.7),
+    "ambulancier_samu": _p("ambulancier_samu", 0.0, 0.48, 0.5, "claire", "chatain", "attache",
+                           soignant("tenue_samu", manches=1.95, chaussures="baskets_noires")),
 }

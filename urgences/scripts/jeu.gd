@@ -74,6 +74,10 @@ func _ready() -> void:
 	add_child(menu_pause)
 	menu_pause.quitter_demande.connect(func(): get_tree().quit())
 	garde.notification.connect(func(t, c, du): hud.notifier(t, c, du))
+	garde.tache_finie.connect(func(p, t):
+		if t.has("traitement"):
+			_effet_traitement(p, t["traitement"])
+		_rafraichir_hud())
 	garde.patients_changes.connect(_rafraichir_hud)
 	for p in garde.patients:
 		_brancher_patient(p)
@@ -290,8 +294,22 @@ func _action_prefixee(id: String) -> void:
 		_commencer_action(id, c[0], c[1])
 	elif id.begins_with("e_"):
 		var ex := id.substr(2)
-		garde.demander_examen(p, ex)
-		hud.notifier("%s demandé pour %s." % [Pathologies.EXAMENS[ex][0], p.civilite()], ThemeHopital.BLEU, 4.0)
+		if p.examens.has(ex) or p.has_meta("demande_" + ex):
+			return
+		p.set_meta("demande_" + ex, true)
+		match ex:
+			"bio", "gaz", "alcool":
+				garde.confier("prelevement", p, {"examen": ex})
+				hud.notifier("%s : prélèvement confié à l'IDE." % p.civilite(), ThemeHopital.BLEU, 4.0)
+			"ecg":
+				garde.confier("ecg", p, {"examen": ex})
+				hud.notifier("%s : ECG demandé à l'équipe." % p.civilite(), ThemeHopital.BLEU, 4.0)
+			"radio", "scanner":
+				garde.confier("imagerie", p, {"examen": ex})
+				hud.notifier("%s : %s — le brancardier l'emmène." % [p.civilite(), Pathologies.EXAMENS[ex][0]], ThemeHopital.BLEU, 4.0)
+			_:
+				garde.demander_examen(p, ex)
+				hud.notifier("%s demandé pour %s." % [Pathologies.EXAMENS[ex][0], p.civilite()], ThemeHopital.BLEU, 4.0)
 		_action_menu("examens")
 	elif id.begins_with("t_"):
 		var t := id.substr(2)
@@ -316,7 +334,13 @@ func _action_prefixee(id: String) -> void:
 					p.traitements.append(t)
 				_rafraichir_hud())
 			return
-		_commencer_action(id, Pathologies.TRAITEMENTS[t], 120.0)
+		# Les autres traitements sont prescrits et administrés par un·e IDE.
+		if p.has_meta("prescrit_" + t):
+			return
+		p.set_meta("prescrit_" + t, true)
+		garde.confier("soin", p, {"traitement": t})
+		hud.notifier("Prescription : %s pour %s — l'IDE s'en charge." % [Pathologies.TRAITEMENTS[t], p.civilite()], ThemeHopital.BLEU, 4.0)
+		_action_menu("traitements")
 	elif id.begins_with("d_"):
 		p.diagnostic = id.substr(2)
 		hud.notifier("Diagnostic retenu : " + Pathologies.par_id(p.diagnostic)["diagnostic"], ThemeHopital.BLEU, 5.0)
@@ -339,8 +363,10 @@ func _action_prefixee(id: String) -> void:
 			hud.notifier("Attribuez d'abord un niveau de tri.", ThemeHopital.ORANGE)
 			return
 		var place := id.substr(2)
-		garde.installer(p, place)
-		hud.notifier("%s installé(e) en %s." % [p.civilite(), Garde.nom_place(place)], ThemeHopital.VERT, 5.0)
+		garde.occupation[place] = p
+		garde.liberer_siege(p)
+		garde.confier("transfert", p, {"place": place})
+		hud.notifier("%s : le brancardier l'installe en %s." % [p.civilite(), Garde.nom_place(place)], ThemeHopital.VERT, 5.0)
 
 
 ## Lance un mini-jeu plein écran ; le jeu continue derrière (le temps passe !).

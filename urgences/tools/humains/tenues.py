@@ -65,6 +65,18 @@ def peindre_tenue(nom, taille=2048, graine=5):
         cad = dev & (np.abs(bord - 1.0) < 0.06)
         haut += np.where(dans, 0.35, 0.0) - 0.8 * cad
         alb *= np.where(cad[..., None], 0.85, 1.0)
+    # Bandes horizontales (tenues de secours : bandes rétroréfléchissantes aux bras et au torse).
+    if "bandes" in spec:
+        bc = np.array(spec["bandes"]) ** 2.2
+        torse_y = art["breast.L____head"][1] - 0.04
+        b = (np.abs(y - torse_y) < 0.025).astype(np.float32)
+        for c in ("L", "R"):
+            coude = art["lowerarm01.%s____head" % c][1]
+            b += (np.abs(y - (coude - 0.05)) < 0.02) * (np.abs(pos[..., 0]) > abs(art["upperarm01.%s____head" % c][0]) + 0.02)
+        genou = art["lowerleg01.L____head"][1]
+        b += (np.abs(y - (genou - 0.12)) < 0.022) * (y < art["pelvis.L____tail"][1] - 0.2)
+        b = np.clip(ndimage.gaussian_filter(b, 1.0), 0, 1)
+        alb = alb * (1 - b[..., None]) + bc * b[..., None]
     # Logo / texte au dos (ex. « SAMU », « URGENCES »).
     rug = np.clip(spec.get("rug", 0.85) + 0.05 * tis - 0.05 * v, 0.3, 1.0)
     nrm = normale_depuis_hauteur(haut_fin + 6.0 * haut, 1.0)
@@ -110,6 +122,8 @@ def peindre_cheveux(couleur, taille=1024, graine=7):
 
 
 TENUES = {
+    "tenue_pompier": {"couleur": (0.10, 0.13, 0.22), "fil": (0.08, 0.10, 0.18), "poche": True, "bandes": (0.95, 0.85, 0.1)},
+    "tenue_samu": {"couleur": (0.90, 0.91, 0.92), "fil": (0.2, 0.35, 0.65), "poche": True, "bandes": (0.15, 0.30, 0.65)},
     "pyjama_bleu": {"couleur": (0.36, 0.55, 0.78), "fil": (0.30, 0.47, 0.70), "poche": True},
     "pyjama_vert": {"couleur": (0.33, 0.62, 0.55), "fil": (0.28, 0.53, 0.47), "poche": True},
     "pyjama_bordeaux": {"couleur": (0.50, 0.16, 0.24), "fil": (0.42, 0.12, 0.2), "poche": True},

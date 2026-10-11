@@ -30,7 +30,11 @@ static var _materiaux := {}
 
 
 func _ready() -> void:
-	var ps: PackedScene = load(DOSSIER + "modeles/" + modele + ".glb")
+	var chemin := DOSSIER + "modeles/" + modele + ".glb"
+	if not ResourceLoader.exists(chemin):
+		push_warning("Modèle absent : %s (remplacé)" % modele)
+		chemin = DOSSIER + "modeles/medecin_karim.glb"
+	var ps: PackedScene = load(chemin)
 	var m: Node3D = ps.instantiate()
 	m.name = "Modele"
 	add_child(m)

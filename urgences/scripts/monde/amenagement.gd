@@ -250,7 +250,8 @@ func dechocage(origine: Vector3, taille: Vector2) -> Array:
 		s.shadow_enabled = k == 0
 		s.light_size = 0.3
 		lumieres.add_child(s)
-		points["dechoc_%d" % (k + 1)] = {"place_patient": o + Vector3(x, 0.80, 2.07), "moniteur": mons[k]}
+		points["dechoc_%d" % (k + 1)] = {"place_patient": o + Vector3(x, 0.80, 2.07), "moniteur": mons[k],
+			"entree": o + Vector3(x + 0.6, 0, 4.2)}
 	poser("chariot_urgence", Vector3(4.2, 0, 1.0), 0.0)
 	poser("lavabo", Vector3(taille.x - 0.06, 0, 5.2), -90.0)
 	poser("armoire_murale", Vector3(taille.x - 0.26, 1.75, 2.6), -90.0)

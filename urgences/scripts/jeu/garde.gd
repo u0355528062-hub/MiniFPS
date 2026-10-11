@@ -37,6 +37,8 @@ var bilans := []                            # résumés des patients orientés
 var prochaine_arrivee := 0.0
 var arrivees_actives := true
 var _accu := 0.0
+var collegues: Array[Collegue] = []
+var taches := []                            # tâches en attente d'un collègue libre
 var _rng := RandomNumberGenerator.new()
 
 
@@ -47,6 +49,22 @@ func _init() -> void:
 
 func _ready() -> void:
 	prochaine_arrivee = heure + 4.0 * 60.0
+	# L'équipe de garde : deux IDE, un brancardier, une interne, au poste de soins.
+	var poste := Vector3(17.0, 0, 18.6)
+	for c in [["ide", "Claire", "infirmiere_claire"], ["ide", "Julien", "ide_julien"],
+			["brancardier", "Paul", "brancardier_paul"], ["interne", "Inès", "interne_ines"]]:
+		if not ResourceLoader.exists("res://assets/personnages/modeles/%s.glb" % c[2]):
+			continue
+		var co := Collegue.new()
+		co.role = c[0]
+		co.nom = c[1]
+		co.modele = c[2]
+		co.service = service
+		co.poste = poste + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-0.6, 0.8))
+		co.name = "Collegue_" + c[1]
+		service.add_child(co)
+		co.global_position = co.poste
+		collegues.append(co)
 
 
 static func heure_texte_de(s: float) -> String:
@@ -64,6 +82,7 @@ func _process(delta: float) -> void:
 	if _accu < 1.0:
 		return
 	_accu = 0.0
+	_distribuer_taches()
 	# Arrivées.
 	if arrivees_actives and heure >= prochaine_arrivee and patients.size() < MAX_PATIENTS:
 		generer_arrivee()
@@ -170,8 +189,27 @@ func ajouter_patient(d: Dictionary) -> PatientJeu:
 	return p
 
 
-func generer_arrivee(patho_id := "") -> PatientJeu:
+func generer_arrivee(patho_id := "", convoi := true) -> PatientJeu:
 	var d := creer_dossier(patho_id)
+	if d["mode"] == "ambulance" and convoi:
+		# Arrivée animée : le fourgon arrive par la route, les secouristes amènent le brancard.
+		d["posture"] = "allonge"
+		var pc := ajouter_patient(d)
+		pc.changer_etat("arrivee", "Véhicule de secours")
+		var cv := Convoi.new()
+		cv.service = service
+		cv.patient = pc
+		cv.samu = _rng.randf() < 0.5
+		cv.name = "Convoi_" + d["iep"]
+		service.add_child(cv)
+		var equipe := "le SAMU" if cv.samu else "les pompiers"
+		notification.emit("Arrivée imminente par %s : %s, %d ans — %s" % [equipe, pc.civilite(), d["age"], d["motif"].to_lower()],
+			ThemeHopital.ROUGE, 9.0)
+		cv.patient_depose.connect(func(p):
+			p.changer_etat("accueil", "Sas ambulances")
+			notification.emit("%s est au sas ambulances : tri et installation à faire." % p.civilite(), ThemeHopital.ORANGE, 7.0)
+			patients_changes.emit())
+		return pc
 	if d["mode"] == "ambulance":
 		d["posture"] = "allonge"
 		var p := ajouter_patient(d)
@@ -224,6 +262,12 @@ static func nom_place(id: String) -> String:
 	return id
 
 
+func liberer_siege(p: PatientJeu) -> void:
+	if p.place.begins_with("siege_") and occupation.get(p.place) == p:
+		occupation.erase(p.place)
+		p.place = ""
+
+
 func liberer(p: PatientJeu) -> void:
 	if p.place != "" and occupation.get(p.place) == p:
 		occupation.erase(p.place)
@@ -270,9 +314,10 @@ func asseoir_direct(p: PatientJeu) -> void:
 
 ## Installe un patient sur le brancard d'un box ou du déchocage (pris en charge par l'équipe).
 func installer(p: PatientJeu, id: String) -> void:
-	if occupation.has(id):
+	if occupation.has(id) and occupation[id] != p:
 		return
-	liberer(p)
+	if p.place != id:
+		liberer(p)
 	occupation[id] = p
 	p.place = id
 	var info: Dictionary = service.points[id]
@@ -289,6 +334,105 @@ func installer(p: PatientJeu, id: String) -> void:
 	(info["moniteur"] as Moniteur).connecter(p.constantes)
 	(info["moniteur"] as Moniteur).brancher(false)
 	patients_changes.emit()
+
+
+# --- Tâches confiées à l'équipe ----------------------------------------------------------------
+const ROLES := {"soin": ["ide"], "prelevement": ["ide"], "ecg": ["ide", "interne"], "transfert": ["brancardier"],
+	"imagerie": ["brancardier"]}
+
+
+func confier(type: String, p: PatientJeu, data := {}) -> void:
+	var t := {"type": type, "patient": p}
+	t.merge(data)
+	taches.append(t)
+	_distribuer_taches()
+
+
+func _distribuer_taches() -> void:
+	var reste := []
+	for t in taches:
+		var p: PatientJeu = t["patient"]
+		if not is_instance_valid(p) or p.decede:
+			continue
+		var co := _collegue_libre(ROLES[t["type"]])
+		if co == null:
+			reste.append(t)
+			continue
+		_lancer_tache(co, t)
+	taches = reste
+
+
+func _collegue_libre(roles: Array) -> Collegue:
+	for co in collegues:
+		if co.role in roles and not co.occupe():
+			return co
+	return null
+
+
+func _au_chevet(p: PatientJeu) -> Vector3:
+	if p.place.begins_with("box_") or p.place.begins_with("dechoc_"):
+		var pl: Vector3 = service.points[p.place]["place_patient"]
+		return Vector3(pl.x + 0.75, 0, pl.z + 0.35)
+	var dir := Vector3(sin(p.rotation.y), 0, cos(p.rotation.y))
+	return Vector3(p.global_position.x, 0, p.global_position.z) + dir * 0.8
+
+
+func _lancer_tache(co: Collegue, t: Dictionary) -> void:
+	var p: PatientJeu = t["patient"]
+	match t["type"]:
+		"soin":
+			co.executer(t, _au_chevet(p), 120.0, func():
+				if is_instance_valid(p) and not t["traitement"] in p.traitements:
+					p.traitements.append(t["traitement"])
+					tache_finie.emit(p, t)
+					notification.emit("%s : %s — fait par %s." % [p.civilite(), Pathologies.TRAITEMENTS[t["traitement"]], co.nom],
+						ThemeHopital.VERT, 5.0)
+					patients_changes.emit(), p.global_position)
+		"prelevement", "ecg":
+			var duree := 180.0 if t["type"] == "prelevement" else 300.0
+			co.executer(t, _au_chevet(p), duree, func():
+				if is_instance_valid(p):
+					demander_examen(p, t["examen"])
+					if t["type"] == "ecg":
+						p.examens["ecg"]["pret"] = heure
+					notification.emit("%s : %s réalisé par %s." % [p.civilite(), "Prélèvement" if t["type"] == "prelevement" else "ECG",
+						co.nom], ThemeHopital.BLEU, 4.0), p.global_position)
+		"imagerie":
+			co.executer(t, _au_chevet(p), 240.0, func():
+				if is_instance_valid(p):
+					demander_examen(p, t["examen"])
+					notification.emit("%s : patient emmené en imagerie (%s) par %s." % [p.civilite(),
+						Pathologies.EXAMENS[t["examen"]][0], co.nom], ThemeHopital.BLEU, 4.0), p.global_position)
+		"transfert":
+			_transfert(co, t)
+
+
+## Le brancardier va chercher le patient et l'accompagne jusqu'à son box.
+func _transfert(co: Collegue, t: Dictionary) -> void:
+	var p: PatientJeu = t["patient"]
+	var place: String = t["place"]
+	co.tache = t
+	co.marcheur.aller(_au_chevet(p))
+	await co.marcheur.arrive
+	if not is_instance_valid(p):
+		co.tache = {}
+		return
+	if p.has_meta("brancard"):
+		# Patient couché (sas) : le brancard est poussé jusqu'au box (déplacement direct).
+		await get_tree().create_timer(2.0).timeout
+	else:
+		p.poser_posture("attente")
+		var box_entree: Vector3 = service.points[place].get("entree", service.points[place]["place_patient"])
+		co.marcheur.aller(box_entree + Vector3(0.6, 0, 0.4))
+		p.aller(box_entree)
+		await co.marcheur.arrive
+	installer(p, place)
+	co.tache = {}
+	co.libre.emit()
+	co.retour_poste()
+
+
+signal tache_finie(p: PatientJeu, t: Dictionary)
 
 
 func moniteur_de(p: PatientJeu) -> Moniteur:
