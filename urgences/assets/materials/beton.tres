@@ -1,0 +1,14 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/beton/albedo.jpg" id="1_b4wcc"]
+[ext_resource type="Texture2D" path="res://assets/textures/beton/normal.png" id="2_cv4kg"]
+[ext_resource type="Texture2D" path="res://assets/textures/beton/orm.jpg" id="3_u1nqr"]
+
+[resource]
+resource_name = "beton"
+albedo_texture = ExtResource("1_b4wcc")
+orm_texture = ExtResource("3_u1nqr")
+normal_enabled = true
+normal_texture = ExtResource("2_cv4kg")
+uv1_scale = Vector3(0.3, 0.3, 0.3)
+texture_filter = 5

@@ -1,0 +1,15 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/albedo.jpg" id="1_hvfus"]
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/normal.png" id="2_8iy52"]
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/orm.jpg" id="3_l23h6"]
+
+[resource]
+resource_name = "mur_blanc"
+albedo_color = Color(0.93, 0.92, 0.89, 1)
+albedo_texture = ExtResource("1_hvfus")
+orm_texture = ExtResource("3_l23h6")
+normal_enabled = true
+normal_texture = ExtResource("2_8iy52")
+uv1_scale = Vector3(0.7, 0.7, 0.7)
+texture_filter = 5

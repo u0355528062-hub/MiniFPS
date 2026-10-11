@@ -1,0 +1,8 @@
+# Cache d'import de Godot (régénéré par « godot --import »)
+.godot/
+# Aperçus des personnages (rendus Cycles de contrôle)
+assets/personnages/apercus/
+# Exports
+build/
+*.tmp
+__pycache__/

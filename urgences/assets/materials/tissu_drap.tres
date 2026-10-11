@@ -1,0 +1,15 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/tissu_serge/albedo.jpg" id="1_lbgyq"]
+[ext_resource type="Texture2D" path="res://assets/textures/tissu_serge/normal.png" id="2_hmp51"]
+[ext_resource type="Texture2D" path="res://assets/textures/tissu_serge/orm.jpg" id="3_knsp5"]
+
+[resource]
+resource_name = "tissu_drap"
+albedo_color = Color(0.93, 0.94, 0.95, 1)
+albedo_texture = ExtResource("1_lbgyq")
+orm_texture = ExtResource("3_knsp5")
+normal_enabled = true
+normal_texture = ExtResource("2_hmp51")
+uv1_scale = Vector3(6, 6, 6)
+texture_filter = 5

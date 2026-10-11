@@ -1,0 +1,14 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/bois_stratifie/albedo.jpg" id="1_rk130"]
+[ext_resource type="Texture2D" path="res://assets/textures/bois_stratifie/normal.png" id="2_lhnw1"]
+[ext_resource type="Texture2D" path="res://assets/textures/bois_stratifie/orm.jpg" id="3_mx30f"]
+
+[resource]
+resource_name = "bois_porte"
+albedo_texture = ExtResource("1_rk130")
+orm_texture = ExtResource("3_mx30f")
+normal_enabled = true
+normal_texture = ExtResource("2_lhnw1")
+uv1_scale = Vector3(0.8, 0.8, 0.8)
+texture_filter = 5

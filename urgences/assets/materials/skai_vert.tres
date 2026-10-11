@@ -1,0 +1,15 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/skai/albedo.jpg" id="1_5xqlv"]
+[ext_resource type="Texture2D" path="res://assets/textures/skai/normal.png" id="2_st8yw"]
+[ext_resource type="Texture2D" path="res://assets/textures/skai/orm.jpg" id="3_pq181"]
+
+[resource]
+resource_name = "skai_vert"
+albedo_color = Color(0.2, 0.42, 0.38, 1)
+albedo_texture = ExtResource("1_5xqlv")
+orm_texture = ExtResource("3_pq181")
+normal_enabled = true
+normal_texture = ExtResource("2_st8yw")
+uv1_scale = Vector3(4, 4, 4)
+texture_filter = 5

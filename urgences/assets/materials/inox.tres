@@ -1,0 +1,13 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/inox_brosse/albedo.jpg" id="1_klnhk"]
+[ext_resource type="Texture2D" path="res://assets/textures/inox_brosse/normal.png" id="2_f4mu7"]
+[ext_resource type="Texture2D" path="res://assets/textures/inox_brosse/orm.jpg" id="3_6gso8"]
+
+[resource]
+resource_name = "inox"
+albedo_texture = ExtResource("1_klnhk")
+orm_texture = ExtResource("3_6gso8")
+normal_enabled = true
+normal_texture = ExtResource("2_f4mu7")
+texture_filter = 5

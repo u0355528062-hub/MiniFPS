@@ -1,0 +1,15 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/plastique_grain/albedo.jpg" id="1_4gfq3"]
+[ext_resource type="Texture2D" path="res://assets/textures/plastique_grain/normal.png" id="2_aym62"]
+[ext_resource type="Texture2D" path="res://assets/textures/plastique_grain/orm.jpg" id="3_due38"]
+
+[resource]
+resource_name = "protection_murale"
+albedo_color = Color(0.82, 0.84, 0.84, 1)
+albedo_texture = ExtResource("1_4gfq3")
+orm_texture = ExtResource("3_due38")
+normal_enabled = true
+normal_texture = ExtResource("2_aym62")
+uv1_scale = Vector3(5, 5, 5)
+texture_filter = 5

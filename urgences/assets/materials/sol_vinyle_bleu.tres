@@ -1,0 +1,14 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/sol_vinyle_bleu/albedo.jpg" id="1_pnxye"]
+[ext_resource type="Texture2D" path="res://assets/textures/sol_vinyle_bleu/normal.png" id="2_jc7pb"]
+[ext_resource type="Texture2D" path="res://assets/textures/sol_vinyle_bleu/orm.jpg" id="3_auh2k"]
+
+[resource]
+resource_name = "sol_vinyle_bleu"
+albedo_texture = ExtResource("1_pnxye")
+orm_texture = ExtResource("3_auh2k")
+normal_enabled = true
+normal_texture = ExtResource("2_jc7pb")
+uv1_scale = Vector3(0.5, 0.5, 0.5)
+texture_filter = 5

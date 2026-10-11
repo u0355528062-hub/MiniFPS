@@ -1,0 +1,14 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/dalle_plafond/albedo.jpg" id="1_53q2d"]
+[ext_resource type="Texture2D" path="res://assets/textures/dalle_plafond/normal.png" id="2_1tkrp"]
+[ext_resource type="Texture2D" path="res://assets/textures/dalle_plafond/orm.jpg" id="3_qaj4t"]
+
+[resource]
+resource_name = "plafond"
+albedo_texture = ExtResource("1_53q2d")
+orm_texture = ExtResource("3_qaj4t")
+normal_enabled = true
+normal_texture = ExtResource("2_1tkrp")
+uv1_scale = Vector3(1.66667, 1.66667, 1.66667)
+texture_filter = 5

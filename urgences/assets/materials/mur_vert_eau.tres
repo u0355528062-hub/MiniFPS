@@ -1,0 +1,15 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/albedo.jpg" id="1_x3r3p"]
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/normal.png" id="2_2jnqk"]
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/orm.jpg" id="3_nmq0f"]
+
+[resource]
+resource_name = "mur_vert_eau"
+albedo_color = Color(0.7, 0.84, 0.8, 1)
+albedo_texture = ExtResource("1_x3r3p")
+orm_texture = ExtResource("3_nmq0f")
+normal_enabled = true
+normal_texture = ExtResource("2_2jnqk")
+uv1_scale = Vector3(0.7, 0.7, 0.7)
+texture_filter = 5

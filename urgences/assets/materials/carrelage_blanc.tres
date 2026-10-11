@@ -1,0 +1,14 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/carrelage_blanc/albedo.jpg" id="1_nlqck"]
+[ext_resource type="Texture2D" path="res://assets/textures/carrelage_blanc/normal.png" id="2_sfunx"]
+[ext_resource type="Texture2D" path="res://assets/textures/carrelage_blanc/orm.jpg" id="3_p7h6y"]
+
+[resource]
+resource_name = "carrelage_blanc"
+albedo_texture = ExtResource("1_nlqck")
+orm_texture = ExtResource("3_p7h6y")
+normal_enabled = true
+normal_texture = ExtResource("2_sfunx")
+uv1_scale = Vector3(0.5, 0.5, 0.5)
+texture_filter = 5

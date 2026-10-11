@@ -1,0 +1,15 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/plastique_grain/albedo.jpg" id="1_2s3ja"]
+[ext_resource type="Texture2D" path="res://assets/textures/plastique_grain/normal.png" id="2_hxvnj"]
+[ext_resource type="Texture2D" path="res://assets/textures/plastique_grain/orm.jpg" id="3_igwxe"]
+
+[resource]
+resource_name = "plastique_vert"
+albedo_color = Color(0.18, 0.62, 0.35, 1)
+albedo_texture = ExtResource("1_2s3ja")
+orm_texture = ExtResource("3_igwxe")
+normal_enabled = true
+normal_texture = ExtResource("2_hxvnj")
+uv1_scale = Vector3(8, 8, 8)
+texture_filter = 5

@@ -1,0 +1,65 @@
+; URGENCES — simulateur de service d'urgences (Godot 4.4, Forward+, Vulkan).
+
+config_version=5
+
+[application]
+
+config/name="Urgences"
+config/description="Simulateur de service d'urgences à la première personne : tri, diagnostic, traitement, orientation."
+run/main_scene="res://scenes/box_examen.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
+run/max_fps=0
+
+[autoload]
+
+Reglages="*res://scripts/systeme/reglages.gd"
+Commandes="*res://scripts/systeme/commandes.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1600
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/vsync/vsync_mode=1
+
+[gui]
+
+theme/custom_font="res://assets/fonts/Inter.ttf"
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+common/physics_ticks_per_second=60
+common/max_physics_steps_per_frame=2
+common/physics_interpolation=true
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+anti_aliasing/quality/use_debanding=true
+textures/default_filters/anisotropic_filtering_level=4
+textures/vram_compression/import_etc2_astc=false
+lights_and_shadows/directional_shadow/size=4096
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
+lights_and_shadows/positional_shadow/atlas_size=8192
+lights_and_shadows/positional_shadow/atlas_quadrant_0_subdiv=1
+lights_and_shadows/positional_shadow/atlas_quadrant_1_subdiv=2
+lights_and_shadows/positional_shadow/atlas_quadrant_2_subdiv=3
+lights_and_shadows/positional_shadow/atlas_quadrant_3_subdiv=4
+reflections/reflection_atlas/reflection_size=512
+reflections/reflection_atlas/reflection_count=32
+reflections/sky_reflections/roughness_layers=8
+environment/ssao/quality=3
+environment/ssil/quality=2
+environment/ssao/half_size=false
+environment/screen_space_reflection/roughness_quality=2
+environment/subsurface_scattering/subsurface_scattering_quality=2
+environment/volumetric_fog/volume_size=96
+environment/volumetric_fog/volume_depth=96
+global_illumination/voxel_gi/quality=1
+global_illumination/sdfgi/probe_ray_count=2
+environment/defaults/default_clear_color=Color(0.05, 0.06, 0.07, 1)

@@ -1,0 +1,9 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+resource_name = "eau"
+transparency = 1
+cull_mode = 2
+albedo_color = Color(0.75, 0.88, 0.95, 0.4)
+metallic_specular = 0.7
+roughness = 0.02
