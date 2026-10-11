@@ -144,8 +144,11 @@ def main():
             if f == "Urgences.pck":
                 zf.writestr("LISEZMOI.txt", "Décompressez TOUS les zips Urgences-Windows-partieNN dans le même "
                             "dossier, puis lancez Urgences.exe.\n")
-        mo = os.path.getsize(z) / 1048576
-        print("%-32s %6.1f Mo %s" % (os.path.basename(z), mo, "TROP GROS" if mo >= 30 else ""))
+        if shutil.which("advzip"):
+            # Recompression zopfli (compatible zip standard) : quelques % de gagnés.
+            subprocess.run(["advzip", "-z", "-3", z], capture_output=True)
+        mo = os.path.getsize(z) / 1e6
+        print("%-32s %6.1f Mo %s" % (os.path.basename(z), mo, "TROP GROS (≥ 30 Mo)" if mo >= 30 else ""))
 
 
 if __name__ == "__main__":
