@@ -74,8 +74,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_compression()
 		KEY_C:
 			if _phase == "charge":
-				_charge = 0.001
-				_dire("Charge en cours… 200 J")
+				if _charge <= 0.0:
+					_charge = 0.001
+					Sons.jouer("defib_charge", -4.0)
+					_dire("Charge en cours… 200 J")
 		KEY_S:
 			if _phase == "choc":
 				_choquer()
@@ -96,6 +98,7 @@ func _compression() -> void:
 	if _compressions.size() > 6:
 		_compressions.pop_front()
 	_total += 1
+	Sons.jouer("compression", -6.0, "Effets", randf_range(0.95, 1.05))
 	var f := frequence()
 	if f >= 100.0 and f <= 120.0:
 		_bonnes += 1
@@ -126,6 +129,7 @@ func _adrenaline_injecter() -> void:
 func _choquer() -> void:
 	_chocs += 1
 	_flash = 0.5
+	Sons.jouer("defib_choc", 0.0)
 	_dire("Choc délivré ! Reprenez immédiatement le massage.")
 	# Probabilité de RACS : qualité du massage, nombre de chocs, médicaments.
 	var p := 0.12 + 0.35 * qualite() + 0.05 * _chocs + (0.1 if _adrenaline > 0 else 0.0) + (0.12 if _amiodarone else 0.0)
@@ -146,6 +150,7 @@ func _racs() -> void:
 	constantes.spo2 = 90.0
 	constantes.cibles["spo2"] = 95.0
 	_dire("RACS ! Pouls retrouvé. Orientez le patient en réanimation.")
+	ecran.battement.connect(func(): Sons.jouer("bip_scope", -12.0))
 	get_tree().create_timer(3.0).timeout.connect(func(): _fin(true))
 
 

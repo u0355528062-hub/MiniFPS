@@ -14,10 +14,14 @@ var personnage: Personnage
 var _chemin := PackedVector3Array()
 var _i := 0
 var _corps: Node3D
+var _son_pas: AudioStreamPlayer3D
+var _distance := 0.0
 
 
 func _ready() -> void:
 	_corps = get_parent()
+	_son_pas = Sons.lecteur_3d(_corps, "pas_0", -12.0, 9.0)
+	_son_pas.position.y = 0.05
 
 
 func aller(cible: Vector3) -> void:
@@ -58,4 +62,11 @@ func _physics_process(delta: float) -> void:
 		return
 	var dir := d.normalized()
 	_corps.global_position = Vector3(pos.x, 0.0, pos.z) + dir * pas
+	# Bruit de pas toutes les ~0,7 m (une enjambée).
+	_distance += pas
+	if _distance > 0.7:
+		_distance = 0.0
+		_son_pas.stream = Sons.flux("pas_%d" % randi_range(0, 3))
+		_son_pas.pitch_scale = randf_range(0.9, 1.08)
+		_son_pas.play()
 	_corps.rotation.y = lerp_angle(_corps.rotation.y, atan2(dir.x, dir.z), clampf(delta * 8.0, 0.0, 1.0))

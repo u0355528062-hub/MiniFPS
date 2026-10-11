@@ -20,7 +20,7 @@ func _executer() -> void:
 	root.add_child(cadre)
 	await process_frame
 	var c := Constantes.new({"fc": 0.0, "rythme": "fv"})
-	var rcp := MiniRCP.new()
+	var rcp = load("res://scripts/minijeux/mini_rcp.gd").new()
 	rcp.constantes = c
 	rcp.termine.connect(func(ok, q): resultats["rcp"] = [ok, q])
 	cadre.add_child(rcp)
@@ -38,12 +38,12 @@ func _executer() -> void:
 	rcp._racs()
 	await create_timer(3.5).timeout
 	print("RCP : ", resultats.get("rcp"))
-	var su := MiniSuture.new()
+	var su = load("res://scripts/minijeux/mini_suture.gd").new()
 	su.termine.connect(func(ok, q): resultats["suture"] = [ok, q])
 	cadre.add_child(su)
 	await process_frame
 	await process_frame
-	for k in MiniSuture.POINTS:
+	for k in su.POINTS:
 		for e in 2:
 			var ev := InputEventMouseButton.new()
 			ev.pressed = true
@@ -54,7 +54,7 @@ func _executer() -> void:
 			await _capture("suture")
 	await create_timer(2.5).timeout
 	print("Suture : ", resultats.get("suture"))
-	var ja := MiniJauge.new()
+	var ja = load("res://scripts/minijeux/mini_jauge.gd").new()
 	ja.termine.connect(func(ok, q): resultats["jauge"] = [ok, q])
 	cadre.add_child(ja)
 	await _capture("jauge")
@@ -62,7 +62,7 @@ func _executer() -> void:
 	ja._valider()
 	await create_timer(1.6).timeout
 	print("Jauge : ", resultats.get("jauge"))
-	var it := MiniIntubation.new()
+	var it = load("res://scripts/minijeux/mini_intubation.gd").new()
 	it.termine.connect(func(ok, q): resultats["intubation"] = [ok, q])
 	cadre.add_child(it)
 	it._preox = 1.0

@@ -43,7 +43,7 @@ var graphismes := {}
 ## Réglages de jeu (indépendants des graphismes).
 var jeu := {
 	"sensibilite": 0.0025, "fov": 75.0, "vsync": true, "fps_max": 0,
-	"volume_general": 0.9, "volume_ambiance": 0.7, "volume_voix": 1.0,
+	"volume_general": 0.9, "volume_ambiance": 0.7, "volume_effets": 0.9, "volume_voix": 1.0,
 	"troisieme_personne": false, "afficher_fps": false,
 }
 
@@ -69,7 +69,11 @@ func regler(cle: String, valeur) -> void:
 		preset = "perso"
 	elif jeu.has(cle):
 		jeu[cle] = valeur
-	appliquer()
+	# Un curseur de volume ne doit pas réappliquer tous les réglages graphiques.
+	if cle.begins_with("volume_"):
+		appliquer_volumes()
+	else:
+		appliquer()
 	sauver()
 
 
@@ -130,7 +134,7 @@ func appliquer() -> void:
 	DisplayServer.window_set_vsync_mode(
 		DisplayServer.VSYNC_ENABLED if jeu["vsync"] else DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = int(jeu["fps_max"])
-	_appliquer_volumes()
+	appliquer_volumes()
 	change.emit()
 
 
@@ -158,10 +162,11 @@ func niveau_reflets() -> int:
 	return int(graphismes["reflets"])
 
 
-func _appliquer_volumes() -> void:
-	var bus := AudioServer.get_bus_index("Master")
-	if bus >= 0:
-		AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(float(jeu["volume_general"]), 0.0001)))
+func appliquer_volumes() -> void:
+	for paire in [["Master", "volume_general"], ["Ambiance", "volume_ambiance"], ["Effets", "volume_effets"], ["Voix", "volume_voix"]]:
+		var bus := AudioServer.get_bus_index(paire[0])
+		if bus >= 0:
+			AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(float(jeu.get(paire[1], 1.0)), 0.0001)))
 
 
 func sauver() -> void:

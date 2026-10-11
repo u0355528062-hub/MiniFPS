@@ -85,6 +85,27 @@ static func theme() -> Theme:
 	return t
 
 
+## Place `c` (à sa taille minimale) avec son coin haut-gauche à `haut_gauche` pixels du point
+## d'ancrage `ancre` (0..1 dans le parent). Passe par les offsets : `position` serait absolue.
+static func placer(c: Control, ancre: Vector2, haut_gauche: Vector2) -> void:
+	c.reset_size()
+	var t := c.size
+	c.anchor_left = ancre.x
+	c.anchor_right = ancre.x
+	c.anchor_top = ancre.y
+	c.anchor_bottom = ancre.y
+	c.offset_left = haut_gauche.x
+	c.offset_top = haut_gauche.y
+	c.offset_right = haut_gauche.x + t.x
+	c.offset_bottom = haut_gauche.y + t.y
+
+
+## Centre `c` dans son parent.
+static func centrer(c: Control) -> void:
+	c.reset_size()
+	placer(c, Vector2(0.5, 0.5), -c.size * 0.5)
+
+
 static func _boite(c: Color, rayon: int, marge: int) -> StyleBoxFlat:
 	var b := StyleBoxFlat.new()
 	b.bg_color = c

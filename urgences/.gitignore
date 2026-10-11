@@ -6,3 +6,4 @@ assets/personnages/apercus/
 build/
 *.tmp
 __pycache__/
+apercus/

@@ -124,7 +124,11 @@ func _process(delta: float) -> void:
 	var cible_h := HAUTEUR_ACCROUPI if (controle and Input.is_action_pressed("accroupir")) else HAUTEUR_YEUX
 	_hauteur = lerpf(_hauteur, cible_h, clampf(8.0 * delta, 0, 1))
 	var v := Vector2(velocity.x, velocity.z).length()
+	var pas_avant := int(_balancement / PI)
 	_balancement += delta * v * 4.2
+	# Un bruit de pas à chaque creux du balancement (deux par cycle).
+	if int(_balancement / PI) != pas_avant and v > 0.4 and is_on_floor():
+		Sons.jouer("pas_%d" % randi_range(0, 3), -16.0 + clampf(v - VITESSE, 0.0, 3.0) * 2.0, "Effets", randf_range(0.92, 1.06))
 	var amp := 0.018 * clampf(v / VITESSE, 0.0, 1.5) * (0.0 if troisieme_personne else 1.0)
 	tete.position.y = _hauteur + sin(_balancement) * amp
 	tete.position.x = cos(_balancement * 0.5) * amp * 0.6

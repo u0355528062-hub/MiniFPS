@@ -77,6 +77,8 @@ func montrer(p: PatientJeu, ex: String) -> void:
 			_contenu.add_child(_compte_rendu(e["resultat"]))
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Le contenu change de taille : recentrage après la mise en page.
+	(func(): ThemeHopital.centrer(self)).call_deferred()
 
 
 func _compte_rendu(texte: String) -> Control:

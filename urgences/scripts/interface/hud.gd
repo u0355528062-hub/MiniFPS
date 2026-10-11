@@ -189,10 +189,11 @@ func montrer_invite(texte: String) -> void:
 	invite.visible = texte != ""
 	invite_texte.text = texte
 	invite.reset_size()
-	invite.position = Vector2(-invite.size.x * 0.5, 40)
+	ThemeHopital.placer(invite, Vector2(0.5, 0.5), Vector2(-invite.size.x * 0.5, 40))
 
 
 func notifier(texte: String, couleur := ThemeHopital.ACCENT, duree := 5.0) -> void:
+	Sons.jouer("notification", -10.0)
 	var p := PanelContainer.new()
 	var hb := HBoxContainer.new()
 	var pastille := ColorRect.new()
@@ -221,7 +222,7 @@ func dire(qui: String, texte: String) -> void:
 	sous_titre.visible = true
 	_sous_titre_t = clampf(texte.length() * 0.07, 3.0, 9.0)
 	sous_titre.reset_size()
-	sous_titre.position.x = -sous_titre.size.x * 0.5
+	ThemeHopital.placer(sous_titre, Vector2(0.5, 1.0), Vector2(-sous_titre.size.x * 0.5, -150))
 
 
 func progression(texte: String, valeur: float) -> void:
@@ -250,11 +251,12 @@ func ouvrir_menu(titre: String, options: Array) -> void:
 			st2.bg_color = (o[2] as Color).lightened(0.15)
 			b.add_theme_stylebox_override("hover", st2)
 		var id: String = o[0]
-		b.pressed.connect(func(): action_choisie.emit(id))
+		b.pressed.connect(func():
+			Sons.jouer("clic", -8.0)
+			action_choisie.emit(id))
 		menu_liste.add_child(b)
 	menu.visible = true
-	menu.reset_size()
-	menu.position = Vector2(-menu.size.x * 0.5, -menu.size.y * 0.5)
+	ThemeHopital.centrer(menu)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -269,6 +271,7 @@ func ouvrir_tableau(g: Garde) -> void:
 	_tableau_garde = g
 	remplir_tableau(g)
 	tableau.visible = true
+	ThemeHopital.centrer(tableau)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 

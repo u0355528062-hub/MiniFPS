@@ -17,6 +17,7 @@ var secouristes: Array[Personnage] = []
 var _gyros: Array[OmniLight3D] = []
 var _mat_gyro: StandardMaterial3D
 var _t := 0.0
+var _sirene: AudioStreamPlayer3D
 
 
 func _ready() -> void:
@@ -37,6 +38,11 @@ func _ready() -> void:
 		vehicule.add_child(l)
 		_gyros.append(l)
 	vehicule.global_position = ROUTE[0]
+	# Sirène (deux tons des pompiers ou trois tons du SAMU) jusqu'à l'approche du sas.
+	_sirene = Sons.lecteur_3d(vehicule, "sirene_samu" if samu else "sirene_pompiers", 2.0, 90.0)
+	_sirene.unit_size = 12.0
+	_sirene.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_PHYSICS_STEP
+	_sirene.play()
 	_rouler()
 
 
@@ -70,6 +76,9 @@ func _orienter(dir: Vector3) -> void:
 
 
 func _debarquer() -> void:
+	var tw_s := create_tween()
+	tw_s.tween_property(_sirene, "volume_db", -40.0, 1.5)
+	tw_s.tween_callback(_sirene.stop)
 	brancard = Bibliotheque.meuble("brancard")
 	add_child(brancard)
 	brancard.global_position = vehicule.global_position + Vector3(0, 0, -3.6)
@@ -85,6 +94,7 @@ func _debarquer() -> void:
 		secouristes.append(s)
 	var arrivee: Vector3 = service.points["sas"]["arrivee"]
 	var chemin := service.chemin(brancard.global_position, arrivee)
+	get_tree().create_timer(2.5).timeout.connect(func(): Sons.jouer_3d("porte", Vector3(32.0, 1.2, 28.0), -4.0, 20.0))
 	var tw := create_tween()
 	var prec := brancard.global_position
 	for i in range(1, chemin.size()):

@@ -77,21 +77,27 @@ func civilite() -> String:
 
 
 func repondre(question: String) -> String:
-	var r: String = reponses.get(question, "Je ne sais pas trop…")
+	var r: String = reponses.get(question, Repliques.NE_SAIS_PAS)
 	_parole = clampf(r.length() * 0.06, 1.0, 5.0)
+	_voix(r)
 	parle.emit(r)
 	return r
 
 
 func dire_eva() -> void:
-	var n := constantes.eva
-	var t := "Sur dix ? Je dirais %d." % n
-	if n >= 7:
-		t += " C'est vraiment très fort."
-	elif n <= 2:
-		t = "Ça va, j'ai à peine mal… %d sur dix." % n
+	var t := Repliques.eva(int(constantes.eva))
 	_parole = 2.0
+	_voix(t)
 	parle.emit(t)
+
+
+## Voix synthétisée de la réplique (si elle existe) ; la bouche bouge pendant sa durée.
+func _voix(t: String) -> void:
+	var age: int = dossier.get("age", 45)
+	var hauteur := 0.94 if age >= 70 else (1.05 if age < 25 else 1.0)
+	var d := Sons.voix(self, t, dossier.get("sexe", "M") == "M", hauteur)
+	if d > 0.0:
+		_parole = d
 
 
 func changer_etat(e: String, l := "") -> void:

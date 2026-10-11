@@ -12,6 +12,9 @@ const BLANC := Color(0.95, 0.95, 0.95)
 const ROUGE := Color(1.0, 0.25, 0.2)
 const VITESSE_BALAYAGE := 0.25   # fraction de largeur par seconde (25 mm/s sur ~10 cm)
 
+## Émis à chaque complexe QRS (bip du scope).
+signal battement
+
 var constantes: Constantes
 var branche := false          # électrodes et capteurs posés
 var brassard := false         # dernière PNI affichée
@@ -72,14 +75,21 @@ func _avancer_phases(dt: float) -> void:
 		if _phase_coeur >= 1.0:
 			_phase_coeur -= 1.0
 			_rr = 60.0 / fc * randf_range(0.65, 1.35)
+			_battre()
 	else:
 		_rr = 60.0 / fc
 		var avant := _phase_coeur
 		_phase_coeur = fmod(_phase_coeur + dt / _rr, 1.0)
 		if _phase_coeur < avant:
-			_bip = 0.08
+			_battre()
 	_phase_resp = fmod(_phase_resp + dt * c.fr / 60.0, 1.0)
 	_fib += dt
+
+
+func _battre() -> void:
+	_bip = 0.08
+	if branche and not constantes.rythme in ["fv", "asystolie"]:
+		battement.emit()
 
 
 func _echantillon_ecg() -> float:

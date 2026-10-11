@@ -9,6 +9,7 @@ signal libre
 var role := "ide"
 var nom := ""
 var modele := "infirmiere_claire"
+var homme := false
 var service: Service
 var personnage: Personnage
 var marcheur: Marcheur
@@ -39,6 +40,8 @@ func titre() -> String:
 ## Va en `lieu`, travaille `duree` secondes de jeu, puis appelle `fin`.
 func executer(t: Dictionary, lieu: Vector3, duree: float, fin: Callable, regarder := Vector3.INF) -> void:
 	tache = t
+	var debut: Array = Repliques.BRANCARDIER_DEBUT if role == "brancardier" else Repliques.COLLEGUE_DEBUT
+	Sons.voix(self, debut.pick_random(), homme)
 	marcheur.aller(lieu)
 	await marcheur.arrive
 	if regarder != Vector3.INF:
@@ -47,6 +50,8 @@ func executer(t: Dictionary, lieu: Vector3, duree: float, fin: Callable, regarde
 	personnage.jouer("parler", 0.3)
 	await get_tree().create_timer(duree / Garde.ECHELLE_TEMPS).timeout
 	fin.call()
+	if role != "brancardier":
+		Sons.voix(self, Repliques.COLLEGUE_FIN.pick_random(), homme)
 	tache = {}
 	personnage.jouer("attente", 0.3)
 	libre.emit()

@@ -59,6 +59,7 @@ func _ready() -> void:
 		co.role = c[0]
 		co.nom = c[1]
 		co.modele = c[2]
+		co.homme = c[1] in ["Julien", "Paul"]
 		co.service = service
 		co.poste = poste + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-0.6, 0.8))
 		co.name = "Collegue_" + c[1]

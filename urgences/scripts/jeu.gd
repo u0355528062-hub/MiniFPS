@@ -44,6 +44,7 @@ const CLINIQUE := {
 
 
 func _ready() -> void:
+	Sons.demarrer_ambiance()
 	monde = load("res://scenes/service.tscn").instantiate()
 	add_child(monde)
 	garde = Garde.new()
