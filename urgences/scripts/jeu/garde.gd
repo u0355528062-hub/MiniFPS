@@ -77,7 +77,7 @@ func _process(delta: float) -> void:
 				notification.emit("Résultat disponible : %s — %s" % [Pathologies.EXAMENS[ex][0], p.civilite()], ThemeHopital.BLEU, 6.0)
 				patients_changes.emit()
 		if p.verifier_aggravation(heure):
-			notification.emit("⚠ %s s'aggrave (%s) !" % [p.civilite(), p.lieu], ThemeHopital.ROUGE, 8.0)
+			notification.emit("ALERTE : %s s'aggrave (%s) !" % [p.civilite(), p.lieu], ThemeHopital.ROUGE, 8.0)
 			reputation = maxf(reputation - 4.0, 0.0)
 			patients_changes.emit()
 
@@ -168,7 +168,7 @@ func generer_arrivee(patho_id := "") -> PatientJeu:
 		service.add_child(br)
 		p.set_meta("brancard", br)
 		p.changer_etat("accueil", "Sas ambulances")
-		notification.emit("🚑 Arrivée %s au sas : %s, %s — %s" % ["SAMU" if _rng.randf() < 0.5 else "des pompiers",
+		notification.emit("Arrivée %s au sas : %s, %s — %s" % ["SAMU" if _rng.randf() < 0.5 else "des pompiers",
 			p.civilite(), str(d["age"]) + " ans", d["motif"].to_lower()], ThemeHopital.ROUGE, 9.0)
 		return p
 	d["posture"] = "attente"
@@ -233,6 +233,22 @@ func envoyer_attente(p: PatientJeu) -> void:
 		patients_changes.emit()
 		return
 	notification.emit("Plus de siège libre en salle d'attente !", ThemeHopital.ORANGE, 5.0)
+
+
+## Place directement un patient sur un siège libre (début de partie, captures).
+func asseoir_direct(p: PatientJeu) -> void:
+	var sieges: Array = service.points["sieges"]
+	for i in sieges.size():
+		var id := "siege_%d" % i
+		if occupation.has(id):
+			continue
+		occupation[id] = p
+		p.place = id
+		p.global_position = sieges[i]["pos"]
+		p.rotation.y = sieges[i]["rot"]
+		p.poser_posture("assis")
+		p.changer_etat("attente", "Salle d'attente")
+		return
 
 
 ## Installe un patient sur le brancard d'un box ou du déchocage (pris en charge par l'équipe).

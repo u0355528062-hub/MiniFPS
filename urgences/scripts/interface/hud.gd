@@ -6,6 +6,7 @@ extends CanvasLayer
 signal action_choisie(id: String)
 signal menu_ferme
 signal tableau_ferme
+signal voir_resultat(p: PatientJeu, ex: String)
 
 var racine: Control
 var invite: PanelContainer
@@ -23,6 +24,7 @@ var dossier: PanelContainer
 var dossier_contenu: VBoxContainer
 var horloge: Label
 var tableau: PanelContainer
+var resultats: FenetreResultats
 var tableau_liste: VBoxContainer
 var _tableau_garde: Garde
 var fps: Label
@@ -128,6 +130,9 @@ func _ready() -> void:
 	dossier.add_child(sc)
 	dossier.visible = false
 	racine.add_child(dossier)
+	resultats = FenetreResultats.new()
+	racine.add_child(resultats)
+	voir_resultat.connect(func(p, ex): resultats.montrer(p, ex))
 	# Tableau des patients (logiciel des urgences), au centre.
 	tableau = PanelContainer.new()
 	tableau.set_anchors_preset(Control.PRESET_CENTER)
@@ -338,7 +343,7 @@ func remplir_tableau(g: Garde) -> void:
 			hb.add_child(l)
 		if p.aggrave:
 			var a := Label.new()
-			a.text = "⚠"
+			a.text = "!"
 			a.add_theme_color_override("font_color", ThemeHopital.ROUGE)
 			hb.add_child(a)
 		ligne.add_child(hb)
@@ -409,7 +414,17 @@ func remplir_dossier(p: PatientJeu) -> void:
 		for ex in p.examens:
 			var e: Dictionary = p.examens[ex]
 			var r: String = e["resultat"] if e["resultat"] != "" else "en cours…"
-			dossier_contenu.add_child(ThemeHopital.texte_doux("• %s : %s" % [Pathologies.EXAMENS[ex][0], r], 15))
+			var ligne := HBoxContainer.new()
+			var l := ThemeHopital.texte_doux("• %s : %s" % [Pathologies.EXAMENS[ex][0], r], 15)
+			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			ligne.add_child(l)
+			if e["resultat"] != "":
+				var b := Button.new()
+				b.text = "Voir"
+				var exx: String = ex
+				b.pressed.connect(func(): voir_resultat.emit(p, exx))
+				ligne.add_child(b)
+			dossier_contenu.add_child(ligne)
 	if not p.traitements.is_empty():
 		dossier_contenu.add_child(HSeparator.new())
 		dossier_contenu.add_child(ThemeHopital.titre("Traitements administrés", 19))

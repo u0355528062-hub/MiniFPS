@@ -368,9 +368,32 @@ func _effet_traitement(p: PatientJeu, t: String) -> void:
 # --- Captures ---------------------------------------------------------------------------------
 func poses_capture() -> Array:
 	var o := Vector3(7.2, 0, 9)
-	return monde.poses_capture() + [
+	return [
+		{"nom": "jeu_attente", "position": Vector3(12.0, 1.65, 25.0), "cible": Vector3(4.0, 0.9, 19.0), "fov": 70.0, "avant": "peupler_pour_capture"},
+		{"nom": "jeu_attente_proche", "position": Vector3(6.5, 1.5, 23.0), "cible": Vector3(3.0, 0.8, 20.5), "fov": 55.0},
+		{"nom": "jeu_dechocage", "position": Vector3(29.0, 1.7, 12.0), "cible": Vector3(24.0, 1.0, 8.0), "fov": 70.0},
 		{"nom": "jeu_scope", "position": o + Vector3(2.1, 1.55, 2.2), "cible": o + Vector3(0.6, 1.4, 0.7), "fov": 60.0, "avant": "brancher_pour_capture"},
+		{"nom": "jeu_tableau", "position": Vector3(12.0, 1.65, 14.5), "cible": Vector3(4.0, 1.4, 14.5), "fov": 70.0, "avant": "tableau_pour_capture"},
 	]
+
+
+func peupler_pour_capture() -> void:
+	garde.arrivees_actives = false
+	for i in 7:
+		var d := garde.creer_dossier()
+		d["posture"] = "assis"
+		d["mode"] = "pied"
+		var p := garde.ajouter_patient(d)
+		garde.asseoir_direct(p)
+	var a := garde.generer_arrivee("avc")
+	a.tri = 1
+	garde.installer(a, "dechoc_1")
+	(garde.moniteur_de(a) as Moniteur).brancher(true)
+
+
+func tableau_pour_capture() -> void:
+	hud.dossier.visible = false
+	hud.ouvrir_tableau(garde)
 
 
 func brancher_pour_capture() -> void:

@@ -254,6 +254,43 @@ const LISTE := [
 ]
 
 
+## Biologie : nom -> [unité, borne basse, borne haute, valeur normale].
+const BIO := {
+	"Hémoglobine": ["g/dL", 12.0, 17.0, 14.2], "Leucocytes": ["G/L", 4.0, 10.0, 7.1],
+	"Plaquettes": ["G/L", 150.0, 400.0, 245.0], "Sodium": ["mmol/L", 135.0, 145.0, 139.0],
+	"Potassium": ["mmol/L", 3.5, 5.0, 4.1], "Créatinine": ["µmol/L", 50.0, 110.0, 78.0],
+	"CRP": ["mg/L", 0.0, 5.0, 2.0], "Troponine": ["ng/L", 0.0, 14.0, 5.0],
+	"Glycémie": ["g/L", 0.70, 1.10, 0.95], "Lactates": ["mmol/L", 0.5, 2.0, 1.1],
+	"Lipase": ["UI/L", 0.0, 60.0, 30.0],
+}
+const BIO_PATHO := {
+	"sca_st": {"Troponine": 850.0, "Glycémie": 1.62},
+	"avc": {"Glycémie": 1.18},
+	"appendicite": {"Leucocytes": 15.2, "CRP": 85.0},
+	"hypoglycemie": {"Glycémie": 0.35},
+	"intoxication_alcool": {"Glycémie": 0.85},
+	"pneumopathie": {"Leucocytes": 18.4, "CRP": 210.0, "Lactates": 2.4},
+	"polytraumatise": {"Hémoglobine": 8.1, "Lactates": 4.2, "Leucocytes": 13.0},
+	"colique_nephretique": {"Leucocytes": 9.5},
+	"asthme": {"Leucocytes": 11.2},
+}
+## Cliché de radiographie selon la pathologie (assets/textures/radios/).
+const RADIO := {"fracture_poignet": "poignet_fracture", "entorse": "cheville_normale", "asthme": "thorax_distension",
+	"pneumopathie": "thorax_pneumopathie", "polytraumatise": "bassin_fracture"}
+## Sus-décalage (mV, + = sus, - = sous) par dérivation pour l'ECG 12 dérivations.
+const ECG_ST := {"sca_st": {"V1": 0.15, "V2": 0.28, "V3": 0.32, "V4": 0.25, "V5": 0.1, "II": -0.08, "III": -0.12, "aVF": -0.1}}
+
+
+static func bio(id: String) -> Array:
+	var l := []
+	var ano: Dictionary = BIO_PATHO.get(id, {})
+	for k in BIO:
+		var b: Array = BIO[k]
+		var v: float = ano.get(k, b[3])
+		l.append([k, v, b[0], b[1], b[2]])
+	return l
+
+
 static func par_id(id: String) -> Dictionary:
 	for p in LISTE:
 		if p["id"] == id:
