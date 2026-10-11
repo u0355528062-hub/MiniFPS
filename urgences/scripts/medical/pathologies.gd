@@ -34,6 +34,7 @@ const TRAITEMENTS := {
 	"remplissage": "Remplissage vasculaire",
 	"thrombolyse_avis": "Alerte thrombolyse (neurologue)",
 	"surveillance": "Surveillance scopée",
+	"intubation": "Intubation orotrachéale (séquence rapide)",
 }
 
 const ORIENTATIONS := {

@@ -26,6 +26,10 @@ var examens := {}                  # id -> {demande: s, resultat: texte|""}
 var diagnostic := ""
 var orientation := ""
 var aggrave := false
+var arret := false
+var arret_heure := 0.0
+var decede := false
+var qualite_gestes := []
 var service: Service
 
 var _parole := 0.0
@@ -172,6 +176,27 @@ func _process(delta: float) -> void:
 	else:
 		personnage.expression("bouche_ouverte", 0.0)
 	Profileur.fin("patients", _t_prof)
+
+
+func declencher_arret(heure: float) -> void:
+	arret = true
+	arret_heure = heure
+	constantes.rythme = "fv"
+	constantes.fc = 0.0
+	constantes.cibles["fc"] = 0.0
+	constantes.tas = 0.0
+	constantes.cibles["tas"] = 0.0
+	constantes.spo2 = 60.0
+	constantes.cibles["spo2"] = 40.0
+	constantes.glasgow = 3
+	poser_posture("allonge")
+
+
+func deceder() -> void:
+	decede = true
+	arret = false
+	constantes.rythme = "asystolie"
+	poser_posture("allonge")
 
 
 ## Vérifie l'aggravation (appelé par la garde, une fois par seconde de jeu réel).

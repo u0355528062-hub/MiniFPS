@@ -146,6 +146,13 @@ func _interagir(c: Node) -> void:
 # --- Menus ------------------------------------------------------------------------------------
 func _menu_principal() -> void:
 	var p := patient
+	if p.decede:
+		hud.ouvrir_menu("%s — décédé(e)" % p.titre(), [["", "Le patient est décédé."], ["fermer", "Fermer"]])
+		return
+	if p.arret:
+		hud.ouvrir_menu("ARRÊT CARDIAQUE — %s" % p.titre(), [["rcp", "Réanimation cardio-pulmonaire (RCP + défibrillateur)", ThemeHopital.ROUGE],
+			["fermer", "Fermer"]])
+		return
 	var opts := [["questions", "Interroger le patient…"], ["mesures", "Constantes…"]]
 	if p.etat == "installe":
 		opts.append(["clinique", "Examen clinique…"])
@@ -240,6 +247,20 @@ func _action_menu(id: String) -> void:
 				opts.append(["", "Aucun box libre : orientez des patients pour libérer de la place."])
 			opts.append(["retour", "← Retour"])
 			hud.ouvrir_menu("Installer — " + p.civilite(), opts)
+		"rcp":
+			hud.fermer_menu()
+			_lancer_mini(MiniRCP.new(), func(ok, q):
+				p.traitements.append("rcp")
+				p.qualite_gestes.append(q)
+				if ok:
+					p.arret = false
+					p.poser_posture("semi_assis")
+					hud.notifier("RACS : %s a retrouvé un pouls. Orientez-le en réanimation." % p.civilite(), ThemeHopital.VERT, 10.0)
+				else:
+					p.deceder()
+					garde.score -= 60
+					hud.notifier("Décès de %s malgré la réanimation." % p.civilite(), ThemeHopital.ROUGE, 10.0)
+				garde.patients_changes.emit(), {"constantes": p.constantes})
 		"attente":
 			hud.fermer_menu()
 			if p.tri == 0:
@@ -276,6 +297,25 @@ func _action_prefixee(id: String) -> void:
 		var t := id.substr(2)
 		if t in p.traitements:
 			return
+		# Gestes techniques : mini-jeux.
+		var mini: Control = null
+		match t:
+			"suture": mini = MiniSuture.new()
+			"vvp": mini = MiniJauge.new()
+			"intubation": mini = MiniIntubation.new()
+		if mini:
+			hud.fermer_menu()
+			_lancer_mini(mini, func(ok, q):
+				p.qualite_gestes.append(q)
+				if ok:
+					p.traitements.append(t)
+					_effet_traitement(p, t)
+					hud.notifier("%s : %s — réussi (qualité %d %%)." % [p.civilite(), Pathologies.TRAITEMENTS[t], int(q * 100)], ThemeHopital.VERT, 6.0)
+				else:
+					hud.notifier("%s : geste échoué, un collègue s'en charge." % p.civilite(), ThemeHopital.ORANGE, 6.0)
+					p.traitements.append(t)
+				_rafraichir_hud())
+			return
 		_commencer_action(id, Pathologies.TRAITEMENTS[t], 120.0)
 	elif id.begins_with("d_"):
 		p.diagnostic = id.substr(2)
@@ -301,6 +341,18 @@ func _action_prefixee(id: String) -> void:
 		var place := id.substr(2)
 		garde.installer(p, place)
 		hud.notifier("%s installé(e) en %s." % [p.civilite(), Garde.nom_place(place)], ThemeHopital.VERT, 5.0)
+
+
+## Lance un mini-jeu plein écran ; le jeu continue derrière (le temps passe !).
+func _lancer_mini(mini: Control, fin: Callable, proprietes := {}) -> void:
+	for k in proprietes:
+		mini.set(k, proprietes[k])
+	joueur.controle = false
+	hud.racine.add_child(mini)
+	mini.termine.connect(func(ok, q):
+		joueur.controle = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		fin.call(ok, q))
 
 
 func _commencer_action(id: String, libelle: String, duree: float) -> void:

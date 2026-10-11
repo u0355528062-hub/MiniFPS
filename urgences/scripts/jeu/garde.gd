@@ -80,6 +80,23 @@ func _process(delta: float) -> void:
 			notification.emit("ALERTE : %s s'aggrave (%s) !" % [p.civilite(), p.lieu], ThemeHopital.ROUGE, 8.0)
 			reputation = maxf(reputation - 4.0, 0.0)
 			patients_changes.emit()
+		# Aggravation grave non corrigée → arrêt cardiaque ; sans réanimation → décès.
+		var ag: Dictionary = p.patho.get("aggravation", {})
+		if p.aggrave and not p.arret and not p.decede and p.orientation == "" and p.etat == "installe" \
+				and (ag.get("rythme", "") in ["tv", "fv"] or ag.get("tas", 999.0) <= 65.0) \
+				and heure - p.arrivee_jeu > ag.get("delai", 999.0) * 60.0 + 15.0 * 60.0:
+			p.declencher_arret(heure)
+			var m := moniteur_de(p)
+			if m:
+				m.brancher(true)
+			notification.emit("ARRÊT CARDIAQUE : %s (%s) ! Réanimation immédiate !" % [p.civilite(), p.lieu], ThemeHopital.ROUGE, 12.0)
+			patients_changes.emit()
+		if p.arret and heure - p.arret_heure > 10.0 * 60.0:
+			p.deceder()
+			score -= 100
+			reputation = maxf(reputation - 15.0, 0.0)
+			notification.emit("Décès de %s, faute de réanimation." % p.civilite(), ThemeHopital.ROUGE, 12.0)
+			patients_changes.emit()
 
 
 # ---------------------------------------------------------------------------------------------

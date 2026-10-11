@@ -52,7 +52,7 @@ func avancer(delta: float) -> void:
 		var k := i % _n
 		if branche:
 			_ecg[k] = _echantillon_ecg()
-			_pleth[k] = _echantillon_pleth()
+			_pleth[k] = _echantillon_pleth() if not constantes.rythme in ["fv", "asystolie"] else randf_range(-0.52, -0.48)
 			_resp[k] = sin(_phase_resp * TAU) * 0.5
 		else:
 			_ecg[k] = 0.0
@@ -152,8 +152,9 @@ func _draw() -> void:
 	# Valeurs numériques.
 	var x := zone_courbes + 10
 	draw_line(Vector2(zone_courbes, 28), Vector2(zone_courbes, t.y), Color(0.2, 0.25, 0.3), 1.0)
-	_valeur(Vector2(x, 32), "FC", str(c.valeur("fc")), "bpm", VERT, c.fc > 120 or c.fc < 45)
-	_valeur(Vector2(x, 32 + t.y * 0.24), "SpO₂", str(c.valeur("spo2")), "%", CYAN, c.spo2 < 92)
+	var arret := c.rythme in ["fv", "asystolie"]
+	_valeur(Vector2(x, 32), "FC", "---" if arret else str(c.valeur("fc")), "bpm", VERT, arret or c.fc > 120 or c.fc < 45)
+	_valeur(Vector2(x, 32 + t.y * 0.24), "SpO₂", "---" if arret else str(c.valeur("spo2")), "%", CYAN, arret or c.spo2 < 92)
 	_valeur(Vector2(x, 32 + t.y * 0.48), "FR", str(c.valeur("fr")), "/min", JAUNE, c.fr > 25 or c.fr < 8)
 	var pni := "-?-/-?-"
 	if c.mesures.has("ta"):
@@ -162,6 +163,9 @@ func _draw() -> void:
 	_texte(Vector2(x, 32 + t.y * 0.72 + 44), pni, 28, BLANC)
 	if _bip > 0.0:
 		draw_circle(Vector2(t.x - 18, 46), 6, VERT)
+	if arret and fmod(Time.get_ticks_msec() / 400.0, 2.0) < 1.0:
+		draw_rect(Rect2(0, 28, zone_courbes, 34), Color(0.8, 0.05, 0.05))
+		_texte(Vector2(14, 52), "ALARME : %s" % ("FIBRILLATION VENTRICULAIRE" if c.rythme == "fv" else "ASYSTOLIE"), 20, BLANC)
 
 
 func _trace(buf: PackedFloat32Array, coul: Color, y0: float, amp: float, largeur: float) -> void:
