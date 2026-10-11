@@ -34,13 +34,12 @@ CORRESP = {
 CLIPS = {
     "marche": ("007/07_01.bvh", 40, 300, "cycle", True),
     "marche_lente": ("008/08_04.bvh", 60, 400, "cycle", True),
-    "boiter": ("077/77_19.bvh", 100, 700, "cycle", True),
+    "boiter": ("017/17_05.bvh", 100, 700, "cycle", True),
     "attente": ("040/40_10.bvh", 200, 1400, "plage", True),
     "debout": ("077/77_02.bvh", 60, 900, "plage", True),
-    "assis": ("075/75_17.bvh", 500, 1100, "plage", True),
-    "assis_tete_mains": ("022/22_03.bvh", 700, 1500, "plage", True),
+    "assis": ("013/13_04.bvh", 1500, 2100, "plage", True),
+    "assis_tete_mains": ("022/22_03.bvh", 100, 700, "plage", True),
     "parler": ("018/18_08.bvh", 300, 1500, "plage", True),
-    "ramasser": ("069/69_73.bvh", 100, 700, False, False),
 }
 
 
@@ -136,6 +135,20 @@ def recibler(nom, spec, dst):
                 W[d_nom] = monde(src, spb[s_nom]).to_3x3().normalized() @ ref_src[s_nom].inverted() @ ref_dst[d_nom]
         h = monde(src, spb["Hips"]).translation
         poses.append((W, (h - hanche_src0) * k))
+    # Cap : on aligne l'orientation moyenne (ou la direction de marche) sur -Y, la face avant
+    # du personnage, pour que toutes les animations « regardent » devant le modèle.
+    if boucle == "cycle":
+        dep = poses[-1][1] - poses[0][1]
+        cap = math.atan2(dep.x, -dep.y)
+    else:
+        fx = fy = 0.0
+        for W, _ in poses:
+            av = W["root"] @ R["root"].inverted() @ Vector((0, -1, 0))
+            fx += av.x
+            fy += av.y
+        cap = math.atan2(fx, -fy)
+    corr = Matrix.Rotation(-cap, 3, "Z")
+    poses = [({b: corr @ m for b, m in W.items()}, corr @ d) for W, d in poses]
     if boucle == "cycle":
         poses = boucler(poses)
     elif boucle == "plage":

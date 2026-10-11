@@ -145,7 +145,7 @@ def peindre_peau(p, taille=2048, graine=1):
         y = pos[..., 1]
         front = _ss(y, yeux_y + 0.03, yeux_y + 0.045) * (1 - _ss(y, yeux_y + 0.075, yeux_y + 0.095)) * _ss(pos[..., 2], tete[2] + 0.06, tete[2] + 0.09)
         lignes = np.sin((y - yeux_y) * 2 * np.pi / 0.0085 + 1.5 * A.b3(30.0, 2, graine + 5))
-        haut -= front * rides * 1.8 * _ss(lignes, 0.6, 1.0)
+        haut -= front * rides * 0.7 * _ss(lignes, 0.75, 1.0) * (0.5 + 0.5 * A.b3(25.0, 2, graine + 6))
         for oeil in ("eye.L____head", "eye.R____head"):
             e = art[oeil]
             d = A.dist(e)

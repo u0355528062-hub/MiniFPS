@@ -35,6 +35,27 @@ static func meuble(nom: String) -> Node3D:
 	return n
 
 
+## Ajoute une collision en boîte (enveloppe du modèle) : le joueur ne traverse pas le mobilier.
+static func ajouter_collision(n: Node3D, marge := 0.0) -> void:
+	var total := AABB()
+	var premier := true
+	for mi in n.find_children("*", "MeshInstance3D", true, false):
+		var a: AABB = mi.transform * mi.get_aabb()
+		total = a if premier else total.merge(a)
+		premier = false
+	if premier:
+		return
+	var corps := StaticBody3D.new()
+	corps.name = "Collision"
+	var cs := CollisionShape3D.new()
+	var b := BoxShape3D.new()
+	b.size = total.size + Vector3.ONE * marge
+	cs.shape = b
+	cs.position = total.get_center()
+	corps.add_child(cs)
+	n.add_child(corps)
+
+
 static func appliquer_materiaux(racine: Node) -> void:
 	for mi in racine.find_children("*", "MeshInstance3D", true, false):
 		var mesh: Mesh = mi.mesh

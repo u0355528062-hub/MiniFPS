@@ -69,11 +69,17 @@ func _plinthes(b: Batisseur) -> void:
 
 
 # ---------------------------------------------------------------------------------------------
+const SOLIDES := ["brancard", "chariot_soins", "lavabo", "chaise", "tabouret", "poubelle_dasri",
+	"poubelle_menagere", "pied_perfusion", "lampe_examen"]
+
+
 func _poser(nom: String, pos: Vector3, rot_y_deg := 0.0, parent: Node3D = self) -> Node3D:
 	var n := Bibliotheque.meuble(nom)
 	n.position = pos
 	n.rotation_degrees.y = rot_y_deg
 	parent.add_child(n)
+	if nom in SOLIDES:
+		Bibliotheque.ajouter_collision(n)
 	return n
 
 
@@ -84,8 +90,12 @@ func _mobilier() -> void:
 	# Brancard : tête vers le mur du fond (axe X du modèle tourné vers -Z).
 	_poser("brancard", Vector3(1.55, 0, 1.40), 90.0, m)
 	_poser("bandeau_tete_lit", Vector3(1.55, 1.45, EP * 0.5 + 0.045), 0.0, m)
-	var mon := _poser("moniteur", Vector3(0.45, 1.72, EP * 0.5 + 0.53), 20.0, m)
-	points_interet["moniteur"] = mon.position
+	var mon := Moniteur.new()
+	mon.name = "Moniteur"
+	mon.position = Vector3(0.45, 1.72, EP * 0.5 + 0.53)
+	mon.rotation_degrees.y = 20.0
+	m.add_child(mon)
+	points_interet["moniteur"] = mon
 	_poser("pied_perfusion", Vector3(2.55, 0, 0.95), -30.0, m)
 	_poser("tensiometre_mural", Vector3(2.75, 1.45, EP * 0.5 + 0.0), 0.0, m)
 	# Mur gauche : lave-mains, distributeur de gants, poubelles, chariot de soins.
@@ -111,14 +121,7 @@ func _mobilier() -> void:
 	_poser("rail_rideau", Vector3(1.8, H - 0.04, 3.55), 0.0, m)
 	var rid := _poser("rideau", Vector3(1.85, H - 0.06, 3.55), 0.0, m)
 	rid.scale = Vector3(0.75, 1.0, 1.0)
-	# Patient semi-assis sur le brancard (dossier à 35°), bassin juste devant la charnière.
-	var patient := Personnage.new()
-	patient.name = "Patient"
-	patient.modele = "patient_gerard"
-	patient.animation_initiale = "semi_assis"
-	m.add_child(patient)
-	patient.position = Vector3(1.55, 0.80 - patient.hauteur_bassin(), 1.27)
-	points_interet["patient"] = patient
+	points_interet["place_patient"] = Vector3(1.55, 0.80, 1.27)
 	# Couloir : chaise et brancard en attente, poubelle.
 	_poser("brancard", Vector3(-1.6, 0, LZ + COULOIR - 0.55), 0.0, m)
 	_poser("chaise", Vector3(5.2, 0, LZ + COULOIR - 0.4), 180.0, m)

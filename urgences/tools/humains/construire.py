@@ -181,6 +181,8 @@ def construire(p, apercu=False):
     if p.get("cheveux"):
         ch = p["cheveux"]
         vets.append(hab.cheveux("cheveux_" + ch["couleur"], ch.get("coupe", "court"), ch.get("volume", 0.012)))
+        if ch.get("coupe") == "attache":
+            vets.append(hab.chignon("cheveux_" + ch["couleur"]))
 
     # Corps + dents + langue + cils.
     f_vis = hab.faces_corps_visibles()
@@ -238,7 +240,7 @@ def construire(p, apercu=False):
         else:
             tex = textures_tenue(v.materiau.replace("tenue_", "", 1))
             mat = materiau(v.materiau, (0.3, 0.5, 0.7), tex, rug=0.85)
-        uvs = b.vt[v.fuv]
+        uvs = v.uvs if v.uvs is not None else b.vt[v.fuv]
         if v.nom.endswith("Bas"):
             # Les aides (jupe) ont leurs propres UV hors de l'atlas du corps : projection
             # cylindrique dans l'îlot du dos (grand et continu) pour garder le tissage.

@@ -40,9 +40,10 @@ def ligne_cheveux(co, art, coupe="court"):
     oeil_y = 0.5 * (art["eye.L____head"][1] + art["eye.R____head"][1])
     phi = np.arctan2(co[:, 0] - tete[0], co[:, 2] - (tete[2] + 0.02))
     a = np.abs(phi)
-    pts_a = np.array([0.0, 0.55, 1.05, 1.45, 1.9, 2.4, np.pi])
+    pts_a = np.array([0.0, 0.55, 0.95, 1.3, 1.6, 2.0, 2.4, np.pi])
     nuque = tete[1] - (0.035 if coupe == "long" else 0.0)
-    pts_h = np.array([oeil_y + 0.072, oeil_y + 0.068, oeil_y + 0.040, oeil_y + 0.050, oeil_y + 0.030, nuque + 0.02, nuque])
+    pts_h = np.array([oeil_y + 0.072, oeil_y + 0.065, oeil_y + 0.035, oeil_y + 0.012, oeil_y + 0.008,
+                      oeil_y - 0.030, nuque + 0.01, nuque])
     return np.interp(a, pts_a, pts_h), phi
 
 
@@ -148,6 +149,7 @@ class Vetement:
         self.fuv = fuv
         self.origine = origine          # index du sommet source (corps ou aide) pour les poids
         self.poids_src = poids_src
+        self.uvs = None                 # UV par coin explicites (sinon celles de l'atlas du corps)
 
 
 def extraire(co_tout, faces_src, fuv_src, sel_f, decalage, lissage=8, nom="vetement", materiau="tissu",
@@ -221,7 +223,7 @@ class Habilleur:
         return m
 
     # --- Hauts -------------------------------------------------------------------------------
-    def haut(self, materiau, manches=0.45, bas=0.0, col_v=0.10, ample=0.018, nom="haut"):
+    def haut(self, materiau, manches=0.45, bas=0.09, col_v=0.10, ample=0.018, nom="haut"):
         """Haut (tunique de pyjama, tee-shirt…). manches : 0..2 (2 = jusqu'au poignet).
         bas : hauteur sous la taille (m) ; col_v : profondeur du col en V."""
         co = self.co
@@ -300,16 +302,60 @@ class Habilleur:
         co = self.co
         y = co[:, 1]
         limite, _ = ligne_cheveux(co, self.art, coupe)
-        oreilles = np.maximum(masque_cible("ears/l-ear-scale-incr", 0.5, self.n), masque_cible("ears/r-ear-scale-incr", 0.5, self.n))
+        oreilles = np.maximum(masque_cible("ears/l-ear-scale-incr", 1.0, self.n), masque_cible("ears/r-ear-scale-incr", 1.0, self.n))
         # La calotte déborde de 1,5 cm sous la lisière : la texture (alpha) dessine la vraie lisière.
-        sel = self.est_corps & (y > limite - 0.015) & (self.m["tete"] > 0.5) & (oreilles < 0.15)
-        sel_f = self._faces_de(sel)
+        sel = self.est_corps & (y > limite - 0.015) & (self.m["tete"] > 0.5)
+        # Le cuir chevelu de MakeHuman est peu dense : on garde toute face qui touche la zone
+        # (la texture, avec son alpha, dessine la lisière exacte), sauf le pavillon de l'oreille.
+        f = self.faces[self.f_corps]
+        garde = sel[f].any(axis=1) & ~(oreilles[f] > 0.6).any(axis=1)
+        sel_f = np.zeros(len(self.faces), dtype=bool)
+        sel_f[self.f_corps[garde]] = True
         oeil_y = 0.5 * (self.a("eye.L____head")[1] + self.a("eye.R____head")[1])
         dec = np.full(self.n, volume, dtype=np.float32)
         # Plus de volume sur le dessus, presque rien sur la lisière.
         dec += volume * 0.8 * np.clip((y - oeil_y - 0.06) / 0.06, 0, 1)
         dec *= np.clip((y - limite + 0.015) / 0.03, 0.15, 1.0)
         v = extraire(co, self.faces, self.fuv, sel_f, dec, 6, nom, materiau)
+        return v
+
+    def chignon(self, materiau, rayon=0.042, nom="Chignon"):
+        """Chignon (cheveux attachés) : ellipsoïde derrière la tête, lié à l'os de la tête."""
+        co = self.co
+        tete = self.a("head____head")
+        oeil_y = 0.5 * (self.a("eye.L____head")[1] + self.a("eye.R____head")[1])
+        cy = oeil_y + 0.005
+        zone = self.est_corps & (np.abs(co[:, 0] - tete[0]) < 0.02) & (np.abs(co[:, 1] - cy) < 0.025)
+        idx = np.nonzero(zone)[0]
+        arriere = idx[np.argmin(co[idx, 2])]
+        centre = co[arriere] + np.array([0.0, 0.0, -rayon * 0.55])
+        nl, nm = 10, 16
+        pts, uvs_v = [], []
+        b = self.b
+        # UV de la zone de cuir chevelu derrière la tête (texture de cheveux opaque).
+        fi = np.nonzero((b.faces[self.f_corps] == arriere).any(axis=1))[0][0]
+        f = self.f_corps[fi]
+        k = list(b.faces[f]).index(arriere)
+        uv0 = b.vt[b.fuv[f][k]]
+        for i in range(nl + 1):
+            th = np.pi * i / nl
+            for j in range(nm):
+                ph = 2 * np.pi * j / nm
+                d = np.array([np.sin(th) * np.cos(ph), np.cos(th), np.sin(th) * np.sin(ph)])
+                pts.append(centre + d * rayon * np.array([1.15, 0.85, 0.9]))
+                uvs_v.append(uv0 + 0.012 * np.array([np.cos(ph), np.sin(ph)]) * np.sin(th))
+        faces, fuv = [], []
+        for i in range(nl):
+            for j in range(nm):
+                a_ = i * nm + j
+                b_ = i * nm + (j + 1) % nm
+                c_ = (i + 1) * nm + (j + 1) % nm
+                d_ = (i + 1) * nm + j
+                faces.append([a_, d_, c_, b_])
+        faces = np.array(faces)
+        uvs = np.array(uvs_v)[faces]
+        v = Vetement(nom, materiau, np.array(pts), faces, None, np.full(len(pts), arriere))
+        v.uvs = uvs
         return v
 
     def faces_corps_visibles(self):

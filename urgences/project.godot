@@ -6,7 +6,7 @@ config_version=5
 
 config/name="Urgences"
 config/description="Simulateur de service d'urgences à la première personne : tri, diagnostic, traitement, orientation."
-run/main_scene="res://scenes/box_examen.tscn"
+run/main_scene="res://scenes/jeu.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
 run/max_fps=0
 
