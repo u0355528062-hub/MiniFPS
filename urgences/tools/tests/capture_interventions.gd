@@ -158,10 +158,10 @@ func _executer() -> void:
 		await _capturer("ambulance_approche", 2)
 		# Depuis l'intérieur du sas, on voit le véhicule se garer, gyrophares allumés.
 		await _vue(Vector3(31.0, 1.7, 25.5), Vector3(32.5, 1.3, 33.0), 66.0)
-		while is_instance_valid(cv) and cv.vehicule.global_position.distance_to(Vector3(32, 0, 31.5)) > 1.5 and Time.get_ticks_msec() - t0 < 120000:
+		while is_instance_valid(cv) and cv.vehicule.global_position.distance_to(Vector3(32, 0, 31.5)) > 1.5 and Time.get_ticks_msec() - t0 < 400000:
 			await process_frame
 		await _capturer("ambulance_gyrophares", 2)
-		while is_instance_valid(cv) and cv.brancard == null and Time.get_ticks_msec() - t0 < 150000:
+		while is_instance_valid(cv) and cv.brancard == null and Time.get_ticks_msec() - t0 < 500000:
 			await process_frame
 		await _attendre(6)
 		if is_instance_valid(cv) and cv.brancard:
@@ -172,7 +172,7 @@ func _executer() -> void:
 				await _vue(cv.brancard.global_position + Vector3(2.2, 1.6, -2.4), cv.brancard.global_position + Vector3(0, 0.7, 0), 60.0)
 				await _capturer("brancard_gros_plan", 2)
 		t0 = Time.get_ticks_msec()
-		while is_instance_valid(a) and a.etat == "arrivee" and Time.get_ticks_msec() - t0 < 120000:
+		while is_instance_valid(a) and a.etat == "arrivee" and Time.get_ticks_msec() - t0 < 400000:
 			await process_frame
 	Engine.time_scale = 1.0
 
@@ -197,10 +197,13 @@ func _executer() -> void:
 	await _vue(ld + Vector3(1.0, 1.6, 1.3), ld, 68.0)
 	var rcp = load("res://scripts/minijeux/mini_rcp.gd").new()
 	jeu._lancer_mini(rcp, func(_ok, _q): pass, {"constantes": dch.constantes})
-	for i in 10:
-		rcp._compression()
-		OS.delay_msec(520)
-		await process_frame
+	# Massage simulé à 110/min (le rendu logiciel est trop lent pour mesurer en temps réel).
+	var t_ms := Time.get_ticks_msec() / 1000.0
+	for i in 6:
+		rcp._compressions.append(t_ms - (5 - i) * 0.545)
+	rcp._bonnes = 54
+	rcp._total = 60
+	rcp._t_cycle = 9.0
 	await _capturer("rcp_massage", 6)
 	rcp._phase = "charge"
 	rcp._charge = 0.55
@@ -268,6 +271,7 @@ func _executer() -> void:
 	_fermer_ui()
 
 	# --- 9. La nuit : arrivée des pompiers --------------------------------------------------
+	g.heure = 22.5 * 3600.0
 	jeu.monde.regler_heure(22.5)
 	Engine.time_scale = 0.35
 	g.generer_arrivee("intoxication_alcool")

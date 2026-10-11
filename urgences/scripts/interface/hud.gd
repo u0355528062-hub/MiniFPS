@@ -72,9 +72,16 @@ func _ready() -> void:
 	racine.add_child(notifs)
 	# Sous-titres (paroles du patient).
 	sous_titre = PanelContainer.new()
-	sous_titre.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	sous_titre.position = Vector2(-420, -150)
-	sous_titre.custom_minimum_size = Vector2(840, 0)
+	# Largeur fixe, ancré en bas au centre, grandit vers le haut avec le texte.
+	sous_titre.anchor_left = 0.5
+	sous_titre.anchor_right = 0.5
+	sous_titre.anchor_top = 1.0
+	sous_titre.anchor_bottom = 1.0
+	sous_titre.offset_left = -420
+	sous_titre.offset_right = 420
+	sous_titre.offset_top = -110
+	sous_titre.offset_bottom = -110
+	sous_titre.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	sous_titre_texte = Label.new()
 	sous_titre_texte.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sous_titre_texte.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -221,8 +228,6 @@ func dire(qui: String, texte: String) -> void:
 	sous_titre_texte.text = "%s : « %s »" % [qui, texte]
 	sous_titre.visible = true
 	_sous_titre_t = clampf(texte.length() * 0.07, 3.0, 9.0)
-	sous_titre.reset_size()
-	ThemeHopital.placer(sous_titre, Vector2(0.5, 1.0), Vector2(-sous_titre.size.x * 0.5, -150))
 
 
 func progression(texte: String, valeur: float) -> void:
@@ -235,6 +240,7 @@ func progression(texte: String, valeur: float) -> void:
 func ouvrir_menu(titre: String, options: Array) -> void:
 	menu_titre.text = titre
 	for c in menu_liste.get_children():
+		menu_liste.remove_child(c)
 		c.queue_free()
 	for o in options:
 		if o[0] == "":
@@ -257,6 +263,7 @@ func ouvrir_menu(titre: String, options: Array) -> void:
 		menu_liste.add_child(b)
 	menu.visible = true
 	ThemeHopital.centrer(menu)
+	(func(): ThemeHopital.centrer(menu)).call_deferred()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -272,6 +279,7 @@ func ouvrir_tableau(g: Garde) -> void:
 	remplir_tableau(g)
 	tableau.visible = true
 	ThemeHopital.centrer(tableau)
+	(func(): ThemeHopital.centrer(tableau)).call_deferred()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -285,6 +293,7 @@ func fermer_tableau() -> void:
 
 func remplir_tableau(g: Garde) -> void:
 	for c in tableau_liste.get_children():
+		tableau_liste.remove_child(c)
 		c.queue_free()
 	var entete := HBoxContainer.new()
 	for col in [["Tri", 60], ["Patient", 300], ["Motif", 260], ["Lieu", 170], ["Attente", 90], ["Étape", 180]]:
@@ -367,6 +376,7 @@ func bilan(b: Dictionary) -> void:
 ## Remplit le dossier patient (fiche d'accueil + constantes mesurées + tri).
 func remplir_dossier(p: PatientJeu) -> void:
 	for c in dossier_contenu.get_children():
+		dossier_contenu.remove_child(c)
 		c.queue_free()
 	var d := p.dossier
 	dossier_contenu.add_child(ThemeHopital.titre("Dossier de soins — urgences", 22))

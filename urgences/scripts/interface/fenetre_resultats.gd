@@ -21,6 +21,7 @@ func _ready() -> void:
 
 func montrer(p: PatientJeu, ex: String) -> void:
 	for c in _contenu.get_children():
+		_contenu.remove_child(c)
 		c.queue_free()
 	var tete := HBoxContainer.new()
 	tete.add_child(ThemeHopital.titre("%s — %s" % [Pathologies.EXAMENS[ex][0], p.titre()], 22))
