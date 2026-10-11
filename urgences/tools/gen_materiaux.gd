@@ -65,6 +65,8 @@ func _initialize() -> void:
 	_image("logo_biorisque", "details/logo_dasri.png", 0.5)
 	_image("cadran", "details/cadran.png", 0.3)
 	_image("cadran_horloge", "details/horloge.png", 0.4)
+	_image("panneau_extincteur", "signaletique/panneau_extincteur.png", 0.5)
+	_simple("rouge_extincteur", Color(0.72, 0.05, 0.04), 0.25)
 	# --- Transparents --------------------------------------------------------------------------
 	_transparent("poche_perf", Color(0.93, 0.96, 1.0, 0.28), 0.12)
 	_transparent("plastique_transparent", Color(0.92, 0.95, 0.97, 0.30), 0.10)

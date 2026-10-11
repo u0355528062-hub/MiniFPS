@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/signaletique/panneau_extincteur.png" id="1_h7q43"]
+
+[resource]
+resource_name = "panneau_extincteur"
+albedo_texture = ExtResource("1_h7q43")
+roughness = 0.5

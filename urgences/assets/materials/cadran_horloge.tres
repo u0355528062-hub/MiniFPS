@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/details/horloge.png" id="1_pe3ao"]
+
+[resource]
+resource_name = "cadran_horloge"
+albedo_texture = ExtResource("1_pe3ao")
+roughness = 0.4

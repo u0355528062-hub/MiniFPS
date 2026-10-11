@@ -1,0 +1,6 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+resource_name = "rouge_extincteur"
+albedo_color = Color(0.72, 0.05, 0.04, 1)
+roughness = 0.25

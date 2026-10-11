@@ -127,7 +127,7 @@ func _ready() -> void:
 	# Compteur de performances.
 	fps = Label.new()
 	fps.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	fps.position = Vector2(16, -120)
+	fps.position = Vector2(16, -260)
 	fps.add_theme_color_override("font_color", Color(0.7, 1.0, 0.7))
 	fps.add_theme_color_override("font_shadow_color", Color.BLACK)
 	fps.add_theme_font_size_override("font_size", 15)
@@ -145,7 +145,7 @@ func _process(delta: float) -> void:
 			Engine.get_frames_per_second(), 1000.0 / maxf(Engine.get_frames_per_second(), 1.0),
 			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
-			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000]
+			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000] + "\n" + Profileur.resume()
 
 
 func _unhandled_input(event: InputEvent) -> void:

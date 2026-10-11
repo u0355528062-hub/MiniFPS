@@ -21,6 +21,11 @@ func _ready() -> void:
 	_mobilier()
 	_eclairage()
 	_ambiance()
+	# Géométrie statique fusionnée : tout le mobilier fixe du box et du couloir → 1 maillage.
+	var t := Time.get_ticks_msec()
+	Fusion.fusionner(get_node("Mobilier"), "MobilierFusionne")
+	Fusion.fusionner(get_node("Eclairage"), "LuminairesFusionnes")
+	print("fusion statique : %d ms" % (Time.get_ticks_msec() - t))
 	Reglages.change.connect(_reglages_changes)
 	_reglages_changes()
 
@@ -92,6 +97,7 @@ func _mobilier() -> void:
 	_poser("bandeau_tete_lit", Vector3(1.55, 1.45, EP * 0.5 + 0.045), 0.0, m)
 	var mon := Moniteur.new()
 	mon.name = "Moniteur"
+	mon.add_to_group("dynamique")
 	mon.position = Vector3(0.45, 1.72, EP * 0.5 + 0.53)
 	mon.rotation_degrees.y = 20.0
 	m.add_child(mon)
@@ -119,8 +125,8 @@ func _mobilier() -> void:
 	_poser("horloge", Vector3(LX * 0.5 + 0.3, 2.25, LZ - EP * 0.5), 180.0, m)
 	# Rail et rideau d'intimité (côté porte), rideau à moitié tiré.
 	_poser("rail_rideau", Vector3(1.8, H - 0.04, 3.55), 0.0, m)
-	var rid := _poser("rideau", Vector3(1.85, H - 0.06, 3.55), 0.0, m)
-	rid.scale = Vector3(0.75, 1.0, 1.0)
+	var rid := _poser("rideau", Vector3(0.12, H - 0.06, 3.55), 0.0, m)
+	rid.scale = Vector3(0.62, 1.0, 1.0)
 	points_interet["place_patient"] = Vector3(1.55, 0.80, 1.27)
 	# Couloir : chaise et brancard en attente, poubelle.
 	_poser("brancard", Vector3(-1.6, 0, LZ + COULOIR - 0.55), 0.0, m)
@@ -128,6 +134,7 @@ func _mobilier() -> void:
 	_poser("chaise", Vector3(5.75, 0, LZ + COULOIR - 0.4), 180.0, m)
 	_poser("pied_perfusion", Vector3(4.6, 0, LZ + 0.5), 0.0, m)
 	_poser("lavabo", Vector3(7.2, 0, LZ + COULOIR - EP * 0.5), 180.0, m)
+	_decor(m)
 	# Porte coulissante vitrée du box (entrouverte) et portes des box voisins (fermées).
 	_porte_vitree(m, 1.95, 0.55)
 	_porte_vitree(m, -3.0, 0.0)
@@ -167,6 +174,90 @@ func _porte_vitree(parent: Node3D, x0: float, ouvert: float) -> void:
 		parent.add_child(r)
 
 
+## Signalétique, affiches, décalques au sol, extincteur, poussière en suspension.
+func _decor(m: Node3D) -> void:
+	var sig := "res://assets/textures/signaletique/"
+	# Panneaux « BOX n » au-dessus des portes, côté couloir.
+	for p in [[3, 2.65], [2, -2.3], [4, LX + 2.3]]:
+		_affiche(m, sig + "box_%d.png" % p[0], Vector3(p[1], 2.42, LZ + EP * 0.5 + 0.004), 0.0, Vector2(0.42, 0.21), true)
+	# Affiches de prévention.
+	_affiche(m, sig + "affiche_mains.png", Vector3(EP * 0.5 + 0.004, 1.45, 3.62), 90.0, Vector2(0.30, 0.425))
+	_affiche(m, sig + "affiche_avc.png", Vector3(0.6, 1.45, LZ + COULOIR - EP * 0.5 - 0.004), 180.0, Vector2(0.42, 0.595))
+	_affiche(m, sig + "affiche_attente.png", Vector3(-0.2, 1.45, LZ + COULOIR - EP * 0.5 - 0.004), 180.0, Vector2(0.42, 0.595))
+	# Extincteur au mur du couloir.
+	_poser("extincteur", Vector3(-3.3, 0.85, LZ + EP * 0.5), 180.0, m)
+	# Flèches de signalétique au sol (décalques projetés vers le bas).
+	_decalque(m, sig + "fleche_radiologie.png", Vector3(-1.2, 0, LZ + COULOIR * 0.5 - 0.35), Vector3(1.2, 0.3, 0.3), 0.0)
+	_decalque(m, sig + "fleche_dechocage.png", Vector3(-1.2, 0, LZ + COULOIR * 0.5 + 0.35), Vector3(1.2, 0.3, 0.3), 180.0)
+	# Traces d'usure (roues de brancard, pas) au sol.
+	_decalque(m, sig + "traces.png", Vector3(1.6, 0, LZ + COULOIR * 0.5), Vector3(6.0, 0.3, 2.2), 0.0, 0.8)
+	_decalque(m, sig + "traces.png", Vector3(1.8, 0, 2.6), Vector3(2.6, 0.3, 2.4), 37.0, 0.6)
+	# Poussière en suspension, visible dans les faisceaux de lumière.
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(LX * 0.5, H * 0.45, LZ * 0.5)
+	pm.gravity = Vector3(0, -0.002, 0)
+	pm.initial_velocity_min = 0.0
+	pm.initial_velocity_max = 0.015
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 180.0
+	pm.turbulence_enabled = true
+	pm.turbulence_noise_strength = 0.4
+	pm.turbulence_noise_speed_random = 0.2
+	pm.scale_min = 0.6
+	pm.scale_max = 1.4
+	var poussiere := GPUParticles3D.new()
+	poussiere.name = "Poussiere"
+	poussiere.amount = 220
+	poussiere.lifetime = 24.0
+	poussiere.preprocess = 24.0
+	poussiere.process_material = pm
+	poussiere.position = Vector3(LX * 0.5, H * 0.5, LZ * 0.5)
+	poussiere.visibility_aabb = AABB(Vector3(-LX * 0.5, -H * 0.5, -LZ * 0.5), Vector3(LX, H, LZ))
+	poussiere.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var q := QuadMesh.new()
+	q.size = Vector2(0.004, 0.004)
+	var mp := StandardMaterial3D.new()
+	mp.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mp.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mp.albedo_color = Color(1, 1, 1, 0.35)
+	mp.roughness = 1.0
+	q.material = mp
+	poussiere.draw_pass_1 = q
+	poussiere.add_to_group("dynamique")
+	add_child(poussiere)
+
+
+func _affiche(parent: Node3D, tex: String, pos: Vector3, rot_y: float, taille: Vector2, decoupe := false) -> void:
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = taille
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = load(tex)
+	mat.roughness = 0.35
+	if decoupe:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	q.material = mat
+	mi.mesh = q
+	mi.position = pos
+	mi.rotation_degrees.y = rot_y
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+
+func _decalque(parent: Node3D, tex: String, pos: Vector3, taille: Vector3, rot_y: float, opacite := 1.0) -> void:
+	var d := Decal.new()
+	d.texture_albedo = load(tex)
+	d.size = taille
+	d.position = pos
+	d.rotation_degrees.y = rot_y
+	d.albedo_mix = opacite
+	d.upper_fade = 0.1
+	d.lower_fade = 0.1
+	d.cull_mask = 1
+	parent.add_child(d)
+
+
 func _bloc(parent: Node3D, centre: Vector3, taille: Vector3, mat: Material) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -188,7 +279,7 @@ func _eclairage() -> void:
 	for p in dalles:
 		_dalle_led(l, p, 1.3, true)
 	for x in [-2.7, -0.3, 2.1, 4.5, 6.9]:
-		_dalle_led(l, Vector3(x, H, LZ + COULOIR * 0.5), 1.1, x > -1 and x < 5)
+		_dalle_led(l, Vector3(x, H, LZ + COULOIR * 0.5), 1.1, absf(x - 2.1) < 0.1)
 	# Éclairage indirect du bandeau de tête de lit (lumière chaude vers le plafond).
 	var ind := OmniLight3D.new()
 	ind.position = Vector3(1.55, 1.75, 0.25)
@@ -350,6 +441,7 @@ func poses_capture() -> Array:
 		{"nom": "box_lit", "position": Vector3(2.9, 1.5, 2.6), "cible": Vector3(1.4, 0.9, 1.0), "fov": 60.0},
 		{"nom": "box_mur_gauche", "position": Vector3(2.6, 1.6, 1.4), "cible": Vector3(0.2, 1.1, 2.7), "fov": 70.0},
 		{"nom": "couloir", "position": Vector3(-3.2, 1.65, LZ + 1.2), "cible": Vector3(4.0, 1.2, LZ + 1.5), "fov": 70.0},
+		{"nom": "couloir_box", "position": Vector3(5.6, 1.6, LZ + 2.1), "cible": Vector3(1.0, 1.3, LZ), "fov": 65.0},
 		{"nom": "moniteur", "position": Vector3(1.0, 1.6, 1.3), "cible": Vector3(0.45, 1.7, 0.6), "fov": 50.0},
 		{"nom": "patient", "position": Vector3(2.3, 1.45, 2.3), "cible": Vector3(1.55, 0.95, 1.2), "fov": 50.0},
 		{"nom": "patient_visage", "position": Vector3(1.95, 1.35, 1.75), "cible": Vector3(1.55, 1.15, 1.05), "fov": 35.0},

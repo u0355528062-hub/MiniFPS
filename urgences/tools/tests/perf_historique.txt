@@ -1,0 +1,28 @@
+
+=== 2026-10-11T16:36:14 · préréglage ultra · chargement 6493 ms ===
+vue                appels   objets   prim (k)  proc (ms)  phys (ms)
+box_porte            1342     1513      710.0    2596.36       0.83 DÉPASSEMENT(objets) DÉPASSEMENT(process_ms)
+box_lit              1335     1494      728.6    2317.51       0.94 DÉPASSEMENT(objets) DÉPASSEMENT(process_ms)
+box_mur_gauche       1342     1509      854.3    2315.81       1.09 DÉPASSEMENT(objets) DÉPASSEMENT(process_ms)
+couloir              1415     1606      516.4    2373.84       0.94 DÉPASSEMENT(objets) DÉPASSEMENT(process_ms)
+moniteur              693      837      490.9    1878.07       0.76 DÉPASSEMENT(process_ms)
+patient               938     1077      659.7    2251.15       0.79 DÉPASSEMENT(process_ms)
+patient_visage        830      970      622.6    2134.59       0.75 DÉPASSEMENT(process_ms)
+jeu_scope             878     1014      631.2    2016.83       0.98 DÉPASSEMENT(process_ms)
+Systèmes (µs/image) : joueur : 12 µs · moniteurs : 28 µs · patients : 66 µs · personnages : 2 µs
+Nœuds : 279 · objets physiques actifs : 0 · mémoire statique : 116 Mo · mémoire vidéo : 1517 Mo
+RÉSULTAT : 12 DÉPASSEMENT(S)
+
+=== 2026-10-11T16:54:09 · préréglage ultra · chargement 6124 ms ===
+vue                appels   objets   prim (k)  proc (ms)  phys (ms)
+box_porte             455      591      940.3    2475.43       1.04
+box_lit               455      591      943.8    2324.97       0.92
+box_mur_gauche        451      587     1025.3    2203.29       0.70
+couloir               455      591      894.5    2174.61       0.67
+moniteur              440      576     1026.7    2035.73       0.70
+patient               455      591     1026.3    2169.32       0.74
+patient_visage        455      591     1029.8    2092.43       0.70
+jeu_scope             455      591     1028.5    1953.13       0.68
+Systèmes (µs/image) : joueur : 14 µs · moniteurs : 26 µs · patients : 73 µs · personnages : 9 µs
+Nœuds : 221 · objets physiques actifs : 0 · mémoire statique : 115 Mo · mémoire vidéo : 1522 Mo
+RÉSULTAT : OK

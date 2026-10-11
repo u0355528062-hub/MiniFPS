@@ -13,5 +13,5 @@ normal_enabled = true
 normal_texture = ExtResource("2_2vv5g")
 backlight_enabled = true
 backlight = Color(0.35, 0.42, 0.42, 1)
-uv1_scale = Vector3(0.5, 0.5, 0.5)
+uv1_scale = Vector3(0.8, 0.8, 0.8)
 texture_filter = 5

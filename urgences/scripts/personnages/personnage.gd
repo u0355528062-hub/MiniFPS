@@ -165,8 +165,10 @@ func expression(nom: String, valeur: float) -> void:
 
 
 func _process(delta: float) -> void:
+	var _t_prof := Profileur.debut()
 	# Clignement des yeux (une blend shape, quelques images toutes les 2 à 6 s).
 	if corps == null or _idx_clignement < 0:
+		Profileur.fin("personnages", _t_prof)
 		return
 	_prochain_clignement -= delta
 	if _prochain_clignement <= 0.0:
@@ -177,3 +179,4 @@ func _process(delta: float) -> void:
 			_clignement = 0.0
 			corps.set_blend_shape_value(_idx_clignement, 0.0)
 			_prochain_clignement = randf_range(2.0, 6.0)
+	Profileur.fin("personnages", _t_prof)

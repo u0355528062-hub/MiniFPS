@@ -53,9 +53,11 @@ func repondre(question: String) -> String:
 
 
 func _process(delta: float) -> void:
+	var _t_prof := Profileur.debut()
 	if constantes:
 		constantes.avancer(delta)
 	if personnage == null or personnage.corps == null:
+		Profileur.fin("patients", _t_prof)
 		return
 	# Expression de douleur selon l'EVA, mouvements de lèvres quand il parle.
 	personnage.expression("douleur", clampf(constantes.eva / 10.0, 0.0, 1.0) * 0.9)
@@ -64,3 +66,4 @@ func _process(delta: float) -> void:
 		personnage.expression("bouche_ouverte", absf(sin(Time.get_ticks_msec() * 0.012)) * 0.5)
 	else:
 		personnage.expression("bouche_ouverte", 0.0)
+	Profileur.fin("patients", _t_prof)

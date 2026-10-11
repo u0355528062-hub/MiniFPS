@@ -62,9 +62,12 @@ func brancher(oui: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	var _t_prof := Profileur.debut()
 	_accu += delta
 	if _accu < 1.0 / FREQUENCE:
+		Profileur.fin("moniteurs", _t_prof)
 		return
 	ecran.avancer(_accu)
 	_accu = 0.0
 	vue.render_target_update_mode = SubViewport.UPDATE_ALWAYS if _visible_ecran else SubViewport.UPDATE_DISABLED
+	Profileur.fin("moniteurs", _t_prof)

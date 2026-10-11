@@ -26,6 +26,8 @@ var controle := true          # faux quand un menu est ouvert
 var _tangage := 0.0
 var _hauteur := HAUTEUR_YEUX
 var _balancement := 0.0
+var _attributs: CameraAttributesPractical
+var _mise_au_point := 3.0
 var _gravite: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 
@@ -51,6 +53,8 @@ func _ready() -> void:
 	camera.near = 0.03
 	camera.far = 200.0
 	camera.fov = Reglages.jeu["fov"]
+	_attributs = CameraAttributesPractical.new()
+	camera.attributes = _attributs
 	bras_camera.add_child(camera)
 	camera.make_current()
 	rayon = RayCast3D.new()
@@ -112,6 +116,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	var _t_prof := Profileur.debut()
 	# Hauteur des yeux (accroupi) et léger balancement de marche.
 	var cible_h := HAUTEUR_ACCROUPI if (controle and Input.is_action_pressed("accroupir")) else HAUTEUR_YEUX
 	_hauteur = lerpf(_hauteur, cible_h, clampf(8.0 * delta, 0, 1))
@@ -126,6 +131,22 @@ func _process(delta: float) -> void:
 		if corps_visuel.lecteur.current_animation != anim:
 			corps_visuel.jouer(anim, 0.3, clampf(v / 1.4, 0.7, 2.2) if anim == "marche" else 1.0)
 	_viser()
+	_profondeur_champ(delta)
+	Profileur.fin("joueur", _t_prof)
+
+## Profondeur de champ : quand on examine de près (moins de 1,6 m), l'arrière-plan se floute.
+func _profondeur_champ(delta: float) -> void:
+	var actif: bool = Reglages.graphismes.get("profondeur_champ", true) and not troisieme_personne
+	var d := 99.0
+	if actif and rayon.is_colliding():
+		d = tete.global_position.distance_to(rayon.get_collision_point())
+	_mise_au_point = lerpf(_mise_au_point, d, clampf(delta * 4.0, 0.0, 1.0))
+	var proche := actif and _mise_au_point < 1.6
+	_attributs.dof_blur_far_enabled = proche
+	if proche:
+		_attributs.dof_blur_far_distance = _mise_au_point + 0.5
+		_attributs.dof_blur_far_transition = 1.2
+		_attributs.dof_blur_amount = 0.06
 
 
 func _viser() -> void:

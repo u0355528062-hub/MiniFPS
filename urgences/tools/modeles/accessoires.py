@@ -514,7 +514,26 @@ def horloge():
     fin("horloge", sans_uv=("cadran",))
 
 
+def extincteur():
+    """Extincteur à eau pulvérisée 6 L (rouge) sur son support mural, avec panneau. Face -Y."""
+    vider_scene()
+    tour("corps", [(0.0, 0.0), (0.085, 0.0), (0.09, 0.01), (0.09, 0.47), (0.07, 0.52), (0.03, 0.54), (0.0, 0.54)],
+         (0, -0.10, 0.05), "rouge_extincteur", seg=40)
+    boite("etiquette_ext", (0.10, 0.004, 0.16), (0, -0.191, 0.33), "etiquette")
+    cylindre("tete", 0.025, 0.06, (0, -0.10, 0.62), "chrome", 20)
+    boite("poignee", (0.14, 0.03, 0.015), (0.03, -0.10, 0.66), "plastique_noir", arrondi=0.005)
+    boite("gachette", (0.12, 0.025, 0.012), (0.03, -0.10, 0.64), "plastique_noir", arrondi=0.004, rot=(0, 0.25, 0))
+    cylindre("manometre", 0.018, 0.012, (0.0, -0.13, 0.61), "cadran", 20, (PI / 2, 0, 0))
+    tube("tuyau", courbe_lisse([(-0.02, -0.10, 0.62), (-0.08, -0.12, 0.58), (-0.11, -0.13, 0.35), (-0.10, -0.15, 0.20)], 6),
+         0.009, "caoutchouc_noir", seg=10)
+    cylindre("buse", 0.012, 0.05, (-0.10, -0.15, 0.17), "plastique_noir", 12)
+    boite("support", (0.12, 0.03, 0.06), (0, -0.015, 0.50), "metal_peint_gris", arrondi=0.005)
+    uv_plan(boite("panneau", (0.20, 0.004, 0.20), (0, -0.002, 0.82), "panneau_extincteur"))
+    fin("extincteur", sans_uv=("panneau",))
+
+
 TOUS = {
+    "extincteur": extincteur,
     "porte_90": lambda: porte("porte_90", 0.90), "porte_120": lambda: porte("porte_120", 1.10),
     "horloge": horloge,
     "brancard": brancard, "moniteur": moniteur, "pied_perfusion": pied_perfusion,
