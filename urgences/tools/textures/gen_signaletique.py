@@ -123,7 +123,60 @@ def panneau_extincteur():
     im.save(os.path.join(SORTIE, "panneau_extincteur.png"))
 
 
+def textes_vehicules():
+    for nom, txt, coul, fond in (("texte_samu", "SAMU 75", (20, 60, 150), (245, 245, 245)),
+                                 ("texte_pompiers", "SAPEURS-POMPIERS", (255, 255, 255), (185, 20, 20))):
+        im = Image.new("RGB", (1024, 170), fond)
+        dr = ImageDraw.Draw(im)
+        centre(dr, (512, 85), txt, f(110 if len(txt) < 10 else 84), coul)
+        im.save(os.path.join(SORTIE, nom + ".png"))
+
+
+def vitrine_distributeur():
+    im = Image.new("RGB", (512, 1024), (25, 28, 32))
+    dr = ImageDraw.Draw(im)
+    rng = np.random.default_rng(5)
+    couleurs = [(200, 30, 40), (240, 180, 20), (30, 120, 200), (40, 160, 70), (230, 230, 230), (120, 60, 160), (250, 120, 30)]
+    for r in range(6):
+        y0 = 40 + r * 160
+        dr.rectangle((20, y0 + 120, 492, y0 + 128), fill=(170, 170, 175))
+        for c in range(5):
+            x0 = 30 + c * 92
+            col = couleurs[rng.integers(len(couleurs))]
+            if r < 3:
+                dr.rounded_rectangle((x0 + 18, y0 + 20, x0 + 62, y0 + 118), 10, fill=col)
+                dr.rectangle((x0 + 22, y0 + 50, x0 + 58, y0 + 80), fill=(250, 250, 250))
+            else:
+                dr.rounded_rectangle((x0 + 5, y0 + 50, x0 + 80, y0 + 118), 6, fill=col)
+                dr.line((x0 + 10, y0 + 80, x0 + 75, y0 + 80), fill=(255, 255, 255), width=4)
+            dr.text((x0 + 25, y0 + 132), "%d%d" % (r + 1, c + 1), font=f(18), fill=(230, 230, 230))
+    im.save(os.path.join(SORTIE, "vitrine_distributeur.png"))
+    im = Image.new("RGB", (512, 90), (200, 20, 30))
+    dr = ImageDraw.Draw(im)
+    centre(dr, (256, 45), "Boissons & snacks", f(48), (255, 255, 255))
+    im.save(os.path.join(SORTIE, "fronton_distributeur.png"))
+
+
+def ecran_info():
+    im = Image.new("RGB", (1280, 720), (12, 40, 70))
+    dr = ImageDraw.Draw(im)
+    dr.rectangle((0, 0, 1280, 110), fill=BLEU_URG)
+    centre(dr, (640, 55), "Service des Urgences — Bienvenue", f(52), (255, 255, 255))
+    centre(dr, (640, 200), "Temps d'attente estimé", f(46), (200, 225, 245))
+    centre(dr, (640, 310), "1 h 45", f(130), (255, 255, 255))
+    lignes = ["Les patients sont pris en charge selon la gravité,", "et non selon l'ordre d'arrivée.",
+              "Signalez à l'accueil toute aggravation de votre état."]
+    for i, l in enumerate(lignes):
+        centre(dr, (640, 470 + i * 60), l, f(38), (220, 230, 240))
+    dr.rectangle((0, 660, 1280, 720), fill=(8, 28, 50))
+    centre(dr, (640, 690), "Wi-Fi gratuit : HOPITAL-PUBLIC  ·  Distributeur au fond de la salle", f(28), (160, 190, 220))
+    im.save(os.path.join(SORTIE, "ecran_info.png"))
+
+
 if __name__ == "__main__":
+    textes_vehicules()
+    vitrine_distributeur()
+    ecran_info()
     panneau_extincteur()
     for n in range(1, 9):
         panneau_box(n)

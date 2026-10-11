@@ -67,6 +67,44 @@ func _initialize() -> void:
 	_image("cadran_horloge", "details/horloge.png", 0.4)
 	_image("panneau_extincteur", "signaletique/panneau_extincteur.png", 0.5)
 	_simple("rouge_extincteur", Color(0.72, 0.05, 0.04), 0.25)
+	# --- Étape 2 : accueil, déchocage, imagerie, véhicules ---------------------------------------
+	_tex("plan_solide", "plastique_grain", Color(0.95, 0.95, 0.94), 0.0, Vector3(4, 4, 4), {"rug": 0.3})
+	_tex("metal_peint_rouge", "plastique_grain", Color(0.70, 0.07, 0.06), 0.0, Vector3(6, 6, 6), {"rug": 0.45})
+	_simple("blanc_o2", Color(0.92, 0.92, 0.92), 0.3)
+	_tex("plastique_vert_clair", "plastique_grain", Color(0.55, 0.85, 0.60), 0.0, Vector3(8, 8, 8))
+	_transparent("tubulure_bleue", Color(0.55, 0.75, 1.0, 0.75), 0.2)
+	_simple("platre", Color(0.95, 0.94, 0.90), 0.95)
+	_simple("carbone", Color(0.08, 0.08, 0.09), 0.35)
+	_emissif("led_bleue", Color(0.3, 0.6, 1.0), 3.0)
+	_transparent("verre_teinte", Color(0.12, 0.15, 0.18, 0.75), 0.05)
+	_simple("carrosserie_blanche", Color(0.93, 0.93, 0.92), 0.22)
+	_simple("carrosserie_rouge", Color(0.70, 0.04, 0.04), 0.22)
+	_simple("bande_samu", Color(0.95, 0.45, 0.05), 0.3)
+	_simple("bande_pompiers", Color(0.95, 0.95, 0.95), 0.3)
+	_image("texte_samu", "signaletique/texte_samu.png", 0.3)
+	_image("texte_pompiers", "signaletique/texte_pompiers.png", 0.3)
+	_emissif("phare", Color(1.0, 0.98, 0.9), 1.5)
+	_emissif("gyrophare", Color(0.15, 0.35, 1.0), 4.0)
+	var vit := StandardMaterial3D.new()
+	vit.albedo_texture = load(TEX + "signaletique/vitrine_distributeur.png")
+	vit.emission_enabled = true
+	vit.emission_texture = vit.albedo_texture
+	vit.emission_energy_multiplier = 0.8
+	vit.roughness = 0.1
+	_sauver(vit, "vitrine_distributeur")
+	var fr := StandardMaterial3D.new()
+	fr.albedo_texture = load(TEX + "signaletique/fronton_distributeur.png")
+	fr.emission_enabled = true
+	fr.emission_texture = fr.albedo_texture
+	fr.emission_energy_multiplier = 1.2
+	_sauver(fr, "fronton_distributeur")
+	var info := StandardMaterial3D.new()
+	info.albedo_color = Color.BLACK
+	info.emission_enabled = true
+	info.emission_texture = load(TEX + "signaletique/ecran_info.png")
+	info.emission_energy_multiplier = 1.3
+	info.roughness = 0.15
+	_sauver(info, "ecran_info")
 	# --- Transparents --------------------------------------------------------------------------
 	_transparent("poche_perf", Color(0.93, 0.96, 1.0, 0.28), 0.12)
 	_transparent("plastique_transparent", Color(0.92, 0.95, 0.97, 0.30), 0.10)

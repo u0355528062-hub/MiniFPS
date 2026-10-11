@@ -1,0 +1,11 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/signaletique/vitrine_distributeur.png" id="1_e0l40"]
+
+[resource]
+resource_name = "vitrine_distributeur"
+albedo_texture = ExtResource("1_e0l40")
+roughness = 0.1
+emission_enabled = true
+emission_energy_multiplier = 0.8
+emission_texture = ExtResource("1_e0l40")

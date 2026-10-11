@@ -1,0 +1,9 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+resource_name = "gyrophare"
+albedo_color = Color(0.15, 0.35, 1, 1)
+roughness = 0.4
+emission_enabled = true
+emission = Color(0.15, 0.35, 1, 1)
+emission_energy_multiplier = 4.0

@@ -418,12 +418,17 @@ func cuire_gi() -> void:
 	rafraichir_sondes()
 
 
+## Recalcule les sondes de reflets une fois la scène éclairée (sinon l'inox reflète du noir) :
+## quelques images en mise à jour continue, puis retour en mise à jour unique (aucun coût).
 func rafraichir_sondes() -> void:
 	for s in [sonde, sonde2]:
 		if s:
-			s.position += Vector3(0.0, 0.0001, 0.0)
-			await get_tree().process_frame
-			s.position -= Vector3(0.0, 0.0001, 0.0)
+			s.update_mode = ReflectionProbe.UPDATE_ALWAYS
+	for i in 8:
+		await get_tree().process_frame
+	for s in [sonde, sonde2]:
+		if s:
+			s.update_mode = ReflectionProbe.UPDATE_ONCE
 
 
 func _reglages_changes() -> void:

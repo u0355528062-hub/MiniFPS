@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/signaletique/texte_pompiers.png" id="1_xpi6d"]
+
+[resource]
+resource_name = "texte_pompiers"
+albedo_texture = ExtResource("1_xpi6d")
+roughness = 0.3

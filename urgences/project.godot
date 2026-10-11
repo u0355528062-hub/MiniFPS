@@ -12,6 +12,7 @@ run/max_fps=0
 
 [autoload]
 
+Paquets="*res://scripts/systeme/paquets.gd"
 Reglages="*res://scripts/systeme/reglages.gd"
 Commandes="*res://scripts/systeme/commandes.gd"
 Profileur="*res://scripts/systeme/profileur.gd"
