@@ -19,6 +19,10 @@ var _prochain_clignement := 2.0
 var _clignement := 0.0
 var _idx_clignement := -1
 var _expressions := {}
+var _notif: VisibleOnScreenNotifier3D
+var _accu_anim := 0.0
+var _phase := 0
+static var _image := 0
 
 static var _bibliotheque: AnimationLibrary
 static var _hauteur_bassin_ref := 0.0
@@ -40,6 +44,13 @@ func _ready() -> void:
 	m.add_child(lecteur)
 	lecteur.root_node = NodePath("..")
 	lecteur.add_animation_library("", _bibliotheque)
+	# Les animations sont avancées par _process selon un budget (distance, visibilité) :
+	# un personnage lointain ou hors champ n'est animé que quelques fois par seconde.
+	lecteur.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	_notif = VisibleOnScreenNotifier3D.new()
+	_notif.aabb = AABB(Vector3(-0.6, 0.0, -0.6), Vector3(1.2, 2.0, 1.2))
+	add_child(_notif)
+	_phase = randi() % 8
 	lecteur.playback_default_blend_time = 0.35
 	# Les positions animées du bassin sont à l'échelle de l'humain neutre.
 	var racine := skeleton.find_bone("root")
@@ -164,8 +175,33 @@ func expression(nom: String, valeur: float) -> void:
 		corps.set_blend_shape_value(_expressions[nom], valeur)
 
 
+## Intervalle de mise à jour de l'animation (en images) selon la distance à la caméra et
+## la visibilité : 1 = chaque image (proche), jusqu'à 8 (hors champ). Les personnages sont
+## répartis sur des images différentes (_phase) pour lisser la charge.
+func _intervalle() -> int:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return 1
+	if _notif and not _notif.is_on_screen():
+		return 8
+	var d := cam.global_position.distance_to(global_position)
+	if d < 8.0:
+		return 1
+	if d < 16.0:
+		return 2
+	if d < 30.0:
+		return 4
+	return 6
+
+
 func _process(delta: float) -> void:
 	var _t_prof := Profileur.debut()
+	if lecteur:
+		_accu_anim += delta
+		var n := _intervalle()
+		if n == 1 or (Engine.get_process_frames() + _phase) % n == 0:
+			lecteur.advance(_accu_anim)
+			_accu_anim = 0.0
 	# Clignement des yeux (une blend shape, quelques images toutes les 2 à 6 s).
 	if corps == null or _idx_clignement < 0:
 		Profileur.fin("personnages", _t_prof)

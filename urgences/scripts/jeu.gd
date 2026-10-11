@@ -1,81 +1,66 @@
 extends Node3D
-## Partie (prototype, étape 1) : un box d'examen, un patient, le joueur soignant.
-## Boucle : examiner le patient → brancher le scope, prendre les constantes, l'interroger →
-## attribuer un niveau de tri. Le temps de jeu avance (1 s réelle = 10 s de jeu).
+## Partie : le service des urgences complet, une garde avec des arrivées de patients.
+## Boucle : accueil et tri (IOA) → installation en box / déchocage ou salle d'attente →
+## interrogatoire, examen clinique, constantes, examens complémentaires → traitements →
+## diagnostic → orientation (domicile, hospitalisation, bloc, réanimation…). Score et réputation.
 
-const ECHELLE_TEMPS := 10.0
-
-var monde: Node3D
+var monde: Service
+var garde: Garde
 var joueur: Joueur
 var hud: Hud
 var menu_pause: MenuPause
-var patient: PatientJeu
-var moniteur: Moniteur
-var heure := 8.0 * 3600.0 + 12.0 * 60.0   # 08 h 12
-var _action := {}                            # action en cours {id, duree, t, fin}
-var _menu_cible: Node = null
-
-const SCENARIO := {
-	"modele": "patient_gerard", "posture": "semi_assis",
-	"prenom": "Gérard", "nom": "MARTIN", "age": 67, "sexe": "M", "iep": "2410-03187", "arrivee": "07 h 58",
-	"motif": "Douleur thoracique depuis 45 minutes",
-	"antecedents": "HTA, diabète de type 2, tabagisme (40 paquets-années)",
-	"traitement": "Metformine 1000 mg ×2, ramipril 5 mg",
-	"allergies": "Aucune connue",
-	"constantes": {"fc": 96.0, "tas": 158.0, "tad": 92.0, "spo2": 95.0, "fr": 20.0, "temperature": 36.9,
-		"glycemie": 1.62, "eva": 7, "sus_st": 0.22},
-	"tri_attendu": 2,
-	"reponses": {
-		"motif": "J'ai une douleur dans la poitrine… comme un étau. Ça serre fort.",
-		"debut": "Ça a commencé il y a trois quarts d'heure, en montant les escaliers. Ça ne passe pas au repos.",
-		"irradiation": "Ça descend dans le bras gauche… et un peu dans la mâchoire.",
-		"signes": "J'ai transpiré d'un coup, et j'ai un peu la nausée.",
-		"antecedents": "J'ai de la tension, du diabète… et je fume, je sais, ce n'est pas bien.",
-		"traitement": "De la metformine matin et soir, et un comprimé pour la tension, le ramipril.",
-		"allergies": "Non, aucune allergie que je sache.",
-		"douleur": "Sur dix ? Je dirais sept. C'est vraiment fort.",
-	},
-}
+var patient: PatientJeu            # patient du menu ouvert
+var _action := {}                  # geste en cours {id, libelle, duree, t, patient}
+var _t_ciel := 0.0
 
 const QUESTIONS := [
 	["q_motif", "« Qu'est-ce qui vous amène ? »", "motif"],
 	["q_debut", "« Depuis quand ? Dans quelles circonstances ? »", "debut"],
-	["q_irradiation", "« La douleur va-t-elle ailleurs ? »", "irradiation"],
+	["q_localisation", "« Où avez-vous mal ? Ça va ailleurs ? »", "localisation"],
 	["q_signes", "« Avez-vous d'autres symptômes ? »", "signes"],
 	["q_antecedents", "« Avez-vous des antécédents médicaux ? »", "antecedents"],
 	["q_traitement", "« Prenez-vous des médicaments ? »", "traitement"],
 	["q_allergies", "« Êtes-vous allergique à quelque chose ? »", "allergies"],
 ]
 
-## Gestes de mesure : id -> [libellé, durée (s de jeu), constantes obtenues, message].
+## Gestes de mesure : id -> [libellé, durée (s de jeu), constantes obtenues].
 const GESTES := {
-	"scope": ["Brancher le scope (électrodes, capteur SpO₂)", 40.0, ["fc", "spo2", "fr"], "Scope branché : rythme sinusal."],
-	"tension": ["Prendre la pression artérielle (brassard)", 45.0, ["ta"], ""],
-	"saturation": ["Poser l'oxymètre de pouls", 15.0, ["spo2", "fc"], ""],
-	"temperature": ["Prendre la température (tympanique)", 20.0, ["temperature"], ""],
-	"glycemie": ["Glycémie capillaire (bout du doigt)", 60.0, ["glycemie"], ""],
-	"fr": ["Compter la fréquence respiratoire (30 s)", 30.0, ["fr"], ""],
-	"eva": ["Évaluer la douleur (échelle 0 à 10)", 10.0, ["eva"], ""],
+	"scope": ["Brancher le scope (ECG, SpO₂, respiration)", 40.0, ["fc", "spo2", "fr"]],
+	"tension": ["Pression artérielle (brassard)", 45.0, ["ta"]],
+	"saturation": ["Oxymètre de pouls", 15.0, ["spo2", "fc"]],
+	"temperature": ["Température (tympanique)", 20.0, ["temperature"]],
+	"glycemie": ["Glycémie capillaire", 60.0, ["glycemie"]],
+	"fr": ["Fréquence respiratoire (compter 30 s)", 30.0, ["fr"]],
+	"eva": ["Douleur (échelle EVA 0 à 10)", 10.0, ["eva"]],
+}
+
+## Examen clinique : id -> [libellé, durée].
+const CLINIQUE := {
+	"aspect": ["Observer le patient (aspect général)", 15.0],
+	"auscultation": ["Ausculter (stéthoscope)", 45.0],
+	"palpation": ["Palper (abdomen, zone douloureuse)", 40.0],
+	"pupilles": ["Examen neurologique et pupilles (lampe)", 40.0],
 }
 
 
 func _ready() -> void:
-	monde = load("res://scenes/box_examen.tscn").instantiate()
+	monde = load("res://scenes/service.tscn").instantiate()
 	add_child(monde)
-	# Patient sur le brancard.
-	patient = PatientJeu.new()
-	patient.name = "Patient"
-	patient.configurer(SCENARIO.duplicate(true))
-	monde.add_child(patient)
-	var place: Vector3 = monde.points_interet["place_patient"]
-	patient.position = place - Vector3(0, patient.personnage.hauteur_bassin(), 0)
-	moniteur = monde.points_interet["moniteur"]
-	moniteur.connecter(patient.constantes)
-	# Joueur à l'entrée du box.
+	garde = Garde.new()
+	garde.name = "Garde"
+	garde.service = monde
+	add_child(garde)
+	# Premier patient déjà installé en box 3 : douleur thoracique (le scénario du prototype).
+	var d := garde.creer_dossier("sca_st", {"prenom": "Gérard", "nom": "MARTIN", "age": 67, "sexe": "M",
+		"modele": "patient_gerard", "posture": "semi_assis", "arrivee": "07 h 58"})
+	patient = garde.ajouter_patient(d)
+	garde.installer(patient, "box_3")
+	patient.arrivee_jeu = garde.heure - 14.0 * 60.0
+	var box: Dictionary = monde.points["box_3"]
 	joueur = Joueur.new()
 	joueur.name = "Joueur"
-	joueur.position = Vector3(2.65, 0.0, 3.2)
-	joueur.rotation_degrees.y = 25.0
+	joueur.position = box["entree"] + Vector3(0.0, 0.0, 0.6)
+	joueur.rotation_degrees.y = 15.0
 	add_child(joueur)
 	joueur.rayon.collision_mask = 1 | 2
 	joueur.cible_changee.connect(_cible_changee)
@@ -84,25 +69,44 @@ func _ready() -> void:
 	add_child(hud)
 	hud.action_choisie.connect(_action_menu)
 	hud.menu_ferme.connect(func(): joueur.controle = true)
+	hud.tableau_ferme.connect(func(): joueur.controle = true)
 	menu_pause = MenuPause.new()
 	add_child(menu_pause)
 	menu_pause.quitter_demande.connect(func(): get_tree().quit())
-	patient.parle.connect(func(t): hud.dire(patient.dossier["prenom"], t))
-	patient.constantes.mesure_prise.connect(func(_n, _v): hud.remplir_dossier(patient))
+	garde.notification.connect(func(t, c, du): hud.notifier(t, c, du))
+	garde.patients_changes.connect(_rafraichir_hud)
+	for p in garde.patients:
+		_brancher_patient(p)
+	garde.patients_changes.connect(func():
+		for p in garde.patients:
+			if not p.has_meta("branche"):
+				_brancher_patient(p))
 	hud.remplir_dossier(patient)
-	hud.notifier("Box 3 : %s — %s. À vous de l'accueillir." % [patient.titre(), SCENARIO["motif"].to_lower()], ThemeHopital.ORANGE, 8.0)
+	hud.notifier("Prise de garde à 08 h 12. Box 3 : %s — douleur thoracique. Tab : tableau des patients." % patient.titre(),
+		ThemeHopital.ORANGE, 9.0)
 
 
-func heure_texte() -> String:
-	var s := int(heure) % 86400
-	return "%02d h %02d" % [s / 3600, (s / 60) % 60]
+func _brancher_patient(p: PatientJeu) -> void:
+	p.set_meta("branche", true)
+	p.parle.connect(func(t): hud.dire(p.dossier["prenom"], t))
+	p.constantes.mesure_prise.connect(func(_n, _v): _rafraichir_hud())
+
+
+func _rafraichir_hud() -> void:
+	if hud.dossier.visible and is_instance_valid(patient):
+		hud.remplir_dossier(patient)
+	if hud.tableau.visible:
+		hud.remplir_tableau(garde)
 
 
 func _process(delta: float) -> void:
-	heure += delta * ECHELLE_TEMPS
-	hud.horloge.text = "Urgences adultes · Box 3 · " + heure_texte()
+	hud.horloge.text = "Urgences adultes · %s · Score %d · Réputation %d %%" % [garde.heure_texte(), garde.score, int(garde.reputation)]
+	_t_ciel += delta
+	if _t_ciel > 2.0:
+		_t_ciel = 0.0
+		monde.regler_heure(garde.heure / 3600.0)
 	if not _action.is_empty():
-		_action["t"] += delta * ECHELLE_TEMPS
+		_action["t"] += delta * Garde.ECHELLE_TEMPS
 		var f: float = _action["t"] / _action["duree"]
 		hud.progression(_action["libelle"], f)
 		if f >= 1.0:
@@ -111,123 +115,267 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("dossier"):
-		hud.dossier.visible = not hud.dossier.visible
-		hud.remplir_dossier(patient)
-	elif event.is_action_pressed("pause") and hud.menu.visible:
+		if hud.tableau.visible:
+			hud.fermer_tableau()
+		elif not hud.menu.visible:
+			joueur.controle = false
+			hud.ouvrir_tableau(garde)
+	elif event.is_action_pressed("pause") and (hud.menu.visible or hud.tableau.visible):
 		hud.fermer_menu()
+		hud.fermer_tableau()
 		get_viewport().set_input_as_handled()
 
 
 func _cible_changee(c: Node) -> void:
-	if c == patient:
-		hud.montrer_invite("[E] Examiner %s" % patient.titre())
-	elif c is Moniteur:
-		hud.montrer_invite("[E] Moniteur")
+	if c is PatientJeu:
+		var p: PatientJeu = c
+		var tri := "" if p.tri == 0 else "  [tri %d]" % p.tri
+		hud.montrer_invite("[E] %s — %s%s" % [p.titre(), p.lieu, tri])
 	else:
 		hud.montrer_invite("")
 
 
 func _interagir(c: Node) -> void:
-	if c == patient and _action.is_empty():
-		_menu_cible = patient
+	if c is PatientJeu and _action.is_empty() and (c as PatientJeu).etat != "oriente":
+		patient = c
 		joueur.controle = false
 		hud.montrer_invite("")
 		_menu_principal()
 
 
+# --- Menus ------------------------------------------------------------------------------------
 func _menu_principal() -> void:
-	var opts := [["questions", "Interroger le patient…"]]
-	for id in GESTES:
-		opts.append([id, GESTES[id][0]])
-	opts.append(["tri", "Attribuer un niveau de tri…"])
+	var p := patient
+	var opts := [["questions", "Interroger le patient…"], ["mesures", "Constantes…"]]
+	if p.etat == "installe":
+		opts.append(["clinique", "Examen clinique…"])
+		opts.append(["examens", "Examens complémentaires…"])
+		opts.append(["traitements", "Traitements…"])
+		opts.append(["diagnostic", "Poser le diagnostic…"])
+		opts.append(["orientation", "Orienter le patient…"])
+	opts.append(["tri", "Niveau de tri (IOA)…" if p.tri == 0 else "Niveau de tri : %d (modifier)…" % p.tri])
+	if p.etat in ["accueil", "attente"]:
+		opts.append(["installer", "Installer en box / déchocage…"])
+		if p.etat == "accueil" and p.dossier.get("mode") == "pied":
+			opts.append(["attente", "Envoyer en salle d'attente"])
+	opts.append(["dossier", "Ouvrir le dossier"])
 	opts.append(["fermer", "Fermer"])
-	hud.ouvrir_menu(patient.titre(), opts)
+	hud.ouvrir_menu("%s — %s" % [p.titre(), p.lieu], opts)
 
 
 func _action_menu(id: String) -> void:
-	if id == "fermer":
+	var p := patient
+	if not is_instance_valid(p):
 		hud.fermer_menu()
-	elif id == "questions":
-		var opts := []
-		for q in QUESTIONS:
-			opts.append([q[0], q[1]])
-		opts.append(["retour", "← Retour"])
-		hud.ouvrir_menu("Interrogatoire", opts)
-	elif id == "retour":
-		_menu_principal()
-	elif id.begins_with("q_"):
+		return
+	match id:
+		"fermer":
+			hud.fermer_menu()
+		"retour":
+			_menu_principal()
+		"dossier":
+			hud.fermer_menu()
+			hud.remplir_dossier(p)
+			hud.dossier.visible = true
+		"questions":
+			var opts := []
+			for q in QUESTIONS:
+				opts.append([q[0], q[1]])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Interrogatoire — " + p.civilite(), opts)
+		"mesures":
+			var opts := []
+			for g in GESTES:
+				if g == "scope" and p.etat != "installe":
+					continue
+				opts.append(["g_" + g, GESTES[g][0]])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Constantes — " + p.civilite(), opts)
+		"clinique":
+			var opts := []
+			for k in CLINIQUE:
+				opts.append(["c_" + k, CLINIQUE[k][0]])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Examen clinique — " + p.civilite(), opts)
+		"examens":
+			var opts := [["", "Les résultats arrivent après un délai (voir le dossier)."]]
+			for ex in Pathologies.EXAMENS:
+				var etat := ""
+				if p.examens.has(ex):
+					etat = "  ✓ résultat" if p.examens[ex]["resultat"] != "" else "  ⏳ en cours"
+				opts.append(["e_" + ex, Pathologies.EXAMENS[ex][0] + etat])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Examens — " + p.civilite(), opts)
+		"traitements":
+			var opts := []
+			for t in Pathologies.TRAITEMENTS:
+				opts.append(["t_" + t, Pathologies.TRAITEMENTS[t] + ("  ✓" if t in p.traitements else "")])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Prescription — " + p.civilite(), opts)
+		"diagnostic":
+			var opts := []
+			for dg in Pathologies.diagnostics():
+				opts.append(["d_" + dg[0], dg[1] + ("  ✓" if p.diagnostic == dg[0] else "")])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Diagnostic — " + p.civilite(), opts)
+		"orientation":
+			var opts := [["", "Fin de la prise en charge aux urgences."]]
+			for o in Pathologies.ORIENTATIONS:
+				opts.append(["o_" + o, Pathologies.ORIENTATIONS[o]])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Orientation — " + p.civilite(), opts)
+		"tri":
+			var opts := [["", "Échelle FRENCH (SFMU)"]]
+			var noms := {1: "Tri 1 — détresse vitale, immédiat", 2: "Tri 2 — urgence vraie, < 20 min",
+				3: "Tri 3 — urgence relative, < 60 min", 4: "Tri 4 — sans gravité, < 120 min", 5: "Tri 5 — non urgent"}
+			for n in range(1, 6):
+				opts.append(["tri_%d" % n, noms[n], ThemeHopital.TRI[n].darkened(0.15 if n != 3 else 0.35)])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Niveau de tri — " + p.civilite(), opts)
+		"installer":
+			var opts := []
+			for b in garde.box_libres():
+				opts.append(["i_" + b, Garde.nom_place(b)])
+			if opts.is_empty():
+				opts.append(["", "Aucun box libre : orientez des patients pour libérer de la place."])
+			opts.append(["retour", "← Retour"])
+			hud.ouvrir_menu("Installer — " + p.civilite(), opts)
+		"attente":
+			hud.fermer_menu()
+			if p.tri == 0:
+				hud.notifier("Attribuez d'abord un niveau de tri.", ThemeHopital.ORANGE)
+				return
+			garde.envoyer_attente(p)
+		_:
+			_action_prefixee(id)
+
+
+func _action_prefixee(id: String) -> void:
+	var p := patient
+	if id.begins_with("q_"):
 		for q in QUESTIONS:
 			if q[0] == id:
 				hud.dire("Vous", q[1].trim_prefix("« ").trim_suffix(" »"))
-				await get_tree().create_timer(1.6).timeout
-				patient.repondre(q[2])
+				await get_tree().create_timer(1.4).timeout
+				p.repondre(q[2])
 				if q[2] in ["antecedents", "traitement", "allergies"]:
-					patient.dossier["connu_" + q[2]] = true
-					hud.remplir_dossier(patient)
-	elif id == "tri":
-		var opts := [["", "Échelle FRENCH (Fédération française de médecine d'urgence)"]]
-		var noms := {1: "Tri 1 — urgence vitale immédiate", 2: "Tri 2 — urgence vraie, < 20 min",
-			3: "Tri 3 — urgence relative, < 60 min", 4: "Tri 4 — sans gravité, < 120 min", 5: "Tri 5 — non urgent"}
-		for n in range(1, 6):
-			opts.append(["tri_%d" % n, noms[n], ThemeHopital.TRI[n].darkened(0.15 if n != 3 else 0.35)])
-		opts.append(["retour", "← Retour"])
-		hud.ouvrir_menu("Niveau de tri", opts)
-	elif id.begins_with("tri_"):
-		_attribuer_tri(int(id.substr(4)))
-	elif GESTES.has(id):
+					p.dossier[q[2]] = p.reponses.get(q[2], "")
+				_rafraichir_hud()
+	elif id.begins_with("g_"):
+		var g: Array = GESTES[id.substr(2)]
+		_commencer_action(id, g[0], g[1])
+	elif id.begins_with("c_"):
+		var c: Array = CLINIQUE[id.substr(2)]
+		_commencer_action(id, c[0], c[1])
+	elif id.begins_with("e_"):
+		var ex := id.substr(2)
+		garde.demander_examen(p, ex)
+		hud.notifier("%s demandé pour %s." % [Pathologies.EXAMENS[ex][0], p.civilite()], ThemeHopital.BLEU, 4.0)
+		_action_menu("examens")
+	elif id.begins_with("t_"):
+		var t := id.substr(2)
+		if t in p.traitements:
+			return
+		_commencer_action(id, Pathologies.TRAITEMENTS[t], 120.0)
+	elif id.begins_with("d_"):
+		p.diagnostic = id.substr(2)
+		hud.notifier("Diagnostic retenu : " + Pathologies.par_id(p.diagnostic)["diagnostic"], ThemeHopital.BLEU, 5.0)
+		_menu_principal()
+	elif id.begins_with("o_"):
 		hud.fermer_menu()
-		joueur.controle = false
-		var g: Array = GESTES[id]
-		_action = {"id": id, "libelle": g[0], "duree": g[1], "t": 0.0}
+		if p.diagnostic == "":
+			hud.notifier("Posez d'abord un diagnostic.", ThemeHopital.ORANGE)
+			return
+		var b := garde.orienter(p, id.substr(2))
+		hud.bilan(b)
+	elif id.begins_with("tri_"):
+		p.tri = int(id.substr(4))
+		hud.notifier("%s : tri %d attribué." % [p.civilite(), p.tri], ThemeHopital.TRI[p.tri].darkened(0.2), 4.0)
+		_rafraichir_hud()
+		_menu_principal()
+	elif id.begins_with("i_"):
+		hud.fermer_menu()
+		if p.tri == 0:
+			hud.notifier("Attribuez d'abord un niveau de tri.", ThemeHopital.ORANGE)
+			return
+		var place := id.substr(2)
+		garde.installer(p, place)
+		hud.notifier("%s installé(e) en %s." % [p.civilite(), Garde.nom_place(place)], ThemeHopital.VERT, 5.0)
+
+
+func _commencer_action(id: String, libelle: String, duree: float) -> void:
+	hud.fermer_menu()
+	joueur.controle = false
+	_action = {"id": id, "libelle": libelle, "duree": duree, "t": 0.0, "patient": patient}
 
 
 func _finir_action() -> void:
 	var id: String = _action["id"]
-	var g: Array = GESTES[id]
+	var p: PatientJeu = _action["patient"]
 	hud.progression("", 1.0)
 	_action = {}
 	joueur.controle = true
-	var c := patient.constantes
-	var res := []
-	for k in g[2]:
-		c.mesurer(k, heure_texte())
-		res.append("%s : %s" % [Constantes.NOMS[k], Constantes.texte(k, c.mesures[k]["valeur"])])
-	if id == "scope":
-		moniteur.brancher(true)
-	if id == "eva":
-		patient.repondre("douleur")
-	if g[3] != "":
-		hud.notifier(g[3], ThemeHopital.VERT)
-	hud.notifier("\n".join(res), ThemeHopital.BLEU, 7.0)
+	if not is_instance_valid(p):
+		return
+	if id.begins_with("g_"):
+		var g := id.substr(2)
+		var res := []
+		for k in GESTES[g][2]:
+			p.constantes.mesurer(k, garde.heure_texte())
+			res.append("%s : %s" % [Constantes.NOMS[k], Constantes.texte(k, p.constantes.mesures[k]["valeur"])])
+		if g == "scope":
+			var m := garde.moniteur_de(p)
+			if m:
+				m.brancher(true)
+		if g == "eva":
+			p.dire_eva()
+		hud.notifier(p.civilite() + "\n" + "\n".join(res), ThemeHopital.BLEU, 7.0)
+	elif id.begins_with("c_"):
+		var k := id.substr(2)
+		var txt: String = p.patho.get("clinique", {}).get(k, "Normal.")
+		if not p.dossier.has("clinique"):
+			p.dossier["clinique"] = {}
+		p.dossier["clinique"][k] = txt
+		hud.notifier("%s — %s :\n%s" % [p.civilite(), CLINIQUE[k][0], txt], ThemeHopital.BLEU, 9.0)
+	elif id.begins_with("t_"):
+		var t := id.substr(2)
+		p.traitements.append(t)
+		_effet_traitement(p, t)
+		hud.notifier("%s : %s — fait." % [p.civilite(), Pathologies.TRAITEMENTS[t]], ThemeHopital.VERT, 5.0)
+	_rafraichir_hud()
 
 
-func _attribuer_tri(n: int) -> void:
-	hud.fermer_menu()
-	patient.tri = n
-	hud.remplir_dossier(patient)
-	var manquantes := []
-	for k in ["fc", "ta", "spo2"]:
-		if not patient.constantes.mesures.has(k):
-			manquantes.append(Constantes.NOMS[k].to_lower())
-	var attendu: int = SCENARIO["tri_attendu"]
-	if n == attendu:
-		hud.notifier("Tri %d : correct. Douleur thoracique typique chez un patient à risque : ECG 12 dérivations dans les 10 minutes et avis médical immédiat." % n, ThemeHopital.VERT, 10.0)
-	elif n < attendu:
-		hud.notifier("Tri %d : sur-triage. Le patient est stable mais nécessite une prise en charge rapide (tri %d attendu)." % [n, attendu], ThemeHopital.ORANGE, 10.0)
-	else:
-		hud.notifier("Tri %d : sous-triage dangereux ! Douleur thoracique typique avec facteurs de risque → tri %d." % [n, attendu], ThemeHopital.ROUGE, 10.0)
-	if not manquantes.is_empty():
-		hud.notifier("Attention : tri attribué sans " + ", ".join(manquantes) + ".", ThemeHopital.ORANGE, 8.0)
+## Effets simples des traitements sur les constantes (le détail viendra à l'étape 3).
+func _effet_traitement(p: PatientJeu, t: String) -> void:
+	var c := p.constantes
+	match t:
+		"morphine", "paracetamol", "ains":
+			c.eva = maxi(c.eva - (4 if t == "morphine" else 2), 0)
+		"o2":
+			c.cibles["spo2"] = minf(c.cibles.get("spo2", 95.0) + 5.0, 99.0)
+		"aerosol":
+			c.cibles["spo2"] = minf(c.cibles.get("spo2", 95.0) + 4.0, 98.0)
+			c.cibles["fr"] = maxf(c.cibles.get("fr", 16.0) - 8.0, 16.0)
+		"g30":
+			c.cibles["glycemie"] = 1.2
+			c.glycemie = 1.1
+			c.glasgow = 15
+		"remplissage":
+			c.cibles["tas"] = c.cibles.get("tas", 100.0) + 20.0
+			c.cibles["fc"] = maxf(c.cibles.get("fc", 100.0) - 15.0, 80.0)
 
 
 # --- Captures ---------------------------------------------------------------------------------
 func poses_capture() -> Array:
+	var o := Vector3(7.2, 0, 9)
 	return monde.poses_capture() + [
-		{"nom": "jeu_scope", "position": Vector3(2.1, 1.55, 2.2), "cible": Vector3(0.6, 1.4, 0.7), "fov": 60.0, "avant": "brancher_pour_capture"},
+		{"nom": "jeu_scope", "position": o + Vector3(2.1, 1.55, 2.2), "cible": o + Vector3(0.6, 1.4, 0.7), "fov": 60.0, "avant": "brancher_pour_capture"},
 	]
 
 
 func brancher_pour_capture() -> void:
-	moniteur.brancher(true)
+	var m := garde.moniteur_de(patient)
+	if m:
+		m.brancher(true)
 	hud.remplir_dossier(patient)
 	hud.dossier.visible = true

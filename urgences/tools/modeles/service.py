@@ -215,20 +215,22 @@ def table_radio():
 
 
 def scanner():
-    """Scanner (tomodensitomètre) : statif annulaire et table mobile."""
+    """Scanner (tomodensitomètre) : statif en anneau épais aux bords arrondis, socle, table mobile."""
     vider_scene()
-    # Statif : couronne épaisse (face avant -Y).
-    tore("anneau_ext", 0.78, 0.30, (0, 0, 1.05), "plastique_blanc", seg=64, seg2=24, rot=(PI / 2, 0, 0))
-    boite("carenage", (2.10, 0.95, 1.90), (0, 0.0, 0.98), "plastique_blanc", arrondi=0.25, segments=6)
-    tour("tunnel", [(0.36, -0.49), (0.37, -0.45), (0.37, 0.45), (0.36, 0.49)], (0, 0, 1.05), "plastique_gris_clair",
-         seg=64, rot=(PI / 2, 0, 0))
-    boite("bandeau_bleu", (1.20, 0.01, 0.06), (0, -0.48, 1.85), "led_bleue")
-    e = boite("ecran_scanner", (0.20, 0.004, 0.12), (-0.55, -0.48, 1.30), "ecran_pc")
+    # Profil (rayon, profondeur) du statif, tourné autour de l'axe du tunnel (Y Blender).
+    prof = [(0.36, -0.40), (0.40, -0.45), (0.86, -0.45), (0.95, -0.40), (0.98, -0.30), (0.98, 0.30),
+            (0.95, 0.40), (0.86, 0.45), (0.40, 0.45), (0.36, 0.40), (0.35, 0.0), (0.36, -0.40)]
+    tour("statif", prof, (0, 0, 1.05), "plastique_blanc", seg=72, rot=(PI / 2, 0, 0))
+    boite("socle_statif", (1.60, 0.80, 0.40), (0, 0.0, 0.20), "plastique_blanc", arrondi=0.08, segments=4)
+    boite("jupe", (1.30, 0.70, 0.30), (0, 0.0, 0.42), "plastique_gris_clair", arrondi=0.06)
+    tore("liseret", 0.92, 0.012, (0, -0.455, 1.05), "led_bleue", seg=72, seg2=8, rot=(PI / 2, 0, 0))
+    e = boite("ecran_scanner", (0.22, 0.004, 0.13), (-0.55, -0.46, 1.62), "ecran_pc", rot=(0, 0, 0.5))
     uv_plan(e)
-    # Table.
-    boite("socle_table", (1.30, 0.50, 0.70), (0, -1.35, 0.35), "plastique_blanc", arrondi=0.06)
-    boite("plateau_table", (2.20, 0.42, 0.06), (0, -1.15, 0.85), "carbone", arrondi=0.02, rot=(0, 0, PI / 2))
-    boite("matelas_table", (2.00, 0.40, 0.05), (0, -1.15, 0.90), "skai_noir", arrondi=0.02, rot=(0, 0, PI / 2))
+    # Table : socle en pied d'éléphant et plateau en fibre de carbone.
+    boite("socle_table", (0.45, 1.10, 0.62), (0, -1.45, 0.31), "plastique_blanc", arrondi=0.08, segments=4)
+    boite("plateau_table", (0.44, 2.10, 0.05), (0, -1.10, 0.86), "carbone", arrondi=0.02)
+    boite("matelas_table", (0.40, 1.90, 0.05), (0, -1.15, 0.91), "skai_noir", arrondi=0.02)
+    boite("appui_tete", (0.30, 0.25, 0.08), (0, -0.30, 0.94), "skai_noir", arrondi=0.03)
     fin("scanner", sans_uv=("ecran",))
 
 

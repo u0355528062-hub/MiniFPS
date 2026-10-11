@@ -5,6 +5,7 @@ extends CanvasLayer
 
 signal action_choisie(id: String)
 signal menu_ferme
+signal tableau_ferme
 
 var racine: Control
 var invite: PanelContainer
@@ -21,6 +22,9 @@ var menu_titre: Label
 var dossier: PanelContainer
 var dossier_contenu: VBoxContainer
 var horloge: Label
+var tableau: PanelContainer
+var tableau_liste: VBoxContainer
+var _tableau_garde: Garde
 var fps: Label
 var _sous_titre_t := 0.0
 
@@ -124,6 +128,28 @@ func _ready() -> void:
 	dossier.add_child(sc)
 	dossier.visible = false
 	racine.add_child(dossier)
+	# Tableau des patients (logiciel des urgences), au centre.
+	tableau = PanelContainer.new()
+	tableau.set_anchors_preset(Control.PRESET_CENTER)
+	tableau.custom_minimum_size = Vector2(1100, 600)
+	tableau.position = Vector2(-550, -300)
+	var tv := VBoxContainer.new()
+	tv.add_theme_constant_override("separation", 8)
+	var titre_t := ThemeHopital.titre("Tableau des patients — Urgences adultes", 24)
+	tv.add_child(titre_t)
+	tv.add_child(ThemeHopital.texte_doux("Cliquez sur un patient pour ouvrir son dossier. Tab ou Échap pour fermer.", 15))
+	tv.add_child(HSeparator.new())
+	var sc_t := ScrollContainer.new()
+	sc_t.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc_t.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tableau_liste = VBoxContainer.new()
+	tableau_liste.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tableau_liste.add_theme_constant_override("separation", 4)
+	sc_t.add_child(tableau_liste)
+	tv.add_child(sc_t)
+	tableau.add_child(tv)
+	tableau.visible = false
+	racine.add_child(tableau)
 	# Compteur de performances.
 	fps = Label.new()
 	fps.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -234,6 +260,102 @@ func fermer_menu() -> void:
 		menu_ferme.emit()
 
 
+func ouvrir_tableau(g: Garde) -> void:
+	_tableau_garde = g
+	remplir_tableau(g)
+	tableau.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func fermer_tableau() -> void:
+	if tableau.visible:
+		tableau.visible = false
+		if not menu.visible:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		tableau_ferme.emit()
+
+
+func remplir_tableau(g: Garde) -> void:
+	for c in tableau_liste.get_children():
+		c.queue_free()
+	var entete := HBoxContainer.new()
+	for col in [["Tri", 60], ["Patient", 300], ["Motif", 260], ["Lieu", 170], ["Attente", 90], ["Étape", 180]]:
+		var l := Label.new()
+		l.text = col[0]
+		l.custom_minimum_size = Vector2(col[1], 0)
+		l.add_theme_font_size_override("font_size", 15)
+		l.add_theme_color_override("font_color", ThemeHopital.TEXTE_DOUX)
+		entete.add_child(l)
+	tableau_liste.add_child(entete)
+	var liste := g.patients.duplicate()
+	liste.sort_custom(func(a, b): return (a.tri if a.tri > 0 else 9) < (b.tri if b.tri > 0 else 9))
+	for p in liste:
+		var ligne := Button.new()
+		ligne.flat = false
+		ligne.custom_minimum_size = Vector2(0, 40)
+		var st := StyleBoxFlat.new()
+		st.bg_color = Color(1, 1, 1, 0.75)
+		st.set_corner_radius_all(6)
+		ligne.add_theme_stylebox_override("normal", st)
+		var st2: StyleBoxFlat = st.duplicate()
+		st2.bg_color = Color(0.85, 0.95, 0.95)
+		ligne.add_theme_stylebox_override("hover", st2)
+		var hb := HBoxContainer.new()
+		hb.set_anchors_preset(Control.PRESET_FULL_RECT)
+		hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var pastille := Label.new()
+		pastille.text = str(p.tri) if p.tri > 0 else "?"
+		pastille.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pastille.custom_minimum_size = Vector2(44, 0)
+		var sp := StyleBoxFlat.new()
+		sp.bg_color = ThemeHopital.TRI.get(p.tri, Color(0.6, 0.6, 0.6))
+		sp.set_corner_radius_all(6)
+		pastille.add_theme_stylebox_override("normal", sp)
+		pastille.add_theme_color_override("font_color", Color.WHITE)
+		var marge := Control.new()
+		marge.custom_minimum_size = Vector2(16, 0)
+		hb.add_child(marge)
+		hb.add_child(pastille)
+		var attente := int((g.heure - p.arrivee_jeu) / 60.0)
+		var etape: String = {"arrivee": "Arrivée", "accueil": "À trier", "attente": "En attente", "installe": "En soins",
+			"oriente": "Sortie"}.get(p.etat, p.etat)
+		if p.etat == "installe":
+			var en_cours := 0
+			for ex in p.examens:
+				if p.examens[ex]["resultat"] == "":
+					en_cours += 1
+			if en_cours > 0:
+				etape = "Examens en cours (%d)" % en_cours
+			elif p.diagnostic != "":
+				etape = "À orienter"
+		for v in [[p.titre(), 300], [p.dossier.get("motif", ""), 260], [p.lieu, 170], ["%d min" % attente, 90], [etape, 180]]:
+			var l := Label.new()
+			l.text = v[0]
+			l.custom_minimum_size = Vector2(v[1], 0)
+			l.clip_text = true
+			l.add_theme_font_size_override("font_size", 16)
+			l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			hb.add_child(l)
+		if p.aggrave:
+			var a := Label.new()
+			a.text = "⚠"
+			a.add_theme_color_override("font_color", ThemeHopital.ROUGE)
+			hb.add_child(a)
+		ligne.add_child(hb)
+		var pp: PatientJeu = p
+		ligne.pressed.connect(func():
+			remplir_dossier(pp)
+			dossier.visible = true)
+		tableau_liste.add_child(ligne)
+
+
+## Affiche le bilan d'un patient orienté (points et détails).
+func bilan(b: Dictionary) -> void:
+	var txt := "Bilan — %s : %+d points\n" % [b["patient"], b["points"]]
+	txt += "\n".join(b["details"])
+	notifier(txt, ThemeHopital.VERT if b["points"] >= 60 else (ThemeHopital.ORANGE if b["points"] >= 0 else ThemeHopital.ROUGE), 14.0)
+
+
 ## Remplit le dossier patient (fiche d'accueil + constantes mesurées + tri).
 func remplir_dossier(p: PatientJeu) -> void:
 	for c in dossier_contenu.get_children():
@@ -244,8 +366,9 @@ func remplir_dossier(p: PatientJeu) -> void:
 	dossier_contenu.add_child(HSeparator.new())
 	dossier_contenu.add_child(ThemeHopital.titre(p.titre(), 20))
 	dossier_contenu.add_child(ThemeHopital.texte_doux("Motif : " + d.get("motif", ""), 16))
+	dossier_contenu.add_child(ThemeHopital.texte_doux("Lieu : %s · Arrivée : %s" % [p.lieu, d.get("arrivee", "")], 15))
 	for cle in ["antecedents", "traitement", "allergies"]:
-		if p.dossier.has("connu_" + cle):
+		if d.get(cle, "") != "":
 			var l := ThemeHopital.texte_doux({"antecedents": "Antécédents", "traitement": "Traitement", "allergies": "Allergies"}[cle] + " : " + d.get(cle, ""), 15)
 			dossier_contenu.add_child(l)
 	dossier_contenu.add_child(HSeparator.new())
@@ -275,6 +398,24 @@ func remplir_dossier(p: PatientJeu) -> void:
 	if p.tri > 0:
 		t.add_theme_color_override("font_color", ThemeHopital.TRI[p.tri].darkened(0.2))
 	dossier_contenu.add_child(t)
-	if d.has("notes"):
-		for n in d["notes"]:
-			dossier_contenu.add_child(ThemeHopital.texte_doux("• " + n, 15))
+	if d.has("clinique"):
+		dossier_contenu.add_child(HSeparator.new())
+		dossier_contenu.add_child(ThemeHopital.titre("Examen clinique", 19))
+		for k in d["clinique"]:
+			dossier_contenu.add_child(ThemeHopital.texte_doux("• %s : %s" % [k.capitalize(), d["clinique"][k]], 15))
+	if not p.examens.is_empty():
+		dossier_contenu.add_child(HSeparator.new())
+		dossier_contenu.add_child(ThemeHopital.titre("Examens complémentaires", 19))
+		for ex in p.examens:
+			var e: Dictionary = p.examens[ex]
+			var r: String = e["resultat"] if e["resultat"] != "" else "en cours…"
+			dossier_contenu.add_child(ThemeHopital.texte_doux("• %s : %s" % [Pathologies.EXAMENS[ex][0], r], 15))
+	if not p.traitements.is_empty():
+		dossier_contenu.add_child(HSeparator.new())
+		dossier_contenu.add_child(ThemeHopital.titre("Traitements administrés", 19))
+		for tr in p.traitements:
+			dossier_contenu.add_child(ThemeHopital.texte_doux("• " + Pathologies.TRAITEMENTS[tr], 15))
+	if p.diagnostic != "":
+		dossier_contenu.add_child(HSeparator.new())
+		dossier_contenu.add_child(ThemeHopital.titre("Diagnostic retenu", 19))
+		dossier_contenu.add_child(ThemeHopital.texte_doux(Pathologies.par_id(p.diagnostic)["diagnostic"], 15))

@@ -1,0 +1,15 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/albedo.jpg" id="1_5lluv"]
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/normal.png" id="2_nwth0"]
+[ext_resource type="Texture2D" path="res://assets/textures/peinture_mur/orm.jpg" id="3_ilel4"]
+
+[resource]
+resource_name = "facade"
+albedo_color = Color(0.84, 0.82, 0.78, 1)
+albedo_texture = ExtResource("1_5lluv")
+orm_texture = ExtResource("3_ilel4")
+normal_enabled = true
+normal_texture = ExtResource("2_nwth0")
+uv1_scale = Vector3(0.5, 0.5, 0.5)
+texture_filter = 5

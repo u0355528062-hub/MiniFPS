@@ -42,6 +42,9 @@ func _ready() -> void:
 	tete = Node3D.new()
 	tete.name = "Tete"
 	tete.position.y = HAUTEUR_YEUX
+	# La tête (et la caméra) bougent dans _process (souris, balancement) : pas d'interpolation
+	# physique pour elles, le corps (CharacterBody3D) reste interpolé.
+	tete.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(tete)
 	bras_camera = SpringArm3D.new()
 	bras_camera.spring_length = 0.0

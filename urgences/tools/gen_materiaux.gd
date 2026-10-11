@@ -128,6 +128,7 @@ func _initialize() -> void:
 	_tex("mur_vert_eau", "peinture_mur", Color(0.70, 0.84, 0.80), 0.0, Vector3(0.7, 0.7, 0.7))
 	_tex("mur_bleu", "peinture_mur", Color(0.62, 0.76, 0.86), 0.0, Vector3(0.7, 0.7, 0.7))
 	_tex("mur_jaune", "peinture_mur", Color(0.95, 0.86, 0.62), 0.0, Vector3(0.7, 0.7, 0.7))
+	_tex("facade", "peinture_mur", Color(0.84, 0.82, 0.78), 0.0, Vector3(0.5, 0.5, 0.5), {"rug": 0.9})
 	_tex("plafond", "dalle_plafond", Color(1, 1, 1), 0.0, Vector3(1.0 / 0.6, 1.0 / 0.6, 1.0 / 0.6))
 	_tex("protection_murale", "plastique_grain", Color(0.82, 0.84, 0.84), 0.0, Vector3(5, 5, 5), {"rug": 0.7})
 	_tex("bois_porte", "bois_stratifie", Color(1, 1, 1), 0.0, Vector3(0.8, 0.8, 0.8))

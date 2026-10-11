@@ -103,6 +103,21 @@ def patient_blouse():
     ]}
 
 
+def _p(pid, genre, age, poids, teinte, cheveux, coupe, tenue, origines=None, taille=0.5, muscle=0.5, barbe=None,
+       rousseurs=0.0, details=None):
+    d = {"id": pid,
+         "morpho": {"genre": genre, "age": age, "poids": poids, "muscle": muscle, "taille": taille,
+                    "origines": origines or {"caucasian": 1.0}},
+         "peau": {"teinte": teinte, "rousseurs": rousseurs},
+         "cheveux": {"couleur": cheveux, "coupe": coupe, "volume": 0.010},
+         "tenue": tenue}
+    if barbe is not None:
+        d["peau"]["barbe"] = barbe
+    if details:
+        d["morpho"]["details"] = details
+    return d
+
+
 PERSONNAGES = {
     # --- Soignants -------------------------------------------------------------------------
     "infirmiere_claire": {
@@ -130,4 +145,29 @@ PERSONNAGES = {
         "cheveux": {"couleur": "poivre_sel", "coupe": "court", "volume": 0.006},
         "tenue": patient_blouse(),
     },
+    # --- Patients civils (arrivées à pied) -----------------------------------------------------
+    "p_homme_jeune_jean": _p("p_homme_jeune_jean", 1.0, 0.45, 0.5, "moyenne", "brun", "court",
+                             civil("tshirt_gris", "jean"), barbe=0.3),
+    "p_femme_jeune": _p("p_femme_jeune", 0.0, 0.40, 0.4, "claire", "blond", "attache",
+                        civil("tshirt_rouge", "jean", "baskets_noires"), rousseurs=0.4),
+    "p_homme_age_pull": _p("p_homme_age_pull", 1.0, 0.85, 0.65, "claire", "blanc", "court",
+                           civil("pull_marine", "pantalon_beige", "chaussures_marron", manches=1.95), barbe=0.15),
+    "p_femme_agee": _p("p_femme_agee", 0.0, 0.88, 0.6, "tres_claire", "gris", "attache",
+                       civil("pull_marine", "pantalon_beige", "chaussures_marron", manches=1.95)),
+    "p_homme_africain": _p("p_homme_africain", 1.0, 0.55, 0.55, "foncee", "noir", "court",
+                           civil("tshirt_gris", "jean"), origines={"african": 1.0}, barbe=0.4, muscle=0.6),
+    "p_femme_africaine": _p("p_femme_africaine", 0.0, 0.52, 0.6, "brune", "noir", "attache",
+                            civil("tshirt_rouge", "pantalon_beige", "baskets_noires"), origines={"african": 1.0}),
+    "p_homme_asiatique": _p("p_homme_asiatique", 1.0, 0.48, 0.42, "mate", "noir", "court",
+                            civil("pull_marine", "jean", "baskets_noires", manches=1.95), origines={"asian": 1.0}, barbe=0.1),
+    "p_femme_mur": _p("p_femme_mur", 0.0, 0.65, 0.7, "moyenne", "chatain", "attache",
+                      civil("pull_marine", "jean", "chaussures_marron", manches=1.95), origines={"caucasian": 0.7, "african": 0.3}),
+    "p_homme_mur_fort": _p("p_homme_mur_fort", 1.0, 0.62, 0.85, "claire", "chatain", "court",
+                           civil("tshirt_gris", "pantalon_beige", "chaussures_marron"), barbe=0.6),
+    "p_ado": _p("p_ado", 1.0, 0.30, 0.4, "claire", "chatain", "court", civil("tshirt_rouge", "jean"), barbe=0.0,
+                taille=0.55),
+    # --- Patients en blouse (installés) ----------------------------------------------------------
+    "p_femme_blouse": _p("p_femme_blouse", 0.0, 0.70, 0.55, "claire", "gris", "attache", patient_blouse()),
+    "p_homme_blouse": _p("p_homme_blouse", 1.0, 0.55, 0.6, "mate", "noir", "court", patient_blouse(),
+                         origines={"caucasian": 0.5, "african": 0.5}, barbe=0.4),
 }
