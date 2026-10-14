@@ -1,40 +1,43 @@
+class_name ERGame
 extends Node3D
-## Point d'entrée : construit la salle de déchocage, le patient (anatomie réelle), les instruments,
-## le joueur à la première personne, l'interface et les menus.
-## Déroulé : menu principal (caméra qui tourne autour de la salle) → briefing → intervention →
-## bilan. Échap : pause.
+## URGENCES — simulateur de médecine d'urgence. Point d'entrée : construit la salle de déchocage,
+## le patient du cas choisi, sa physiologie, les appareils, le joueur, la vue rapprochée, les gestes,
+## l'interface et les menus.
+## Déroulé : menu (choix du cas) → transmission → prise en charge → conclusion → compte rendu.
 ##
-## Arguments de ligne de commande (après « -- ») :
-##   --play                 sauter le menu principal (directement au briefing)
-##   --op=id                opération (drain, exsufflation, pericardiocentese, voie_centrale…)
-##   --step=N               sauter à l'étape N
-##   --autotest             un robot fait toute l'opération (vérification)
-##   --desktest             un robot joue avec la souris et le clavier simulés (vrai joueur)
-##   --chaos[=seed]         actions au hasard puis le robot termine (invariants vérifiés)
-##   --restarttest          fin de partie → rejouer (rechargement) sans erreur
-##   --shot=chemin.png      capture d'écran puis quitter   --view=menu|player|field|overview|xray
-##   --cam=x,y,z --at=x,y,z   caméra libre pour la capture  --frames=N  --hold=id  --mode=0|1|2
-##   --desktest --shot=f.png --shotstep=N --shotdelay=s   capture pendant le test (étape N)
+## Arguments (après « -- ») :
+##   --case=id                 cas à jouer (acr_fv, sca_st, overdose, hypoglycemie, asthme, anaphylaxie)
+##   --play                    sauter le menu principal
+##   --autotest                un robot joue le cas idéalement (vérification), --autotest=all : tous
+##   --shot=f.png --view=menu|briefing|player|zone:thorax|... --frames=N   capture d'écran
 
 static var skip_menu := false
-## Opération choisie dans le menu (gardée au rechargement de la scène)
-static var selected_op := "drain"
+static var selected_case := "acr_fv"
 
-var room: OperatingRoom
+var room: ERRoom
 var patient: Patient
-var tray: InstrumentTray
+var physio: Physio
 var monitor: VitalMonitor
-var procedure: Procedure
+var defib: Defibrillator
 var player: Player
-var hud: GameHUD
+var zone_view: ZoneView
+var gestures: Gestures
+var inv: Inventory
+var journal := Journal.new()
+var case: Case
+var hud: ERHud
 var menus: Menus
 var env: WorldEnvironment
-var op: Operation
-var args := {}
+var flags := {"gants": false}
 var state := "menu"  ## menu, briefing, play, pause, end
-var _leaving := false  ## la scène va être rechargée (double clic : une seule fois)
+var args := {}
+var lab_pending: Array = []  ## [exam, résultat, heure d'arrivée]
+var results: Array = []  ## [exam, texte, heure]
+var radio_tex: Texture2D
+var _leaving := false
 var _menu_cam: Camera3D
 var _menu_t := 0.0
+var _ended := false
 var _testing := false
 
 
@@ -42,103 +45,134 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "1"
-	for t in ["autotest", "desktest", "chaos", "restarttest"]:
-		if args.has(t):
-			_testing = true
-			Engine.max_fps = 90
-	if args.has("op"):
-		selected_op = args["op"]
-	op = Operation.create(selected_op)
-	Patient.pose_id = op.pose
+	if args.has("case"):
+		selected_case = args["case"]
+	_testing = args.has("autotest")
 	var sfx := Sfx.new()
 	sfx.name = "Sons"
 	sfx.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(sfx)
 	_build_environment()
-	room = OperatingRoom.new()
+	case = Case.create(selected_case)
+	case.game = self
+	room = ERRoom.new()
 	room.name = "Salle"
-	room.pose_id = op.pose
 	add_child(room)
 	room.build()
+	physio = Physio.new()
+	physio.name = "Physiologie"
+	add_child(physio)
+	case.physio = physio
 	patient = Patient.new()
 	patient.name = "Patient"
-	op.configure_patient(patient)
 	add_child(patient)
-	patient.build()
-	tray = InstrumentTray.new()
-	tray.name = "Instruments"
-	add_child(tray)
-	tray.build(op)
+	patient.build(case.profile)
+	# Scope sur le bras plafonnier
 	monitor = VitalMonitor.new()
-	monitor.name = "Moniteur"
+	monitor.name = "Scope"
 	add_child(monitor)
-	monitor.build()
-	monitor.heart_rate = op.vitals["hr"]
-	monitor.target_rate = op.vitals["hr"]
-	monitor.spo2 = op.vitals["spo2"]
-	monitor.sys = op.vitals["sys"]
-	monitor.dia = op.vitals["dia"]
-	monitor.temp = op.vitals.get("temp", 37.0)
-	monitor.position = Vector3(0.78, 1.62, -0.52)
-	monitor.look_at(Vector3(0.0, 1.62, 0.55), Vector3.UP, true)
-	procedure = Procedure.new()
-	procedure.name = "Procedure"
-	procedure.op = op
-	procedure.patient = patient
-	procedure.tray = tray
-	procedure.monitor = monitor
-	add_child(procedure)
-	op.proc = procedure
-	op.patient = patient
-	op.tray = tray
-	op.monitor = monitor
-	op.root = self
-	op.build_extras()
-	op.define_steps()
-	room.scan_label.text = op.scan_text
-	if op.imaging_tex != "":
-		(room.scan_film.material_override as StandardMaterial3D).albedo_texture = load(op.imaging_tex)
+	monitor.global_transform = room.monitor_anchor
+	monitor.physio = physio
+	monitor.gear = patient.gear
+	var scope_scene: PackedScene = load("res://assets/models/scope.glb")
+	monitor.build(scope_scene.instantiate())
+	Interactable.make(monitor, "scope:pni", "Mesure de la pression (PNI)", "Appuyer", Vector3(0.05, 0.04, 0.03), monitor.global_transform * Vector3(0.16, -0.12, 0.01), Patient.LAYER_DEVICE)
+	defib = Defibrillator.new()
+	defib.name = "Defibrillateur"
+	add_child(defib)
+	defib.setup(room.defib_root, physio, patient.gear)
+	defib.set_meta("monitor", monitor)
+	defib.shocked.connect(_on_shock)
+	defib.analysed.connect(func(adv: bool) -> void: event("analyse", "Analyse du rythme : choc %s" % ("recommandé" if adv else "non recommandé")))
+	# Électrocardiographe : électrodes à prendre, bouton d'enregistrement
+	var ecg_xf := room.ecg_root.global_transform
+	Interactable.make(room.ecg_root, "ecg:electrodes", "Prendre les électrodes de l'ECG", "Prendre", Vector3(0.1, 0.12, 0.1), ecg_xf * Vector3(0.22, 0.85, 0.08), Patient.LAYER_DEVICE)
+	Interactable.make(room.ecg_root, "ecg:enregistrer", "Enregistrer l'ECG", "Appuyer", Vector3(0.3, 0.02, 0.1), ecg_xf * Vector3(0.0, 0.935, 0.06), Patient.LAYER_DEVICE)
+	# Débitmètre d'oxygène : + et -
+	Interactable.make(room, "rampe:plus", "Oxygène : augmenter le débit", "Tourner", Vector3(0.04, 0.04, 0.05), Vector3(1.47, 1.66, -0.35), Patient.LAYER_DEVICE)
+	Interactable.make(room, "rampe:moins", "Oxygène : diminuer le débit", "Tourner", Vector3(0.04, 0.04, 0.05), Vector3(1.47, 1.4, -0.35), Patient.LAYER_DEVICE)
+	room.add_interactables(room)
+	inv = Inventory.new()
+	player = Player.new()
+	player.name = "Joueur"
+	add_child(player)
+	player.build(Vector3(-0.1, 0.0, 0.85), Vector3(-0.05, 1.0, 0.0))
+	player.interact_requested.connect(_on_interact)
+	player.pause_requested.connect(_on_pause_key)
+	player.key_action.connect(_on_key_action)
+	zone_view = ZoneView.new()
+	zone_view.name = "VueRapprochee"
+	zone_view.player = player
+	add_child(zone_view)
+	_define_zones()
+	gestures = Gestures.new()
+	gestures.name = "Gestes"
+	add_child(gestures)
+	zone_view.gestures = gestures
+	gestures.setup(self)
+	defib.set_meta("gestures", gestures)
+	hud = ERHud.new()
+	hud.name = "HUD"
+	hud.game = self
+	add_child(hud)
+	hud.build()
+	zone_view.entered.connect(func(_z: String) -> void: hud.zone_mode(true))
+	zone_view.exited.connect(func() -> void: hud.zone_mode(false))
+	inv.changed.connect(hud.refresh_hotbar)
+	_vignette()
+	menus = Menus.new()
+	menus.name = "Menus"
+	menus.process_mode = Node.PROCESS_MODE_ALWAYS
+	menus.game = self
+	add_child(menus)
+	menus.build()
+	menus.case_chosen.connect(_choose_case)
+	menus.start_pressed.connect(_start)
+	menus.resume_pressed.connect(_resume)
+	menus.restart_pressed.connect(_restart)
+	menus.main_menu_pressed.connect(_to_main_menu)
+	menus.quit_pressed.connect(func() -> void: _quit())
+	if args.has("quality"):
+		Settings.quality = int(args["quality"])
+	Settings.apply_graphics(env.environment, get_viewport())
+	case.setup()
+	physio.died.connect(_on_died)
+	_sync_patient(0.0)
+	if _testing or args.has("shot"):
+		await _run_cli()
+		return
+	if skip_menu or args.has("play"):
+		skip_menu = false
+		_go_briefing(true)
 	else:
-		room.scan_film.visible = false
-	patient.breath_rate = op.breath_rate
-	monitor.resp_rate = op.breath_rate
+		_show_main_menu()
 
-	if args.has("autotest"):
-		var bot := AutoBot.new()
-		bot.name = "Robot"
-		bot.patient = patient
-		add_child(bot)
-		procedure.hands.append(bot)
-	else:
-		player = Player.new()
-		player.name = "Joueur"
-		add_child(player)
-		player.build(op.player_spawn, op.player_look)
-		player.hand.patient = patient
-		player.hand.tray = tray
-		procedure.hands.append(player.hand)
-		hud = GameHUD.new()
-		hud.name = "HUD"
-		hud.monitor = monitor
-		hud.hand = player.hand
-		hud.player = player
-		hud.instruments = tray.ordered
-		add_child(hud)
-		hud.build()
-		hud.marker = procedure.marker
-		hud.reference = op.reference_time()
-		procedure.uis.append(hud)
-		player.pause_requested.connect(_on_pause_key)
-		player.view_mode_requested.connect(_cycle_view)
-		player.hand.hint_changed.connect(func(t: String) -> void:
-			if t != "" and t.begins_with("Approche"):
-				hud.toast(t, false))
-		procedure.step_changed.connect(func(_i: int) -> void:
-			hud.required_id = procedure.required_id()
-			hud.step_kind = procedure.current().get("kind", "")
-			hud.hand_prompt = procedure.current().get("hand_prompt", "")
-			hud.action_prompt = procedure.current().get("action_prompt", ""))
-	# Vignettage léger sur l'image 3D, sous le HUD et les menus
+
+func _define_zones() -> void:
+	var zv := zone_view
+	var ideal := Vector3(-0.03, 1.06, 0.0)
+	zv.define("thorax", "Thorax", ideal + Vector3(0.08, -0.02, 0.0), 0.0, 58.0, 0.72, 0.25, 1.2)
+	zv.define("tete", "Tête et visage", Vector3(0.28, 1.0, 0.0), 0.55, 52.0, 0.42, 0.15, 0.9)
+	zv.define("cou", "Cou", Vector3(0.18, 0.98, 0.02), 0.25, 55.0, 0.36, 0.15, 0.8)
+	zv.define("abdomen", "Abdomen", Vector3(-0.27, 1.0, 0.0), 0.0, 58.0, 0.55, 0.2, 1.0)
+	for side in ["L", "R"]:
+		var mid := Patient.arm_point(side, 0.55)
+		var hand := Patient.arm_point(side, 0.9)
+		var yaw := 0.0 if side == "L" else PI
+		var nm := "gauche" if side == "L" else "droit"
+		zv.define("bras_" + side, "Bras " + nm, mid + Vector3(0, 0.05, 0), yaw, 60.0, 0.55, 0.15, 1.0)
+		zv.define("main_" + side, "Main " + ("gauche" if side == "L" else "droite"), hand + Vector3(0, 0.03, 0), yaw, 58.0, 0.32, 0.12, 0.8)
+	zv.define("jambes", "Jambes (cuisse)", Vector3(-0.68, 0.95, 0.05), 0.0, 55.0, 0.7, 0.25, 1.2)
+	var d := room.defib_root
+	zv.define("defib", "Défibrillateur", d.global_transform * Vector3(0.02, 0.14, 0.0), d.rotation.y, 18.0, 0.5, 0.25, 1.0)
+	var m := room.monitor_anchor
+	zv.define("scope", "Scope", m.origin, atan2(m.basis.z.x, m.basis.z.z), 5.0, 0.55, 0.25, 1.0)
+	var e := room.ecg_root
+	zv.define("ecg", "Électrocardiographe", e.global_transform * Vector3(0.0, 0.92, 0.0), e.rotation.y, 40.0, 0.7, 0.3, 1.2)
+	zv.define("rampe", "Débitmètre d'oxygène", Vector3(1.44, 1.52, -0.35), -PI * 0.5, 8.0, 0.45, 0.2, 0.9)
+
+
+func _vignette() -> void:
 	var vig_layer := CanvasLayer.new()
 	vig_layer.name = "Vignettage"
 	vig_layer.layer = 1
@@ -150,80 +184,275 @@ func _ready() -> void:
 	vm.shader = preload("res://shaders/vignette.gdshader")
 	vig.material = vm
 	vig_layer.add_child(vig)
-	menus = Menus.new()
-	menus.name = "Menus"
-	menus.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(menus)
-	menus.build(op)
-	menus.play_pressed.connect(_go_briefing)
-	menus.op_chosen.connect(_choose_op)
-	menus.start_pressed.connect(_start)
-	menus.resume_pressed.connect(_resume)
-	menus.restart_pressed.connect(_restart)
-	menus.main_menu_pressed.connect(_to_main_menu)
-	menus.quit_pressed.connect(func() -> void: _quit())
-	procedure.uis.append(menus_proxy())
-	procedure.finished.connect(_on_finished)
-	if args.has("quality"):
-		Settings.quality = int(args["quality"])
-	Settings.apply_graphics(env.environment, get_viewport())
-	Settings.changed.connect(func() -> void:
-		if player:
-			player.camera.fov = Settings.fov)
-	procedure.setup()
-	if args.has("perf"):
-		var pp := PerfProbe.new()
-		pp.proc = procedure
-		add_child(pp)
 
-	if _testing or args.has("shot") or args.has("step"):
-		await _run_cli()
+
+# ---------------------------------------------------------------- Boucle
+
+func _process(delta: float) -> void:
+	if state == "menu" and _menu_cam:
+		_menu_t += delta * 0.06
+		var a := 0.9 + sin(_menu_t) * 0.6
+		var c := Vector3(-0.3, 1.0, 0.0)
+		_menu_cam.global_position = c + Vector3(cos(a) * 2.2, 0.85 + 0.12 * sin(_menu_t * 1.7), sin(a) * 2.2)
+		_menu_cam.look_at(c + Vector3(0.2, 0.0, 0.0))
+	if state != "play":
 		return
-	if skip_menu or args.has("play"):
-		skip_menu = false
-		_go_briefing(true)
-	else:
-		_show_main_menu()
+	case.tick(delta)
+	case.chatter(delta)
+	_sync_patient(delta)
+	# Résultats d'examens qui arrivent
+	for i in range(lab_pending.size() - 1, -1, -1):
+		var lp: Array = lab_pending[i]
+		if physio.time >= float(lp[2]):
+			results.append([lp[0], lp[1], physio.time])
+			lab_pending.remove_at(i)
+			if lp[0] == "radio":
+				if radio_tex:
+					room.show_imaging(radio_tex)
+				say("La radio est sur l'écran d'imagerie.", "ide")
+			else:
+				hud.toast("Résultat arrivé : %s" % Labs.NAMES.get(lp[0], lp[0]), true)
+	if physio.dead and not _ended:
+		_finish(false)
 
 
-## Les menus reçoivent aussi l'écran de fin de la procédure.
-func menus_proxy() -> Object:
-	var p := EndProxy.new()
-	p.main = self
-	return p
+## Ce qu'on voit du patient suit sa physiologie.
+func _sync_patient(_delta: float) -> void:
+	patient.set_signs(physio.signs)
+	if physio.in_arrest():
+		patient.set_eyes_open(0.15)
 
 
-class EndProxy:
-	extends RefCounted
-	var main: Node
+# ---------------------------------------------------------------- Événements
 
-	func show_step(_a: int, _b: int, _c: String, _d: String, _e: String, _f: String) -> void:
-		pass
-
-	func set_progress(_v: float, _t: String) -> void:
-		pass
-
-	func toast(_t: String, _ok := true) -> void:
-		pass
-
-	func set_status(_e: float, _n: int) -> void:
-		pass
-
-	func set_steps(_t: Array) -> void:
-		pass
-
-	func set_header(_h: String) -> void:
-		pass
-
-	func show_end(elapsed: float, errors: int, grade: String, summary: String, log: Array, quality: Dictionary) -> void:
-		main.call("_pending_end", [elapsed, errors, grade, summary, log, quality])
+func now() -> float:
+	return physio.time
 
 
-var _end_data: Array = []
+func event(kind: String, text := "", data := {}) -> void:
+	journal.add(physio.time, kind, text, data)
+	case.on_event(kind, data)
 
 
-func _pending_end(data: Array) -> void:
-	_end_data = data
+func toast(text: String, ok := true) -> void:
+	if hud:
+		hud.toast(text, ok)
+
+
+func say(text: String, who := "patient") -> void:
+	if hud:
+		hud.say(text, who)
+
+
+func set_progress(v: float, label: String) -> void:
+	if hud:
+		hud.set_progress(v, label)
+
+
+func case_fault(text: String, pts: float) -> void:
+	case.fault(text, pts)
+
+
+## Un médicament est administré (seringue, perfusion, nébulisation).
+func drug_given(drug: String, dose: float, route: String) -> void:
+	case.on_drug(drug, dose, route)
+	var txt := "%s %s %s" % [Drugs.name_of(drug), Drugs.dose_text(drug, dose), route]
+	event("drug:" + drug, txt, {"dose": dose, "route": route})
+	event("traitement", "")
+	toast("Injecté : " + txt if route in ["IV", "IM"] else txt)
+	Sfx.play("succes", Vector3.INF, -14.0)
+
+
+func on_compression(_depth: float, _rate: float) -> void:
+	pass
+
+
+func on_insufflation(_effective: bool) -> void:
+	pass
+
+
+func _on_shock(energy: int) -> void:
+	event("choc", "Choc électrique externe %d J" % energy)
+	if gestures.cpr:
+		case_fault("Choc délivré pendant que vous touchiez le patient !", 10.0)
+	patient.set_compression(0.0)
+	# Le corps sursaute
+	var tw := create_tween()
+	tw.tween_property(patient, "position:y", 0.02, 0.06)
+	tw.tween_property(patient, "position:y", 0.0, 0.18)
+	case.on_shock(energy)
+
+
+func record_ecg12() -> void:
+	if patient.gear.ecg12.size() < 10:
+		toast("Pose d'abord les 10 électrodes de l'ECG", false)
+		return
+	var e := case.ecg12()
+	var bad: Array = flags.get("ecg12_bad", [])
+	event("ecg12", "ECG 12 dérivations : " + String(e["text"]), e)
+	hud.show_ecg(e, bad)
+	Sfx.play("clic", Vector3.INF, -8.0)
+
+
+## Prescription d'un examen (ordinateur) : il faut un prélèvement pour la biologie.
+func order_exam(exam: String) -> String:
+	if exam == "radio":
+		if journal.has("exam:radio"):
+			return "Radio déjà demandée"
+		var x := case.xray()
+		var path: String = x.get("tex", "")
+		radio_tex = load(path) if path != "" and ResourceLoader.exists(path) else load("res://assets/textures/radio_normale.png") if ResourceLoader.exists("res://assets/textures/radio_normale.png") else null
+		lab_pending.append(["radio", x["text"], physio.time + 50.0])
+		event("exam:radio", "Radio du thorax au lit demandée")
+		say("Le manipulateur radio arrive.", "ide")
+		return "Radio demandée : le manipulateur arrive"
+	if not journal.has("prelevement"):
+		return "Il faut d'abord prélever des tubes (sur le cathéter)"
+	if journal.has("exam:" + exam):
+		return "Déjà demandé"
+	var delay := 25.0 if exam == "gds" else 45.0
+	lab_pending.append([exam, case.lab(exam), physio.time + delay])
+	event("exam:" + exam, "Demandé : %s" % Labs.NAMES.get(exam, exam))
+	return "Demandé : résultat dans quelques minutes"
+
+
+## Interrogatoire : une question posée au patient.
+func ask(i: int) -> void:
+	if i < 0 or i >= case.questions.size():
+		return
+	var q: Array = case.questions[i]
+	if not physio.speaks:
+		say("…", "patient")
+		toast("Il ne peut pas répondre", false)
+		return
+	event("question", "« %s » — %s" % [q[0], q[1]])
+	say(q[1], "patient")
+
+
+## Conclusion : diagnostic et orientation → fin du cas.
+func conclude(diag: String, orient: String) -> void:
+	event("diagnostic", "Diagnostic retenu : " + diag)
+	event("orientation", "Orientation : " + orient)
+	if diag == case.diag_ok:
+		event("diag_ok", "")
+	var ok_orient := orient == case.orient_ok
+	if case is CaseAsthme and orient == "Réanimation" and (case as CaseAsthme).severity > 0.5:
+		ok_orient = true
+	if ok_orient:
+		event("orient_ok", "")
+	_finish(not physio.in_arrest() and not physio.dead)
+
+
+func _on_died() -> void:
+	if not _ended:
+		_finish(false)
+
+
+## Évaluation : objectifs atteints, erreurs, devenir du patient → note.
+func evaluate(alive: bool) -> Dictionary:
+	var objs := case.objectives()
+	var total := 0.0
+	var got := 0.0
+	var lines := []
+	for o in objs:
+		total += float(o[1])
+		if o[2]:
+			got += float(o[1])
+		lines.append([o[0], o[1], o[2]])
+	var pen := 0.0
+	for e in case.errors:
+		pen += float(e[1])
+	var score := clampf(got / maxf(total, 1.0) * 100.0 - pen, 0.0, 100.0)
+	if not alive:
+		score = minf(score, 45.0)
+	var grade := "D"
+	if score >= 92.0 and case.errors.is_empty() and alive:
+		grade = "S"
+	elif score >= 80.0:
+		grade = "A"
+	elif score >= 65.0:
+		grade = "B"
+	elif score >= 45.0:
+		grade = "C"
+	return {"score": score, "grade": grade, "objectives": lines, "errors": case.errors.duplicate(), "alive": alive,
+		"time": physio.time, "summary": case.summary_good if alive else case.summary_bad}
+
+
+func _finish(alive: bool) -> void:
+	if _ended:
+		return
+	_ended = true
+	var res := evaluate(alive)
+	if not _testing and not args.has("shot"):
+		res["record"] = Records.submit(case.id, res["grade"], res["score"], physio.time)
+	if _testing:
+		print("FIN DU CAS %s — %s — note %s (%d/100) — vivant : %s — erreurs : %s" % [case.id, case.name, res["grade"], int(res["score"]), alive, str(case.errors)])
+		for l in res["objectives"]:
+			print("   %s %s" % ["[x]" if l[2] else "[ ]", l[0]])
+	await get_tree().create_timer(0.1 if _testing else 1.6).timeout
+	state = "end"
+	if zone_view.active:
+		zone_view.exit()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	player.enabled = false
+	hud.visible = false
+	menus.show_end(res)
+
+
+# ---------------------------------------------------------------- Interactions
+
+func _on_interact(it: Interactable) -> void:
+	if state != "play":
+		return
+	if it.zone != "":
+		zone_view.enter(it.zone)
+		return
+	match it.id:
+		"chariot", "armoire":
+			hud.open_cart(it.id)
+		"defib":
+			zone_view.enter("defib")
+		"scope":
+			zone_view.enter("scope")
+		"ecg":
+			zone_view.enter("ecg")
+		"rampe":
+			zone_view.enter("rampe")
+		"poste":
+			hud.open_computer()
+		"imagerie":
+			if radio_tex and journal.has("exam:radio") and lab_pending.filter(func(l: Array) -> bool: return l[0] == "radio").is_empty():
+				hud.show_image(radio_tex, _result_text("radio"))
+			else:
+				toast("Aucune image pour l'instant", false)
+		"gants":
+			if not flags["gants"]:
+				flags["gants"] = true
+				event("gants", "Gants mis")
+				toast("Gants enfilés")
+				Sfx.play("drap", Vector3.INF, -12.0, 1.4)
+		"sha", "lavabo":
+			event("hygiene", "Hygiène des mains")
+			toast("Friction hydro-alcoolique des mains")
+			Sfx.play("souffle", Vector3.INF, -18.0, 1.6)
+
+
+func _result_text(exam: String) -> String:
+	for r in results:
+		if r[0] == exam:
+			return r[1]
+	return ""
+
+
+func _on_key_action(action: String) -> void:
+	if state != "play":
+		return
+	match action:
+		"parler":
+			if player.global_position.distance_to(Vector3(0.0, 0.0, 0.0)) < 2.2:
+				hud.open_dialogue()
+		"dossier":
+			hud.open_computer()
 
 
 # ---------------------------------------------------------------- États
@@ -231,10 +460,8 @@ func _pending_end(data: Array) -> void:
 func _show_main_menu() -> void:
 	state = "menu"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if hud:
-		hud.visible = false
-	if player:
-		player.enabled = false
+	hud.visible = false
+	player.enabled = false
 	_menu_cam = Camera3D.new()
 	_menu_cam.fov = 55
 	add_child(_menu_cam)
@@ -242,25 +469,14 @@ func _show_main_menu() -> void:
 	menus.show_main()
 
 
-func _process(delta: float) -> void:
-	if state == "menu" and _menu_cam:
-		_menu_t += delta * 0.06
-		var a := 0.7 + sin(_menu_t) * 0.55
-		var c := Vector3(-0.25, 1.15, 0.0)
-		_menu_cam.global_position = c + Vector3(cos(a) * 2.6, 0.75 + 0.15 * sin(_menu_t * 1.7), sin(a) * 2.6)
-		_menu_cam.look_at(c + Vector3(0.1, 0.05, 0.0))
-
-
-## Une opération est choisie dans le menu : la même → briefing ; une autre → la scène est
-## reconstruite pour elle (patient, salle, instruments), directement au briefing.
-func _choose_op(op_id: String) -> void:
+func _choose_case(case_id: String) -> void:
 	if _leaving or state != "menu":
 		return
-	if op_id == op.id:
+	if case_id == case.id:
 		_go_briefing()
 		return
 	_leaving = true
-	selected_op = op_id
+	selected_case = case_id
 	skip_menu = true
 	await menus.fade(true, 0.35)
 	get_tree().reload_current_scene()
@@ -268,14 +484,13 @@ func _choose_op(op_id: String) -> void:
 
 func _go_briefing(instant := false) -> void:
 	if _menu_cam and not instant:
-		# Vol de la caméra jusqu'aux yeux du joueur
 		menus.hide_all()
 		var from := _menu_cam.global_transform
 		var to := player.camera.global_transform
 		var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 		state = "fly"
 		tw.tween_method(func(k: float) -> void:
-			_menu_cam.global_transform = Transform3D(Basis(Quaternion(from.basis.orthonormalized()).slerp(Quaternion(to.basis.orthonormalized()), k)), from.origin.lerp(to.origin, k)), 0.0, 1.0, 1.6)
+			_menu_cam.global_transform = Transform3D(Basis(Quaternion(from.basis.orthonormalized()).slerp(Quaternion(to.basis.orthonormalized()), k)), from.origin.lerp(to.origin, k)), 0.0, 1.0, 1.5)
 		await tw.finished
 	if _menu_cam:
 		_menu_cam.queue_free()
@@ -284,6 +499,7 @@ func _go_briefing(instant := false) -> void:
 	state = "briefing"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	hud.visible = false
+	player.enabled = false
 	menus.show_briefing()
 
 
@@ -295,12 +511,19 @@ func _start() -> void:
 	hud.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	player.enabled = true
-	procedure.on_continue()
+	event("debut", "Prise en charge débutée")
 
 
 func _on_pause_key() -> void:
 	match state:
 		"play":
+			if hud.any_panel_open():
+				hud.close_panels()
+				return
+			if zone_view.active:
+				if not gestures.cancel_current():
+					zone_view.exit()
+				return
 			state = "pause"
 			get_tree().paused = true
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -313,7 +536,8 @@ func _resume() -> void:
 	state = "play"
 	get_tree().paused = false
 	menus.hide_all()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if not zone_view.active:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _restart() -> void:
@@ -322,7 +546,6 @@ func _restart() -> void:
 	_leaving = true
 	get_tree().paused = false
 	skip_menu = true
-	Procedure.restarts += 1
 	await menus.fade(true, 0.35)
 	get_tree().reload_current_scene()
 
@@ -337,53 +560,31 @@ func _to_main_menu() -> void:
 	get_tree().reload_current_scene()
 
 
-func _on_finished(_s: float, _e: int) -> void:
-	await get_tree().create_timer(1.6).timeout
-	state = "end"
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if player:
-		player.enabled = false
-	if hud:
-		hud.visible = false
-	if not _end_data.is_empty():
-		menus.callv("show_end", _end_data)
-
-
-## Vue anatomique (V) : normale → muscles (peau fantôme) → squelette et organes → normale.
-func _cycle_view() -> void:
-	if state != "play":
-		return
-	var m := (patient.view_mode + 1) % 3
-	patient.set_view_mode(m)
-	Sfx.play("vue", Vector3.INF, -10.0, 1.0 + m * 0.12)
-	hud.set_view_tag(["", "VUE ANATOMIQUE  ·  MUSCLES   (V)", "VUE ANATOMIQUE  ·  CÔTES, POUMONS, CŒUR   (V)"][m])
-
-
 func _build_environment() -> void:
 	env = WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = Color(0.05, 0.06, 0.07)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.6, 0.66, 0.68)
-	e.ambient_light_energy = 0.42
+	e.ambient_light_color = Color(0.66, 0.7, 0.72)
+	e.ambient_light_energy = 0.38
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_BG
 	e.tonemap_mode = Environment.TONE_MAPPER_AGX
-	e.tonemap_exposure = 1.0
-	e.tonemap_white = 4.0
+	e.tonemap_exposure = 1.05
+	e.tonemap_white = 6.0
 	e.glow_enabled = true
-	e.glow_intensity = 0.35
-	e.glow_strength = 0.9
-	e.glow_bloom = 0.04
-	e.glow_hdr_threshold = 1.2
+	e.glow_intensity = 0.3
+	e.glow_strength = 0.85
+	e.glow_bloom = 0.03
+	e.glow_hdr_threshold = 1.3
 	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-	e.volumetric_fog_density = 0.006
+	e.volumetric_fog_density = 0.004
 	e.volumetric_fog_albedo = Color(0.9, 0.95, 1.0)
 	e.volumetric_fog_length = 8.0
 	e.volumetric_fog_ambient_inject = 0.1
 	e.adjustment_enabled = true
-	e.adjustment_contrast = 1.05
-	e.adjustment_saturation = 1.04
+	e.adjustment_contrast = 1.06
+	e.adjustment_saturation = 1.02
 	env.environment = e
 	add_child(env)
 
@@ -391,156 +592,52 @@ func _build_environment() -> void:
 # ---------------------------------------------------------------- Tests et captures
 
 func _run_cli() -> void:
-	if hud and player:
-		state = "play"
-		player.enabled = true
-	if args.has("step"):
-		procedure.skip_to(int(args["step"]))
+	state = "play"
+	hud.visible = true
+	player.enabled = true
 	if args.has("autotest"):
-		var ad := AutoDriver.new()
-		add_child(ad)
-		ad.setup(procedure.hands[0], procedure, patient, tray)
-		if args.has("shot") and args.has("shotstep"):
-			_shot_during_test()
-		await ad.run_all()
-		await _quit()
-		return
-	if args.has("desktest"):
-		var pb := PlayerBot.new()
-		add_child(pb)
-		pb.setup(player, procedure, patient, tray)
-		if args.has("shot") and args.has("shotstep"):
-			_shot_during_test()
-		await get_tree().process_frame
-		await pb.run_all()
-		await _quit()
-		return
-	if args.has("chaos"):
-		var ct := ChaosTest.new()
-		ct.proc = procedure
-		ct.patient = patient
-		ct.tray = tray
-		add_child(ct)
-		var pb2 := PlayerBot.new()
-		add_child(pb2)
-		pb2.setup(player, procedure, patient, tray)
-		ct.bot = pb2
-		await ct.run(int(args.get("chaos", "1")) if args["chaos"].is_valid_int() else 1)
-		await _quit()
-		return
-	if args.has("restarttest"):
-		if Procedure.restarts == 0:
-			procedure.skip_to(procedure.steps.size())
-			await get_tree().create_timer(2.0).timeout
-			if state != "end":
-				print("RESTART ÉCHEC : pas d'écran de fin")
-				await _quit()
-				return
-			_restart()
-			return
-		await get_tree().create_timer(0.5).timeout
-		print("RESTART OK (étape ", procedure.step, ", état ", state, ")")
+		var bot := ERBot.new()
+		bot.game = self
+		add_child(bot)
+		await bot.run()
 		await _quit()
 		return
 	if args.has("shot"):
 		await _take_shot()
 
 
-## Capture pendant un test (robot) : quand l'étape « shotstep » a commencé depuis « shotdelay »
-## secondes ; caméra libre si --cam/--at (sinon la vue du joueur).
-func _shot_during_test() -> void:
-	var target := int(args["shotstep"])
-	var delay := float(args.get("shotdelay", "1.0"))
-	procedure.step_changed.connect(func(i: int) -> void:
-		if i != target:
-			return
-		await get_tree().create_timer(delay).timeout
-		if args.has("cam"):
-			var cam := Camera3D.new()
-			cam.fov = 50
-			add_child(cam)
-			var c: PackedFloat64Array = args["cam"].split_floats(",")
-			var t: PackedFloat64Array = args.get("at", "0,1,0").split_floats(",")
-			cam.look_at_from_position(Vector3(c[0], c[1], c[2]), Vector3(t[0], t[1], t[2]))
-			cam.current = true
-			if args.has("mode"):
-				patient.set_view_mode(int(args["mode"]))
-			for k in 6:
-				await get_tree().process_frame
-		get_viewport().get_texture().get_image().save_png(args["shot"])
-		print("CAPTURE ", args["shot"]))
-
-
 func _take_shot() -> void:
 	var view: String = args.get("view", "player")
-	if args.has("mode"):
-		patient.set_view_mode(int(args["mode"]))
-	if args.has("hold") and player:
-		player.hand.take_requested.emit(player.hand, tray.instruments[args["hold"]])
-	var cam: Camera3D
-	match view:
-		"menu":
-			state = "menu"
-			_show_main_menu()
-			_menu_t = 0.9
-			cam = _menu_cam
-		"briefing":
-			state = "briefing"
-			hud.visible = false
-			menus.show_briefing()
-			cam = player.camera
-		"end":
-			if args.has("demo_score"):
-				# Capture de l'écran de fin avec des pénalités (vérification de la mise en page)
-				procedure.elapsed = procedure.op.reference_time() + 60.0
-				procedure.errors = 2
-				procedure.penalty = 30.0
-				procedure.error_log.assign(["Trop bas : reste à 1-2 cm sous la clavicule, sinon l'aiguille n'arrive pas sous l'os.",
-					"Mauvais instrument pris : Dilatateur (au lieu de Aiguille 18G sur seringue)",
-					"Le guide est entré dans le cœur : extrasystoles ! Il ne faut pas dépasser 20 cm."])
-				procedure.quality["bonus"] = 4.0
-			procedure.skip_to(procedure.steps.size())
-			await get_tree().create_timer(2.2).timeout
-			cam = player.camera
-			player.look_towards(Vector3(0.0, 1.3, 0.0))
-		"player":
-			cam = player.camera
-			if args.has("at"):
-				var t: PackedFloat64Array = args["at"].split_floats(",")
-				player.look_towards(Vector3(t[0], t[1], t[2]))
-		_:
-			cam = Camera3D.new()
-			cam.fov = 60
-			add_child(cam)
-			var presets := {
-				"field": [Vector3(0.05, 1.62, 0.36), Vector3(0.0, 1.3, 0.0)],
-				"overview": [Vector3(1.9, 2.1, 2.3), Vector3(-0.3, 1.0, 0.0)],
-				"xray": [Vector3(0.25, 1.75, 0.75), Vector3(-0.02, 1.2, 0.0)],
-			}
-			var pr: Array = presets.get(view, presets["overview"])
-			var from: Vector3 = pr[0]
-			var at: Vector3 = pr[1]
-			if args.has("cam"):
-				var c: PackedFloat64Array = args["cam"].split_floats(",")
-				from = Vector3(c[0], c[1], c[2])
-			if args.has("at"):
-				var t2: PackedFloat64Array = args["at"].split_floats(",")
-				at = Vector3(t2[0], t2[1], t2[2])
-			cam.look_at_from_position(from, at)
-	cam.current = true
-	if hud and not view in ["player"]:
+	if view == "menu":
+		_show_main_menu()
+		_menu_t = 0.9
+	elif view == "briefing":
+		state = "briefing"
 		hud.visible = false
-	if menus and not view in ["menu", "briefing", "end", "player"]:
-		menus.visible = false  # vue libre : la scène seule (pas le compte rendu de fin)
-	for i in int(args.get("frames", "40")):
+		menus.show_briefing()
+	elif view.begins_with("zone:"):
+		zone_view.enter(view.substr(5))
+		if args.has("tool"):
+			inv.add(args["tool"])
+		await get_tree().create_timer(0.8).timeout
+	elif view == "end":
+		_finish(true)
+		await get_tree().create_timer(0.5).timeout
+	elif args.has("at"):
+		var t: PackedFloat64Array = args["at"].split_floats(",")
+		player.look_towards(Vector3(t[0], t[1], t[2]))
+	if args.has("steps"):
+		var bot := ERBot.new()
+		bot.game = self
+		add_child(bot)
+		await bot.run_steps(int(args["steps"]))
+	for i in int(args.get("frames", "30")):
 		await get_tree().process_frame
-	var img := get_viewport().get_texture().get_image()
-	img.save_png(args["shot"])
+	get_viewport().get_texture().get_image().save_png(args["shot"])
 	print("CAPTURE ", args["shot"])
 	await _quit()
 
 
-## Quitte proprement : sons coupés d'abord (le serveur audio relâche ses lectures), puis quitter.
 func _quit() -> void:
 	Sfx.stop_all()
 	await get_tree().create_timer(0.15, true, false, true).timeout

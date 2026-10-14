@@ -1,36 +1,37 @@
 class_name Player
 extends CharacterBody3D
-## Joueur à la première personne : ZQSD (ou WASD, flèches) pour marcher, souris pour regarder,
-## Maj pour aller plus vite, Ctrl pour se pencher au-dessus du patient (on voit au fond d'une plaie).
-## Clic droit maintenu : précision (zoom, souris ralentie, profondeur de champ) pour les gestes fins.
+## Urgentiste à la première personne : ZQSD (ou WASD, flèches) pour marcher, souris pour regarder,
+## Maj pour aller plus vite, Ctrl pour se pencher. Le viseur désigne ce qu'on peut utiliser (zone
+## du patient, appareil, chariot...) : clic gauche (ou E) pour l'utiliser.
 
 signal pause_requested
-signal view_mode_requested
-signal continue_requested
+signal interact_requested(it: Interactable)
+signal key_action(action: String)
 
 const EYE := 1.66
-const LEAN_DOWN := 0.1  ## se pencher : la tête descend un peu...
-const LEAN_FWD := 0.32  ## ... et passe au-dessus de la table
-const WALK := 1.35
+const LEAN_DOWN := 0.12
+const LEAN_FWD := 0.28
+const WALK := 1.4
 const RUN := 2.6
+const REACH := 1.9
 
 var camera: Camera3D
 var head: Node3D
-var hand: PlayerHand
-var enabled := true  ## faux pendant les menus
-var precision := 0.0  ## 0..1 (zoom de précision)
+var enabled := true  ## faux pendant les menus et les vues rapprochées
 var crouch := 0.0
-var sim_look := Vector2.INF  ## tests : orientation imposée (lacet, tangage en radians)
-var sim_lean := -1.0  ## tests : penché imposé (0..1), -1 = touche Ctrl
+var aimed: Interactable
+var sim_look := Vector2.INF
+var sim_lean := -1.0
 
 var _yaw := 0.0
 var _pitch := -0.35
 var _bob_t := 0.0
 var _bob := Vector3.ZERO
-var _attrs: CameraAttributesPractical
 
 
 func build(at: Vector3, look_at_point: Vector3) -> void:
+	collision_layer = 1
+	collision_mask = 1
 	var cap := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
 	shape.radius = 0.22
@@ -44,26 +45,14 @@ func build(at: Vector3, look_at_point: Vector3) -> void:
 	add_child(head)
 	camera = Camera3D.new()
 	camera.name = "Camera"
-	camera.near = 0.02
+	camera.near = 0.03
 	camera.far = 40.0
 	camera.fov = Settings.fov
 	head.add_child(camera)
-	_attrs = CameraAttributesPractical.new()
-	_attrs.dof_blur_far_enabled = false
-	_attrs.dof_blur_amount = 0.06
-	camera.attributes = _attrs
 	camera.current = true
 	position = at
-	var d := look_at_point - (at + Vector3.UP * EYE)
-	_yaw = atan2(-d.x, -d.z)
-	_pitch = atan2(d.y, Vector2(d.x, d.z).length())
-	hand = PlayerHand.new()
-	hand.name = "Main"
-	hand.camera = camera
-	hand.player = self
-	add_child(hand)
 	floor_max_angle = deg_to_rad(50)
-	_apply_look()
+	look_towards(look_at_point)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -71,16 +60,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var m := event as InputEventMouseMotion
-		var k := 0.0022 * Settings.sensitivity * (camera.fov / Settings.fov)
+		var k := 0.0022 * Settings.sensitivity
 		_yaw -= m.relative.x * k
 		_pitch -= m.relative.y * k * (-1.0 if Settings.invert_y else 1.0)
 		_pitch = clampf(_pitch, deg_to_rad(-86), deg_to_rad(80))
 		_apply_look()
+	elif event is InputEventMouseButton and event.pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and aimed:
+			interact_requested.emit(aimed)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		var key := event as InputEventKey
 		match key.physical_keycode:
-			KEY_V:
-				view_mode_requested.emit()
+			KEY_E:
+				if aimed:
+					interact_requested.emit(aimed)
+			KEY_T:
+				key_action.emit("parler")
+			KEY_TAB:
+				key_action.emit("dossier")
 
 
 func _input(event: InputEvent) -> void:
@@ -94,76 +91,68 @@ func _apply_look() -> void:
 	head.rotation.x = _pitch
 
 
-## Tests : se pencher (0..1) tout de suite, sans transition (la visée qui suit en tient compte).
-func snap_lean(v: float) -> void:
-	sim_lean = v
-	crouch = v
-	var lean := smoothstep(0.0, 1.0, crouch)
-	head.position = Vector3(0, EYE - LEAN_DOWN * lean, -LEAN_FWD * lean)
-
-
-## Orientation imposée (robots de test, cinématique).
 func look_towards(p: Vector3) -> void:
-	# Le corps se tourne vers le point (la tête penchée reste dans cet alignement), puis l'œil
-	# s'incline vers lui
 	var dh := p - global_position
 	_yaw = atan2(-dh.x, -dh.z)
 	_apply_look()
-	var d := p - camera.global_position
+	var d := p - (global_position + Vector3.UP * EYE)
 	_pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), deg_to_rad(-86), deg_to_rad(80))
 	_apply_look()
 
 
-func _key(phys: Key) -> bool:
-	return Input.is_physical_key_pressed(phys)
+func eye_transform() -> Transform3D:
+	return camera.global_transform
+
+
+## Ce que vise le viseur (objet utilisable à portée).
+func _update_aim() -> void:
+	aimed = null
+	var space := get_world_3d().direct_space_state
+	var from := camera.global_position
+	var to := from - camera.global_basis.z * REACH
+	var q := PhysicsRayQueryParameters3D.create(from, to, Patient.LAYER_INTERACT | 1)
+	q.exclude = [get_rid()]
+	var hit := space.intersect_ray(q)
+	if not hit.is_empty() and hit["collider"] is Interactable and (hit["collider"] as Interactable).enabled:
+		aimed = hit["collider"]
 
 
 func _physics_process(delta: float) -> void:
 	var input := Vector2.ZERO
 	var active := enabled and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	if active:
-		if _key(KEY_W) or _key(KEY_UP):
+		if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
 			input.y -= 1.0
-		if _key(KEY_S) or _key(KEY_DOWN):
+		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
 			input.y += 1.0
-		if _key(KEY_A) or _key(KEY_LEFT):
+		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
 			input.x -= 1.0
-		if _key(KEY_D) or _key(KEY_RIGHT):
+		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
 			input.x += 1.0
 	input = input.limit_length(1.0)
-	var run := active and _key(KEY_SHIFT)
-	var speed := (RUN if run else WALK) * lerpf(1.0, 0.35, precision) * lerpf(1.0, 0.6, crouch)
+	var run := active and Input.is_physical_key_pressed(KEY_SHIFT)
+	var speed := (RUN if run else WALK) * lerpf(1.0, 0.6, crouch)
 	var wish := (transform.basis * Vector3(input.x, 0, input.y)) * speed
 	var accel := 10.0 if input != Vector2.ZERO else 14.0
 	velocity.x = move_toward(velocity.x, wish.x, accel * delta)
 	velocity.z = move_toward(velocity.z, wish.z, accel * delta)
-	if not is_on_floor():
-		velocity.y -= 9.8 * delta
-	else:
-		velocity.y = 0.0
+	velocity.y = 0.0 if is_on_floor() else velocity.y - 9.8 * delta
 	move_and_slide()
-	# Se pencher, précision, balancement de la tête
-	var want_crouch := 1.0 if active and _key(KEY_CTRL) else 0.0
+	var want_crouch := 1.0 if active and Input.is_physical_key_pressed(KEY_CTRL) else 0.0
 	if sim_lean >= 0.0:
 		want_crouch = sim_lean
 	crouch = move_toward(crouch, want_crouch, delta * 3.5)
-	var want_prec := 1.0 if active and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) else 0.0
-	precision = move_toward(precision, want_prec, delta * 4.0)
-	var pe := smoothstep(0.0, 1.0, precision)
-	camera.fov = lerpf(Settings.fov, 30.0, pe)
 	var hspeed := Vector2(velocity.x, velocity.z).length()
 	if Settings.head_bob and is_on_floor() and hspeed > 0.2:
 		_bob_t += delta * hspeed * 5.2
 	else:
 		_bob_t = lerpf(_bob_t, roundf(_bob_t / PI) * PI, delta * 4.0)
-	var amp := 0.012 * clampf(hspeed / WALK, 0.0, 1.5) * (1.0 - pe)
+	var amp := 0.012 * clampf(hspeed / WALK, 0.0, 1.5)
 	_bob = Vector3(cos(_bob_t * 0.5) * amp * 0.6, -absf(sin(_bob_t)) * amp, 0.0)
 	var lean := smoothstep(0.0, 1.0, crouch)
 	head.position = Vector3(0, EYE - LEAN_DOWN * lean, -LEAN_FWD * lean) + _bob
-	# Profondeur de champ en précision : l'arrière-plan s'estompe derrière le point visé
-	if _attrs:
-		var aim := hand.aim_distance()
-		_attrs.dof_blur_far_enabled = pe > 0.05 and aim < 3.0
-		_attrs.dof_blur_far_distance = aim + 0.25
-		_attrs.dof_blur_far_transition = 0.6
-		_attrs.dof_blur_amount = 0.05 * pe
+	camera.fov = Settings.fov
+	if enabled:
+		_update_aim()
+	else:
+		aimed = null

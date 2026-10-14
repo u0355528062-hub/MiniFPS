@@ -3,7 +3,7 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dkqpfkw7xjiuj"
+uid="uid://besqc6fsxs7vp"
 path="res://.godot/imported/drap_dos.glb-f9b9e907d8fd7027bbf849f2e5f0cef4.scn"
 
 [deps]
@@ -23,9 +23,9 @@ nodes/root_scale=1.0
 nodes/import_as_skeleton_bones=false
 nodes/use_name_suffixes=true
 nodes/use_node_type_suffixes=true
-meshes/ensure_tangents=false
-meshes/generate_lods=false
-meshes/create_shadow_meshes=false
+meshes/ensure_tangents=true
+meshes/generate_lods=true
+meshes/create_shadow_meshes=true
 meshes/light_baking=1
 meshes/lightmap_texel_size=0.2
 meshes/force_disable_compression=false

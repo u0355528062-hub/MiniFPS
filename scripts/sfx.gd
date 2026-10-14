@@ -1,7 +1,8 @@
 class_name Sfx
 extends Node
-## Sons synthétisés au lancement (aucun fichier) : bips du moniteur, instruments, réussite,
-## erreur, incision, coup de ciseaux, ambiance du bloc (ventilation).
+## Sons synthétisés au lancement (aucun fichier) : bips du scope, alarmes, défibrillateur (charge,
+## choc), bruits du cœur et de la respiration au stéthoscope (sibilants, crépitants), compressions
+## du massage, ballon, objets, réussite, erreur, ambiance de la salle (ventilation).
 
 const RATE := 44100
 
@@ -39,6 +40,13 @@ func _ready() -> void:
 	streams["clic"] = _tone([[1300.0, 1.0], [2600.0, 0.3]], 0.06, 0.002, 0.03, 0.12)
 	streams["drap"] = _swish()
 	streams["vue"] = _tone([[660.0, 1.0], [990.0, 0.5]], 0.18, 0.01, 0.1, 0.1)
+	streams["choc"] = _shock()
+	streams["coeur"] = _heart()
+	streams["compression"] = _compress()
+	streams["loop_charge"] = _charge_whine()
+	streams["loop_respi"] = _loop_noise(700.0, 0.55, 21, 0.0)
+	streams["loop_sibilant"] = _wheeze()
+	streams["loop_crepitant"] = _crackles()
 	# Sons continus (en boucle, volume réglé à chaque image par le geste)
 	streams["loop_badigeon"] = _loop_noise(900.0, 0.5, 11, 9.0)
 	streams["loop_incision"] = _loop_noise(2600.0, 0.35, 12, 23.0)
@@ -135,6 +143,91 @@ func _process(delta: float) -> void:
 				p.play()
 		elif p.playing:
 			p.stop()
+
+
+## Choc électrique : claquement sec et sursaut (grave).
+func _shock() -> AudioStreamWAV:
+	var n := int(0.5 * RATE)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31
+	for i in n:
+		var t := float(i) / RATE
+		d[i] = rng.randf_range(-1, 1) * exp(-t * 60.0) + sin(TAU * (90.0 - 60.0 * t) * t) * exp(-t * 9.0) * 0.8
+	return _to_wav(d, 0.7)
+
+
+## Bruits du cœur au stéthoscope : B1 (« poum ») puis B2 (« tac »), graves et sourds.
+func _heart() -> AudioStreamWAV:
+	var n := int(0.45 * RATE)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		var b1 := sin(TAU * 52.0 * t) * exp(-pow((t - 0.04) / 0.035, 2.0))
+		var b2 := sin(TAU * 70.0 * t) * exp(-pow((t - 0.32) / 0.025, 2.0)) * 0.8
+		d[i] = b1 + b2
+	return _to_wav(d, 0.9)
+
+
+## Compression du thorax : choc mat (mains sur le sternum), petit craquement de cartilage.
+func _compress() -> AudioStreamWAV:
+	var n := int(0.16 * RATE)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		lp += (rng.randf_range(-1, 1) - lp) * 0.08
+		d[i] = sin(TAU * 75.0 * t) * exp(-t * 28.0) * 0.8 + lp * exp(-t * 40.0) * 1.5
+	return _to_wav(d, 0.5)
+
+
+## Charge du défibrillateur : sifflement aigu qui monte (boucle).
+func _charge_whine() -> AudioStreamWAV:
+	var n := int(RATE * 1.0)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph += TAU * (2200.0 + 500.0 * t) / RATE
+		d[i] = sin(ph) * 0.5 + sin(ph * 2.0) * 0.12
+	return _make_loop(d, 0.06)
+
+
+## Sibilants : sifflements expiratoires musicaux.
+func _wheeze() -> AudioStreamWAV:
+	var n := int(RATE * 1.5)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var ph := 0.0
+	var ph2 := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph += TAU * (420.0 + 40.0 * sin(TAU * 0.7 * t)) / RATE
+		ph2 += TAU * (610.0 + 30.0 * sin(TAU * 1.1 * t)) / RATE
+		d[i] = sin(ph) * 0.5 + sin(ph2) * 0.3
+	return _make_loop(d, 0.12)
+
+
+## Crépitants : petits craquements fins (comme des cheveux frottés).
+func _crackles() -> AudioStreamWAV:
+	var n := int(RATE * 1.5)
+	var d := PackedFloat32Array()
+	d.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 51
+	var env := 0.0
+	for i in n:
+		if rng.randf() < 0.0016:
+			env = 1.0
+		env *= 0.985
+		d[i] = rng.randf_range(-1, 1) * env
+	return _make_loop(d, 0.5)
 
 
 ## Scie sternale : moteur aigu (fondamentale et harmoniques) et crissement de l'os.

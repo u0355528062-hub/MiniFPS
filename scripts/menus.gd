@@ -1,10 +1,9 @@
 class_name Menus
 extends CanvasLayer
-## Écrans plein cadre : menu principal (sur la salle en fond), briefing du patient, pause,
-## options, bilan de fin (note, temps, erreurs, précision des gestes).
+## Écrans plein cadre : menu principal (sur la salle en fond), transmission du patient, pause,
+## options, compte rendu de fin (devenir du patient, note, objectifs atteints ou manqués, erreurs).
 
-signal play_pressed
-signal op_chosen(op_id: String)
+signal case_chosen(case_id: String)
 signal start_pressed
 signal resume_pressed
 signal restart_pressed
@@ -14,7 +13,7 @@ signal quit_pressed
 ## Couleur de chaque note (médaille de fin, record au menu)
 const GRADE_COLORS := {"S": Color(1.0, 0.82, 0.3), "A": Color(0.35, 0.95, 0.55), "B": Color(0.22, 0.92, 0.82), "C": Color(1.0, 0.78, 0.3), "D": Color(1.0, 0.36, 0.33)}
 
-var op: Operation
+var game: Node
 var root: Control
 var _dim: ColorRect
 var _main: Control
@@ -27,8 +26,7 @@ var _fade: ColorRect
 var _brief_go: Button
 
 
-func build(p_op: Operation) -> void:
-	op = p_op
+func build() -> void:
 	layer = 20
 	root = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -55,6 +53,10 @@ func build(p_op: Operation) -> void:
 	hide_all()
 
 
+func _case() -> Case:
+	return game.get("case")
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var k := (event as InputEventKey).physical_keycode
@@ -68,12 +70,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _options.visible and _options_back.is_valid():
 				_options_back.call()
 				get_viewport().set_input_as_handled()
-		elif k == KEY_SPACE:
+		elif k == KEY_SPACE or k == KEY_ENTER:
 			if _brief.visible:
 				start_pressed.emit()
-				get_viewport().set_input_as_handled()
-			elif _end.visible:
-				restart_pressed.emit()
 				get_viewport().set_input_as_handled()
 
 
@@ -110,7 +109,6 @@ func _first_button(n: Node) -> Button:
 	return null
 
 
-## Fondu au noir puis retour (transitions).
 func fade(to_black: bool, dur := 0.5) -> void:
 	var tw := create_tween()
 	tw.tween_property(_fade, "color:a", 1.0 if to_black else 0.0, dur)
@@ -133,7 +131,6 @@ func _build_main() -> Control:
 	var c := Control.new()
 	c.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(c)
-	# Dégradé sombre à gauche pour la lisibilité
 	var grad := TextureRect.new()
 	var g := Gradient.new()
 	g.set_color(0, Color(0.0, 0.02, 0.03, 0.92))
@@ -144,57 +141,50 @@ func _build_main() -> Control:
 	gt.fill_to = Vector2(1, 0)
 	grad.texture = gt
 	grad.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-	grad.custom_minimum_size = Vector2(900, 0)
-	grad.offset_right = 900.0  # pleine hauteur par les ancres, 900 px de large
+	grad.offset_right = 950.0
 	grad.stretch_mode = TextureRect.STRETCH_SCALE
 	grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.add_child(grad)
 	var col := UIKit.vbox(10)
-	col.position = Vector2(90, 70)
+	col.position = Vector2(90, 64)
 	c.add_child(col)
-	var kicker := UIKit.label("SIMULATEUR CHIRURGICAL", 16, UIKit.ACCENT, true)
-	col.add_child(kicker)
-	var title := UIKit.label("BLOC  URGENCES", 66, UIKit.TEXT, true)
-	title.add_theme_constant_override("outline_size", 0)
-	col.add_child(title)
-	var sub := UIKit.label("Choisis une intervention", 19, UIKit.TEXT_DIM)
-	col.add_child(sub)
+	col.add_child(UIKit.label("EMERGENCY SIMULATOR", 16, UIKit.ACCENT, true))
+	col.add_child(UIKit.label("URGENCES", 72, UIKit.TEXT, true))
+	col.add_child(UIKit.label("Tu es l'urgentiste de garde. Un patient t'attend au déchocage.", 19, UIKit.TEXT_DIM))
 	var sp := Control.new()
 	sp.custom_minimum_size.y = 8
 	col.add_child(sp)
-	for e in Operation.CATALOG:
-		col.add_child(_op_card(e))
+	for e in Case.CATALOG:
+		col.add_child(_case_card(e))
 	var sp2 := Control.new()
 	sp2.custom_minimum_size.y = 12
 	col.add_child(sp2)
-	var b2 := UIKit.button("Options", 380)
+	var row := UIKit.hbox(12)
+	col.add_child(row)
+	var b2 := UIKit.button("Options", 260)
 	b2.pressed.connect(func() -> void: open_options(func() -> void: show_main()))
-	col.add_child(b2)
-	var b3 := UIKit.button("Quitter", 380)
+	row.add_child(b2)
+	var b3 := UIKit.button("Quitter", 260)
 	b3.pressed.connect(func() -> void: quit_pressed.emit())
-	col.add_child(b3)
-	var foot := UIKit.label("Anatomie : atlas Z-Anatomy (CC BY-SA 4.0, d'après BodyParts3D)   ·   Version 6.0", 13, Color(1, 1, 1, 0.4))
+	row.add_child(b3)
+	var foot := UIKit.label("Anatomie : atlas Z-Anatomy (CC BY-SA 4.0, d'après BodyParts3D)   ·   Version 7.0", 13, Color(1, 1, 1, 0.4))
 	foot.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	foot.position = Vector2(90, -50)
 	c.add_child(foot)
 	return c
 
 
-## Carte d'une intervention : nom, résumé, difficulté et durée ; « bientôt » si pas encore jouable.
-func _op_card(e: Dictionary) -> Button:
-	var ready: bool = e["ready"]
+func _case_card(e: Dictionary) -> Button:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(660, 66)
+	b.custom_minimum_size = Vector2(720, 70)
 	b.focus_mode = Control.FOCUS_ALL
-	b.disabled = not ready
-	var cur: bool = e["id"] == op.id
+	var cur: bool = e["id"] == _case().id
 	var normal := UIKit.box(Color(0.03, 0.06, 0.075, 0.82), 10, UIKit.ACCENT_DIM if cur else Color(1, 1, 1, 0.07), 2 if cur else 1, 16)
 	var hover := UIKit.box(Color(0.05, 0.13, 0.14, 0.92), 10, UIKit.ACCENT, 2, 16)
 	b.add_theme_stylebox_override("normal", normal)
 	b.add_theme_stylebox_override("hover", hover)
 	b.add_theme_stylebox_override("focus", hover)
 	b.add_theme_stylebox_override("pressed", hover)
-	b.add_theme_stylebox_override("disabled", UIKit.box(Color(0.03, 0.05, 0.06, 0.55), 10, Color(1, 1, 1, 0.04), 1, 16))
 	var row := UIKit.hbox(16)
 	row.set_anchors_preset(Control.PRESET_FULL_RECT)
 	row.offset_left = 18
@@ -206,10 +196,10 @@ func _op_card(e: Dictionary) -> Button:
 	txt.alignment = BoxContainer.ALIGNMENT_CENTER
 	txt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(txt)
-	var t := UIKit.label(e["name"], 22, UIKit.TEXT if ready else UIKit.TEXT_DIM, true)
+	var t := UIKit.label(e["name"], 22, UIKit.TEXT, true)
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	txt.add_child(t)
-	var tg := UIKit.label(e["tag"], 14, UIKit.TEXT_DIM if ready else Color(1, 1, 1, 0.3))
+	var tg := UIKit.label(e["tag"], 14, UIKit.TEXT_DIM)
 	tg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	txt.add_child(tg)
 	var right := UIKit.vbox(2)
@@ -217,28 +207,26 @@ func _op_card(e: Dictionary) -> Button:
 	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(right)
 	var lvl: int = e["level"]
-	var dots := UIKit.label("●".repeat(lvl) + "○".repeat(3 - lvl), 15, UIKit.ACCENT if ready else Color(1, 1, 1, 0.25))
+	var dots := UIKit.label("●".repeat(lvl) + "○".repeat(3 - lvl), 15, UIKit.ACCENT)
 	dots.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	dots.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right.add_child(dots)
-	var info := UIKit.label(("~%d min" % e["minutes"]) if ready else "BIENTÔT", 13, UIKit.TEXT_DIM if ready else UIKit.WARN, not ready)
+	var info := UIKit.label("~%d min" % e["minutes"], 13, UIKit.TEXT_DIM)
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right.add_child(info)
-	# Meilleur résultat obtenu sur cette intervention
-	var rec: Dictionary = Records.best(e["id"]) if ready else {}
+	var rec: Dictionary = Records.best(e["id"])
 	if not rec.is_empty():
-		var g: String = rec["grade"]
-		var bl := UIKit.label("RECORD  %s  ·  %s" % [g, UIKit.fmt_time(rec["time"])], 12, GRADE_COLORS.get(g, UIKit.TEXT), true)
+		var gr: String = rec["grade"]
+		var bl := UIKit.label("RECORD  %s  ·  %s" % [gr, UIKit.fmt_time(rec["time"])], 12, GRADE_COLORS.get(gr, UIKit.TEXT), true)
 		bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		right.add_child(bl)
-	if ready:
-		var op_id: String = e["id"]
-		b.mouse_entered.connect(func() -> void: Sfx.play("survol", Vector3.INF, -22.0, 1.6))
-		b.pressed.connect(func() -> void:
-			Sfx.play("clic", Vector3.INF, -12.0, 1.0)
-			op_chosen.emit(op_id))
+	var cid: String = e["id"]
+	b.mouse_entered.connect(func() -> void: Sfx.play("survol", Vector3.INF, -22.0, 1.6))
+	b.pressed.connect(func() -> void:
+		Sfx.play("clic", Vector3.INF, -12.0, 1.0)
+		case_chosen.emit(cid))
 	return b
 
 
@@ -246,95 +234,51 @@ func show_main() -> void:
 	_show(_main, false)
 
 
-# ---------------------------------------------------------------- Briefing
+# ---------------------------------------------------------------- Transmission (briefing)
 
 func _build_briefing() -> Control:
+	var cs := _case()
 	var c := Control.new()
 	c.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(c)
-	var p := _center_panel(1040, c)
+	var p := _center_panel(1120, c)
 	var v := UIKit.vbox(16)
 	p.add_child(v)
 	var head := UIKit.hbox(14)
 	v.add_child(head)
-	var tag := UIKit.label(op.urgency, 15, Color(0.05, 0.05, 0.05), true)
-	var tsb := UIKit.box(UIKit.BAD, 6, Color(0, 0, 0, 0), 0, 10)
+	var tag := UIKit.label("DÉCHOCAGE 1", 15, Color(0.05, 0.05, 0.05), true)
+	var tsb := UIKit.box(Color(1.0, 0.36, 0.33), 6, Color(0, 0, 0, 0), 0, 10)
 	tsb.shadow_size = 0
-	tsb.content_margin_top = 4
-	tsb.content_margin_bottom = 4
+	tsb.content_margin_top = 3
+	tsb.content_margin_bottom = 3
 	tag.add_theme_stylebox_override("normal", tsb)
 	head.add_child(tag)
-	head.add_child(UIKit.label(op.intro_title.to_upper() + "  ·  " + op.header.split("·")[1].strip_edges() if op.header.contains("·") else op.intro_title, 15, UIKit.TEXT_DIM, true))
-	v.add_child(UIKit.label(op.patient_line, 34, UIKit.TEXT, true))
-	var cols := UIKit.hbox(28)
-	v.add_child(cols)
-	var left := UIKit.vbox(12)
-	left.custom_minimum_size.x = 560
-	cols.add_child(left)
-	var story := UIKit.label(op.intro_text, 18, Color(0.85, 0.9, 0.92))
+	head.add_child(UIKit.label("%s, %d ans" % [cs.profile["name"], cs.profile["age"]], 20, UIKit.TEXT_DIM, true))
+	v.add_child(UIKit.label(cs.name, 40, UIKit.TEXT, true))
+	var story := UIKit.label(cs.arrival, 19, Color(0.88, 0.92, 0.94))
 	story.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	story.custom_minimum_size.x = 560
-	left.add_child(story)
-	left.add_child(UIKit.label("DÉROULÉ", 14, UIKit.ACCENT, true))
-	var steps_txt := ""
-	for i in op.steps.size():
-		steps_txt += "%d.  %s\n" % [i + 1, op.steps[i]["list"]]
-	left.add_child(UIKit.label(steps_txt.strip_edges(), 17, UIKit.TEXT))
-	var right := UIKit.vbox(10)
-	right.custom_minimum_size.x = 380
-	cols.add_child(right)
-	right.add_child(UIKit.label("CONSTANTES À L'ARRIVÉE", 14, UIKit.ACCENT, true))
-	var vit := GridContainer.new()
-	vit.columns = 2
-	vit.add_theme_constant_override("h_separation", 24)
-	vit.add_theme_constant_override("v_separation", 6)
-	right.add_child(vit)
-	# Couleur selon la valeur : normale, inquiétante, critique ; non mesurable en arrêt cardiaque
-	var hr := float(op.vitals["hr"])
-	var spo2 := float(op.vitals["spo2"])
-	var sys := int(op.vitals["sys"])
-	var fr := op.breath_rate
-	var rows := [
-		["Fréquence cardiaque", "%d /min" % int(hr), _level(hr < 40.0 or hr > 130.0, hr < 55.0 or hr > 100.0)],
-		["Saturation (SpO₂)", ("%d %%" % int(spo2)) if spo2 > 0.0 else "non mesurable", _level(spo2 < 90.0, spo2 < 95.0)],
-		["Tension", ("%d / %d" % [sys, op.vitals["dia"]]) if sys > 0 else "imprenable", _level(sys < 80 or sys > 180, sys < 100 or sys > 150)],
-		["Ventilation (intubé)", "%d /min" % int(fr), UIKit.OK] if op.ventilated else
-			["Respiration", "%d /min" % int(fr), _level(fr > 30.0 or fr < 8.0, fr > 20.0 or fr < 10.0)]]
-	for row in rows:
-		vit.add_child(UIKit.label(row[0], 17, UIKit.TEXT_DIM))
-		vit.add_child(UIKit.label(row[1], 19, row[2], true))
-	right.add_child(UIKit.label("IMAGERIE", 14, UIKit.ACCENT, true))
-	if op.imaging_tex != "":
-		var xr := XRayCard.new()
-		xr.tex = load(op.imaging_tex)
-		xr.caption = op.imaging_caption
-		xr.side = op.imaging_side
-		xr.custom_minimum_size = Vector2(380, 300)
-		right.add_child(xr)
-	else:
-		var no := UIKit.label(op.imaging_text, 16, UIKit.TEXT)
-		no.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		no.custom_minimum_size = Vector2(380, 0)
-		right.add_child(no)
-	var keys := UIKit.label("ZQSD marcher · Souris regarder · Clic prendre / appuyer · Clic droit précision · V vue anatomique · Échap pause", 14, UIKit.TEXT_DIM)
+	story.custom_minimum_size.x = 1060
+	v.add_child(story)
+	var vit := UIKit.label(cs.arrival_vitals, 19, UIKit.WARN, true)
+	vit.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vit.custom_minimum_size.x = 1060
+	v.add_child(vit)
+	var keys := UIKit.label("ZQSD : marcher · Souris : regarder · Clic ou E : utiliser ce que vise le viseur (zone du patient, chariot, défibrillateur, scope, débitmètre, ordinateur…)\n" +
+		"Vue rapprochée : la souris est libre, clic gauche : geste avec l'objet en main (1-9), clic droit maintenu : tourner autour, molette : zoom, ZQSD : décaler, Échap : revenir\n" +
+		"T : parler au patient · Tab : dossier, examens et conclusion (poste informatique)", 15, UIKit.TEXT_DIM)
 	keys.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	keys.custom_minimum_size.x = 960
+	keys.custom_minimum_size.x = 1060
 	v.add_child(keys)
 	var row := UIKit.hbox(12)
 	row.alignment = BoxContainer.ALIGNMENT_END
 	v.add_child(row)
-	var back := UIKit.button("Retour au menu  (Échap)", 280)
+	var back := UIKit.button("Menu (Échap)", 220)
 	back.pressed.connect(func() -> void: main_menu_pressed.emit())
 	row.add_child(back)
-	var go := UIKit.button("Commencer  (Espace)", 320)
-	go.pressed.connect(func() -> void: start_pressed.emit())
-	row.add_child(go)
-	_brief_go = go
+	_brief_go = UIKit.button("Entrer dans le box  (Espace)", 380)
+	_brief_go.pressed.connect(func() -> void: start_pressed.emit())
+	row.add_child(_brief_go)
 	return c
-
-
-static func _level(critical: bool, worrying: bool) -> Color:
-	return UIKit.BAD if critical else (UIKit.WARN if worrying else UIKit.OK)
 
 
 func show_briefing() -> void:
@@ -357,7 +301,7 @@ func _build_pause() -> Control:
 	v.add_child(t)
 	for item in [["Reprendre", func() -> void: resume_pressed.emit()],
 			["Options", func() -> void: open_options(func() -> void: show_pause())],
-			["Recommencer l'intervention", func() -> void: restart_pressed.emit()],
+			["Recommencer le cas", func() -> void: restart_pressed.emit()],
 			["Menu principal", func() -> void: main_menu_pressed.emit()],
 			["Quitter le jeu", func() -> void: quit_pressed.emit()]]:
 		var b := UIKit.button(item[0], 380)
@@ -470,91 +414,65 @@ func open_options(back: Callable) -> void:
 	_show(_options, true)
 
 
-# ---------------------------------------------------------------- Bilan
+# ---------------------------------------------------------------- Compte rendu
 
-func show_end(elapsed: float, errors: int, grade: String, summary: String, log: Array, quality: Dictionary) -> void:
+func show_end(res: Dictionary) -> void:
+	var cs := _case()
 	for ch in _end.get_children():
 		ch.queue_free()
-	var p := _center_panel(860, _end)
-	var v := UIKit.vbox(16)
+	var p := _center_panel(1180, _end)
+	var v := UIKit.vbox(14)
 	p.add_child(v)
 	var top := UIKit.hbox(28)
 	v.add_child(top)
 	var badge := GradeBadge.new()
-	badge.grade = grade
+	badge.grade = res["grade"]
 	badge.custom_minimum_size = Vector2(150, 150)
 	top.add_child(badge)
 	var info := UIKit.vbox(8)
 	top.add_child(info)
 	var head := UIKit.hbox(12)
 	info.add_child(head)
-	# Patient sauvé dans tous les cas ; avec trop d'erreurs, le geste est à revoir
-	var good := grade in ["S", "A", "B"]
-	head.add_child(UIKit.label("INTERVENTION RÉUSSIE" if good else "INTERVENTION TERMINÉE  ·  GESTE À REVOIR", 15, UIKit.OK if good else UIKit.WARN, true))
-	if quality.get("record", false):
-		var rec := UIKit.label("NOUVEAU RECORD", 13, Color(0.05, 0.05, 0.05), true)
-		var rsb := UIKit.box(Color(1.0, 0.82, 0.3), 6, Color(0, 0, 0, 0), 0, 8)
-		rsb.shadow_size = 0
-		rsb.content_margin_top = 2
-		rsb.content_margin_bottom = 2
-		rec.add_theme_stylebox_override("normal", rsb)
-		head.add_child(rec)
-	info.add_child(UIKit.label(op.name, 36, UIKit.TEXT, true))
-	var s := UIKit.label(summary, 17, Color(0.85, 0.9, 0.92))
+	var alive: bool = res["alive"]
+	head.add_child(UIKit.label("PATIENT VIVANT" if alive else "PATIENT DÉCÉDÉ", 15, UIKit.OK if alive else UIKit.BAD, true))
+	if res.get("record", false):
+		head.add_child(UIKit.label("NOUVEAU RECORD", 13, Color(1.0, 0.82, 0.3), true))
+	info.add_child(UIKit.label("%s — %s, %d ans" % [cs.name, cs.profile["name"], cs.profile["age"]], 32, UIKit.TEXT, true))
+	var s := UIKit.label(res["summary"], 17, Color(0.85, 0.9, 0.92))
 	s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	s.custom_minimum_size.x = 600
+	s.custom_minimum_size.x = 900
 	info.add_child(s)
-	var grid := GridContainer.new()
-	grid.add_theme_constant_override("h_separation", 34)
-	grid.add_theme_constant_override("v_separation", 4)
-	v.add_child(grid)
-	# Seules les mesures qui ont un sens pour cette intervention (repère au feutre, incision)
-	var stats := [["TEMPS  ·  RÉF. %s" % UIKit.fmt_time(op.reference_time()), UIKit.fmt_time(elapsed)],
-		["ERREURS", str(errors)], ["ÉTAPES", str(op.steps.size())]]
-	if quality.has("mark_mm"):
-		stats.append(["REPÈRE", "%d mm" % int(quality["mark_mm"])])
-	if quality.has("incision_dev_mm"):
-		stats.append(["INCISION", "± %.1f mm" % quality["incision_dev_mm"]])
-	grid.columns = stats.size()
-	for stt in stats:
-		grid.add_child(UIKit.label(stt[0], 13, UIKit.TEXT_DIM, true))
-	for stt in stats:
-		grid.add_child(UIKit.label(stt[1], 28, UIKit.TEXT, true))
-	if quality.has("score"):
-		# Comment la note est calculée : 100, moins les pénalités, plus les bonus de précision
-		var parts := "100"
-		var ne := int(round(float(quality["pen_errors"]) / 12.0))
-		if ne > 0:
-			parts += "  − %d (%d erreur%s)" % [int(quality["pen_errors"]), ne, "s" if ne > 1 else ""]
-		var np := int(round(float(quality["pen_picks"]) / 6.0))
-		if np > 0:
-			parts += "  − %d (%d mauvais instrument%s)" % [int(quality["pen_picks"]), np, "s" if np > 1 else ""]
-		if float(quality["pen_time"]) >= 0.5:
-			parts += "  − %d (temps)" % int(round(float(quality["pen_time"])))
-		if quality.get("bonus", 0.0) > 0.0:
-			parts += "  + %d (précision)" % int(quality["bonus"])
-		var pts := UIKit.label("POINTS   %s  =  %d" % [parts, int(round(float(quality["score"])))], 15, UIKit.TEXT_DIM)
-		pts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		pts.custom_minimum_size.x = 800
-		v.add_child(pts)
-	v.add_child(UIKit.label("COMPTE RENDU", 14, UIKit.ACCENT, true))
-	var lt := ""
-	if log.is_empty():
-		lt = "Aucune erreur : gestes sûrs, dans le bon ordre, au bon endroit."
-	else:
-		for e in log:
-			lt += "•  " + str(e) + "\n"
-	var ll := UIKit.label(lt.strip_edges(), 16, UIKit.TEXT if not log.is_empty() else UIKit.OK)
-	ll.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	ll.custom_minimum_size.x = 800
-	v.add_child(ll)
+	info.add_child(UIKit.label("Note %s · %d / 100 · durée %s (référence %s)" % [res["grade"], int(res["score"]), UIKit.fmt_time(res["time"]), UIKit.fmt_time(cs.reference_time())], 18, UIKit.TEXT_DIM, true))
+	var cols := UIKit.hbox(30)
+	v.add_child(cols)
+	var left := UIKit.vbox(4)
+	left.custom_minimum_size.x = 640
+	cols.add_child(left)
+	left.add_child(UIKit.label("OBJECTIFS", 14, UIKit.ACCENT, true))
+	for o in res["objectives"]:
+		var l := UIKit.label("%s  %s  (%d pts)" % ["✔" if o[2] else "✘", o[0], int(o[1])], 16, UIKit.OK if o[2] else UIKit.BAD)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 630
+		left.add_child(l)
+	var right := UIKit.vbox(4)
+	right.custom_minimum_size.x = 460
+	cols.add_child(right)
+	right.add_child(UIKit.label("ERREURS", 14, UIKit.ACCENT, true))
+	var errs: Array = res["errors"]
+	if errs.is_empty():
+		right.add_child(UIKit.label("Aucune erreur.", 16, UIKit.OK))
+	for e in errs:
+		var l2 := UIKit.label("•  %s  (−%d)" % [e[0], int(e[1])], 16, UIKit.WARN)
+		l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l2.custom_minimum_size.x = 450
+		right.add_child(l2)
 	var row := UIKit.hbox(12)
 	row.alignment = BoxContainer.ALIGNMENT_END
 	v.add_child(row)
 	var b1 := UIKit.button("Menu principal", 240)
 	b1.pressed.connect(func() -> void: main_menu_pressed.emit())
 	row.add_child(b1)
-	var b2 := UIKit.button("Rejouer  (Espace)", 260)
+	var b2 := UIKit.button("Rejouer ce cas", 260)
 	b2.pressed.connect(func() -> void: restart_pressed.emit())
 	row.add_child(b2)
 	_show(_end, true)
@@ -584,21 +502,3 @@ class GradeBadge:
 		draw_string(f, c + Vector2(-w * 0.5, fs * 0.36), grade, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
-## Radiographie du thorax de face (calculée sur l'atlas) : poumon droit rétracté, liseré pleural.
-class XRayCard:
-	extends Control
-	var tex: Texture2D
-	var caption := ""
-	var side := "D"
-
-	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		draw_rect(r, Color(0.0, 0.0, 0.0))
-		var ts := tex.get_size()
-		var k := minf(size.x / ts.x, size.y / ts.y)
-		var w := ts * k
-		draw_texture_rect(tex, Rect2((size - w) * 0.5, w), false)
-		var f := UIKit.font()
-		if side != "":
-			draw_string(f, Vector2((size.x - w.x) * 0.5 + 8, 22), side, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.9))
-		draw_string(f, Vector2(8, size.y - 10), caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.85))
