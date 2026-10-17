@@ -257,13 +257,117 @@ func remove_cuff() -> void:
 
 # ---------------------------------------------------------------- Garrot, voie veineuse
 
+const IV_LIFT := 0.0032  ## l'embase du cathéter posé repose sur la peau (hauteur de son axe)
+static var _scenes := {}
+
+
+static func _scene(file: String) -> PackedScene:
+	if not _scenes.has(file):
+		_scenes[file] = load("res://assets/models/%s.glb" % file)
+	return _scenes[file]
+
+
+## Longueur de la canule (18G : 45 mm, 20G : 32 mm).
+static func cath_len(gauge: String) -> float:
+	return 0.045 if gauge == "18" else 0.032
+
+
+## Repère du cathéter : pointe en p + axe * s, axe dans la direction d de la veine, piquant sous la
+## peau (normale n) avec l'angle donné.
+static func iv_pose(p: Vector3, d: Vector3, n: Vector3, angle_deg: float, s: float) -> Transform3D:
+	d = (d - n * d.dot(n)).normalized()
+	var a := deg_to_rad(angle_deg)
+	var z := (d * cos(a) - n * sin(a)).normalized()
+	var y := (n * cos(a) + d * sin(a)).normalized()
+	return Transform3D(Basis(y.cross(z), y, z), p + z * s)
+
+
+func catheter_node(gauge: String) -> Node3D:
+	var n: Node3D = _scene("catheter" + gauge).instantiate()
+	n.name = "Catheter%sG" % gauge
+	return n
+
+
+func syringe_node() -> Node3D:
+	var n: Node3D = _scene("seringue").instantiate()
+	n.name = "Seringue"
+	return n
+
+
+## Garrot à boucle autour du bras au point t : bande élastique bleue qui épouse la section du bras
+## et boucle en plastique posée sur la bande. slack : 0 serré (la bande marque un peu la peau),
+## 1 lâche ; preview : aperçu translucide avant de serrer.
+func tourniquet_node(side: String, t: float, slack := 0.0, preview := false) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Garrot"
+	var sec := arm_section(side, t)
+	var c: Vector3 = sec["c"]
+	var dir: Vector3 = sec["dir"]
+	var perp: Vector3 = sec["perp"]
+	var up := perp.cross(dir).normalized()
+	if up.y < 0.0:
+		up = -up
+	var k := lerpf(0.985, 1.32, clampf(slack, 0.0, 1.0))
+	var hw := float(sec["hw"]) * k
+	var hh := float(sec["hh"]) * k
+	var thick := 0.0032
+	var band := _mat(Color(0.18, 0.42, 0.85), 0.72)
+	var buckle := _mat(Color(0.16, 0.2, 0.28), 0.45)
+	if preview:
+		for m in [band, buckle]:
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			m.albedo_color.a = 0.45
+	# Bande : anneau elliptique épais (section rectangulaire 25 mm x 3 mm)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 48
+	var wdt := 0.0125
+	for i in n + 1:
+		var a := TAU * i / n
+		var off := perp * cos(a) * hw + up * sin(a) * hh
+		var nrm := (perp * cos(a) / hw + up * sin(a) / hh).normalized()
+		for e in [[-wdt, 0.0], [wdt, 0.0], [wdt, thick], [-wdt, thick]]:
+			st.set_normal(nrm)
+			st.add_vertex(c + off + nrm * float(e[1]) + dir * float(e[0]))
+	for i in n:
+		var b0 := i * 4
+		var b1 := b0 + 4
+		for f in [[3, 2], [0, 3], [1, 0], [2, 1]]:
+			var p0: int = f[0]
+			var p1: int = f[1]
+			st.add_index(b0 + p0)
+			st.add_index(b1 + p0)
+			st.add_index(b0 + p1)
+			st.add_index(b0 + p1)
+			st.add_index(b1 + p0)
+			st.add_index(b1 + p1)
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.name = "Bande"
+	mi.mesh = st.commit()
+	var dm := band.duplicate() as StandardMaterial3D
+	dm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = dm
+	root.add_child(mi)
+	# Boucle : sur le dessus du bras, côté extérieur, à plat sur la bande ; bout libre qui dépasse
+	var a0 := 1.0
+	var pos := c + perp * cos(a0) * hw + up * sin(a0) * hh
+	var nrm0 := (perp * cos(a0) / hw + up * sin(a0) / hh).normalized()
+	var tan := nrm0.cross(dir).normalized()
+	var bx := MeshUtil.box_instance(root, Vector3(0.024, 0.006, 0.03), Vector3.ZERO, buckle, "Boucle")
+	bx.transform = Transform3D(Basis(tan, nrm0, dir).orthonormalized(), pos + nrm0 * (thick + 0.003))
+	var tail := MeshUtil.box_instance(root, Vector3(0.05, 0.0016, wdt * 2.0 - 0.002), Vector3.ZERO, band, "BoutLibre")
+	tail.transform = Transform3D(Basis(tan, nrm0, dir).orthonormalized().rotated(dir, -0.25), pos + nrm0 * (thick + 0.004) - tan * 0.03)
+	return root
+
+
 func place_tourniquet(side: String, t: float) -> void:
 	_remove("garrot")
 	tourniquet = {"side": side, "t": t}
-	var sec := _band("garrot", side, t, 0.025, 0.004, _mat(Color(0.25, 0.45, 0.8), 0.6))
-	var c: Vector3 = sec["c"]
-	var up: Vector3 = sec["up"]
-	_own("garrot", MeshUtil.box_instance(self, Vector3(0.03, 0.012, 0.032), c + up * (float(sec["hh"]) + 0.01), _mat(Color(0.1, 0.1, 0.12), 0.5), "Boucle"))
+	var n := tourniquet_node(side, t)
+	add_child(n)
+	IVProcedure.gear_layer(n)
+	_own("garrot", n)
 
 
 func remove_tourniquet() -> void:
@@ -271,52 +375,203 @@ func remove_tourniquet() -> void:
 	tourniquet = {}
 
 
-## Cathéter veineux posé (point de ponction sur la peau, axe de la veine) sous pansement transparent.
-func place_iv(side: String, p: Vector3, dir: Vector3, color := Color(1.0, 0.82, 0.15)) -> void:
+## Cathéter veineux posé (point de ponction sur la peau, axe de la veine vers le coude), aiguille
+## retirée et bouchon vissé. node : le cathéter tenu pendant la pose (sinon on en crée un).
+func place_iv(side: String, p: Vector3, dir: Vector3, gauge := "18", node: Node3D = null) -> void:
 	_remove("iv")
+	_remove("ligne")
+	_remove("pansement")
 	var s := _skin_at(p)
-	var top: Vector3 = s[0] + Vector3.UP * 0.001
+	var q: Vector3 = s[0]
 	var nrm: Vector3 = s[1]
 	dir = (dir - nrm * dir.dot(nrm)).normalized()
-	var dress := MeshUtil.box_instance(self, Vector3(0.05, 0.002, 0.04), top, _clear(Color(0.92, 0.95, 1.0, 0.35), 0.15), "Pansement")
-	dress.look_at_from_position(top, top + dir, nrm)
-	_own("iv", dress)
-	var hub := top - dir * 0.012 + nrm * 0.004
-	var cat := MeshUtil.cylinder_instance(self, 0.004, 0.018, hub, _mat(color, 0.4), "Catheter")
-	cat.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, -dir)), hub)
-	_own("iv", cat)
-	var port := MeshUtil.cylinder_instance(self, 0.0035, 0.008, hub + nrm * 0.005, _mat(Color(0.95, 0.95, 0.95), 0.4), "Robinet")
-	_own("iv", port)
-	iv = {"side": side, "hub": hub, "port": hub + nrm * 0.009, "dir": dir, "line": false}
+	var L := cath_len(gauge)
+	if node == null:
+		node = catheter_node(gauge)
+	if node.get_parent():
+		node.get_parent().remove_child(node)
+	add_child(node)
+	IVProcedure.gear_layer(node)
+	node.global_transform = iv_pose(q, dir, nrm, IVProcedure.ANGLE_FLAT, IVProcedure.DEPTH_VEIN)
+	node.global_position += nrm * IV_LIFT
+	var cat := node.find_child("Catheter", true, false) as Node3D
+	cat.position.z = L - 0.002 - IVProcedure.DEPTH_VEIN
+	(node.find_child("Aiguille", true, false) as Node3D).visible = false
+	(node.find_child("Reflux", true, false) as Node3D).visible = false
+	(node.find_child("Obturateur", true, false) as Node3D).visible = true
+	_own("iv", node)
+	var xf := node.global_transform
+	var o := cat.position
+	iv = {"side": side, "p": q, "dir": dir, "gauge": gauge, "node": node, "line": false, "dressing": false,
+		"hub": xf * (o + Vector3(0, 0, -L - 0.009)), "port": xf * (o + Vector3(0, 0.0088, -L - 0.0085)),
+		"port_up": xf.basis.y.normalized(), "rear": xf * (o + Vector3(0, 0, -L - 0.0185)), "axis": xf.basis.z.normalized()}
 
 
 func has_iv() -> bool:
 	return not iv.is_empty()
 
 
-## Tubulure de la poche de soluté (sur le mât du brancard) jusqu'au cathéter.
+## Pansement transparent adhésif (type film semi-perméable) : film fin qui épouse la peau et le
+## cathéter (ailettes, embase), cadre blanc renforcé avec une encoche pour le site d'injection.
+## Créé en l'air (on le colle avec dressing_progress), posé par add_dressing.
+func dressing_node() -> Node3D:
+	var root := Node3D.new()
+	root.name = "Pansement"
+	if iv.is_empty():
+		return root
+	var p: Vector3 = iv["p"]
+	var d: Vector3 = iv["dir"]
+	d = Vector3(d.x, 0.0, d.z).normalized()
+	var lat := Vector3(-d.z, 0.0, d.x)
+	var c := p + d * 0.012
+	var u0 := -0.026
+	var u1 := 0.03
+	var v0 := 0.032
+	var nu := 30
+	var nv := 26
+	var film := SurfaceTool.new()
+	film.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var frame := SurfaceTool.new()
+	frame.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var verts := []
+	for j in nv + 1:
+		var row := []
+		for i in nu + 1:
+			var u := lerpf(u0, u1, float(i) / nu)
+			var v := lerpf(-v0, v0, float(j) / nv)
+			var w := c + d * u + lat * v
+			var y := Patient.body_height(w.x, w.z) + 0.0006
+			# Le film recouvre les ailettes et l'embase (encoche autour du site d'injection)
+			var uh := u + 0.012  # 0 au point de ponction
+			var hub := (1.0 - smoothstep(0.0036, 0.0075, absf(v))) * smoothstep(0.004, -0.004, uh) * 0.0068
+			var wing := (1.0 - smoothstep(0.012, 0.017, absf(v))) * smoothstep(0.003, -0.002, uh) * smoothstep(-0.03, -0.024, uh) * 0.0016
+			y += maxf(hub, wing)
+			row.append(Vector3(w.x, y, w.z) - c)
+		verts.append(row)
+	for j in nv:
+		for i in nu:
+			var a: Vector3 = verts[j][i]
+			var b: Vector3 = verts[j][i + 1]
+			var cc: Vector3 = verts[j + 1][i]
+			var dd: Vector3 = verts[j + 1][i + 1]
+			var u := lerpf(u0, u1, (i + 0.5) / nu)
+			var v := lerpf(-v0, v0, (j + 0.5) / nv)
+			var notch := u < u0 + 0.014 and absf(v) < 0.007
+			if notch:
+				continue
+			var border := u < u0 + 0.0045 or u > u1 - 0.0045 or absf(v) > v0 - 0.0045 or (u < u0 + 0.0185 and absf(v) < 0.0115)
+			var stt := frame if border else film
+			var lift := Vector3(0, 0.00025, 0) if border else Vector3.ZERO
+			for q in [a, b, cc, b, dd, cc]:
+				stt.set_uv(Vector2((q as Vector3).dot(d), (q as Vector3).dot(lat)) * 20.0)
+				stt.add_vertex(q + lift)
+	for stt in [film, frame]:
+		stt.generate_normals()
+	var fm := StandardMaterial3D.new()
+	fm.albedo_color = Color(0.93, 0.96, 1.0, 0.16)
+	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fm.roughness = 0.14
+	fm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var frm := StandardMaterial3D.new()
+	frm.albedo_color = Color(0.97, 0.97, 0.95, 0.88)
+	frm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	frm.roughness = 0.65
+	frm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for e in [[film, fm, "Film"], [frame, frm, "Cadre"]]:
+		var mi := MeshInstance3D.new()
+		mi.name = e[2]
+		mi.mesh = (e[0] as SurfaceTool).commit()
+		mi.material_override = e[1]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(mi)
+	add_child(root)
+	IVProcedure.gear_layer(root)
+	root.global_position = c
+	root.set_meta("base", c)
+	dressing_progress(root, 0.0)
+	return root
+
+
+## Pansement en cours de pose : il descend sur la peau et se plaque (k de 0 à 1).
+func dressing_progress(node: Node3D, k: float) -> void:
+	var base: Vector3 = node.get_meta("base", node.global_position)
+	node.global_position = base + Vector3.UP * (1.0 - k) * 0.014
+	node.scale = Vector3(1.0, lerpf(1.6, 1.0, k), 1.0)
+
+
+func add_dressing(node: Node3D = null) -> void:
+	if iv.is_empty():
+		return
+	_remove("pansement")
+	if node == null:
+		node = dressing_node()
+	dressing_progress(node, 1.0)
+	_own("pansement", node)
+	iv["dressing"] = true
+
+
+## Tubulure de la poche de soluté (sur la potence) jusqu'au cathéter : prolongateur et robinet à
+## trois voies à l'arrière de l'embase, tubulure posée sur le drap et pendant du brancard, régulateur
+## à molette, chambre compte-gouttes sous la poche.
 func connect_line() -> void:
 	if iv.is_empty():
 		return
 	_remove("ligne")
 	iv["line"] = true
-	var hub: Vector3 = iv["hub"]
-	var dir: Vector3 = iv["dir"]
-	var bag_scene: PackedScene = load("res://assets/models/poche.glb")
-	var bag: Node3D = bag_scene.instantiate()
+	var node: Node3D = iv["node"]
+	(node.find_child("Obturateur", true, false) as Node3D).visible = false
+	var rear: Vector3 = iv["rear"]
+	var axis: Vector3 = iv["axis"]
+	var back := -Vector3(axis.x, 0.0, axis.z).normalized()
+	var clear := _clear(Color(0.9, 0.95, 1.0, 0.5), 0.15)
+	var white := _mat(Color(0.94, 0.94, 0.92), 0.45)
+	var blue := _mat(Color(0.15, 0.35, 0.85), 0.4)
+	# Embout luer vissé et prolongateur jusqu'au robinet
+	var luer := MeshUtil.cylinder_instance(self, 0.0036, 0.008, rear, white, "EmboutLuer")
+	luer.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, -axis)), rear - axis * 0.003)
+	_own("ligne", luer)
+	var sk := _on(rear.x + back.x * 0.05, rear.z + back.z * 0.05, 0.004)
+	var ext := MeshUtil.bezier(rear - axis * 0.007, rear - axis * 0.02, sk - back * 0.02, sk, 10)
+	_tube(ext, 0.0016, clear, "ligne", "Prolongateur")
+	# Robinet à trois voies (corps blanc, robinet bleu)
+	var rob := Node3D.new()
+	rob.name = "Robinet3voies"
+	add_child(rob)
+	_own("ligne", rob)
+	var lat := Vector3.UP.cross(back).normalized()
+	rob.global_transform = Transform3D(Basis(lat, Vector3.UP, back), sk + back * 0.012)
+	MeshUtil.box_instance(rob, Vector3(0.008, 0.008, 0.024), Vector3.ZERO, white, "Corps")
+	MeshUtil.cylinder_instance(rob, 0.0028, 0.012, Vector3(0, 0.008, 0), white, "Voie")
+	MeshUtil.box_instance(rob, Vector3(0.022, 0.003, 0.006), Vector3(0, 0.0055, 0), blue, "Manette")
+	MeshUtil.cylinder_instance(rob, 0.0032, 0.003, Vector3(0, 0.0145, 0), blue, "Bouchon")
+	# Tubulure jusqu'à la chambre compte-gouttes
+	var start := sk + back * 0.026
+	var drip := iv_bag + Vector3(0, -0.322, 0)
+	var s := 1.0 if rear.z > 0.0 else -1.0
+	var path := PackedVector3Array([start, start + back * 0.02 + Vector3.UP * 0.003, _on(start.x - 0.06, s * 0.29, 0.002),
+		Vector3(start.x - 0.08, 0.6, s * 0.4), Vector3(lerpf(start.x, iv_bag.x, 0.5), 1.05, lerpf(s * 0.4, iv_bag.z, 0.6)), drip])
+	var pts := Cable.smooth(Cable._simulate(path, 0.04, 0.0021, 0.025, 2, 2, _obstacles))
+	_tube(pts, 0.0021, clear, "ligne", "Tubulure")
+	# Régulateur à molette sur la partie qui pend
+	var k := int(pts.size() * 0.8)
+	var a := pts[k]
+	var b := pts[mini(k + 1, pts.size() - 1)]
+	var reg := MeshUtil.box_instance(self, Vector3(0.016, 0.05, 0.012), a, white, "Regulateur")
+	var tdir := (b - a).normalized()
+	var ref := Vector3.RIGHT if absf(tdir.x) < 0.9 else Vector3.FORWARD
+	reg.global_transform = Transform3D(Basis(ref.cross(tdir).normalized(), tdir, ref.cross(tdir).cross(tdir).normalized()).orthonormalized(), a)
+	_own("ligne", reg)
+	var bag: Node3D = _scene("poche").instantiate()
 	add_child(bag)
 	bag.global_position = iv_bag
 	_own("ligne", bag)
-	var drip := iv_bag + Vector3(0, -0.31, 0)
-	var s := 1.0 if hub.z > 0.0 else -1.0
-	var path := PackedVector3Array([hub - dir * 0.01, hub - dir * 0.03 + Vector3.UP * 0.004, _on(hub.x + 0.08, s * 0.28, 0.002),
-		Vector3(hub.x + 0.2, 0.62, s * 0.36), Vector3(0.6, 0.9, -0.36), drip])
-	_cable(path, 0.05, 0.0021, _clear(Color(0.9, 0.95, 1.0, 0.55), 0.1), "ligne")
+	IVProcedure.gear_layer(luer)
 
 
 func remove_iv() -> void:
 	_remove("iv")
 	_remove("ligne")
+	_remove("pansement")
 	iv = {}
 
 

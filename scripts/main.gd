@@ -631,6 +631,12 @@ func _take_shot() -> void:
 		bot.game = self
 		add_child(bot)
 		await bot.run_steps(int(args["steps"]))
+	# Voie veineuse jusqu'à l'étape --iv=N, souris posée sur --aim=x,y,z (voir ERBot.shot_extra)
+	if args.has("iv") or args.has("aim"):
+		var bot2 := ERBot.new()
+		bot2.game = self
+		add_child(bot2)
+		await bot2.shot_extra(args)
 	for i in int(args.get("frames", "30")):
 		await get_tree().process_frame
 	get_viewport().get_texture().get_image().save_png(args["shot"])

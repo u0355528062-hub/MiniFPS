@@ -60,9 +60,9 @@ var _squeeze := 0.0
 var _lucas: Node3D
 var _lucas_piston: Node3D
 var _lucas_t := 0.0
-# Voie veineuse
+# Voie veineuse (séquence complète : IVProcedure)
+var iv_proc: IVProcedure
 var veins := {"L": PackedVector3Array(), "R": PackedVector3Array()}
-var _iv_try := {}  ## {"side", "p", "dir", "flash": bool, "drag": float}
 var _iv_misses := 0
 var _disinfected := {}
 var _stetho_beat := 0.0
@@ -76,7 +76,11 @@ func setup(p_game: Node) -> void:
 	gear = patient.gear
 	physio = game.get("physio")
 	inv = game.get("inv")
-	_build_veins()
+	iv_proc = IVProcedure.new()
+	iv_proc.name = "VoieVeineuse"
+	add_child(iv_proc)
+	iv_proc.setup(self)
+	iv_proc.build_veins()
 
 
 func _model(file: String) -> Node3D:
@@ -172,61 +176,10 @@ func _fingertip(p: Vector3) -> String:
 
 # ---------------------------------------------------------------- Veines (voie veineuse)
 
-## Veines superficielles de l'avant-bras et du dos de la main (céphalique, médiane) : tracés
-## légèrement sinueux sur le dessus de chaque bras, plus visibles sous garrot.
-func _build_veins() -> void:
-	var arr := PackedVector4Array()
-	for side in ["L", "R"]:
-		var pts := PackedVector3Array()
-		var s := 1.0 if side == "L" else -1.0
-		for k in 8:
-			var t := lerpf(0.5, 0.9, k / 7.0)
-			var c := Patient.arm_point(side, t)
-			var dir := Patient.arm_dir(side, t)
-			var lat := dir.cross(Vector3.UP).normalized()
-			var off := lat * (0.006 * sin(t * 23.0 + s) + 0.004 * s)
-			var q := c + off
-			q.y = Patient.body_height(q.x, q.z)
-			pts.append(q)
-			arr.append(Vector4(q.x, q.y, q.z, 0.0025))
-		veins[side] = pts
-		arr.append(Vector4(0, 0, 0, -1.0))
-	patient.skin_mat.set_shader_parameter("veins", arr)
-	patient.skin_mat.set_shader_parameter("vein_n", arr.size())
-	_update_vein_vis()
-
-
+## Veines (pli du coude, avant-bras, poignet, dos de la main) : construites et animées par
+## IVProcedure (gonflées sous garrot, plates en cas de choc).
 func _update_vein_vis() -> void:
-	var t_side := String(gear.tourniquet.get("side", ""))
-	var vis := Vector2(0.18, 0.18)
-	if t_side == "L":
-		vis.x = 0.85
-	elif t_side == "R":
-		vis.y = 0.85
-	# Choc : veines plates, à peine visibles
-	if physio.sys < 85.0:
-		vis *= 0.6
-	patient.skin_mat.set_shader_parameter("vein_vis", vis)
-
-
-## Distance du point à la veine la plus proche du bras, et direction de la veine.
-func _vein_hit(p: Vector3) -> Array:
-	var best := INF
-	var best_dir := Vector3.ZERO
-	var best_side := ""
-	for side in veins:
-		var pts: PackedVector3Array = veins[side]
-		for i in pts.size() - 1:
-			var a := pts[i]
-			var b := pts[i + 1]
-			var ab := b - a
-			var k := clampf((p - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
-			var d := p.distance_to(a + ab * k)
-			if d < best:
-				best = d
-				best_dir = ab.normalized()
-				best_side = side
-	return [best, best_dir, best_side]
+	iv_proc.update_vis()
 
 
 # ---------------------------------------------------------------- Survol (aperçu sous la souris)
@@ -244,7 +197,7 @@ func _set_ghost(id: String) -> void:
 			file = "main_pouls"
 		"stetho":
 			file = "stethoscope"
-		"lampe", "glucometre", "thermometre", "garrot", "seringue":
+		"lampe", "glucometre", "thermometre", "seringue":
 			file = id
 		"pads":
 			file = "electrode_defib"
@@ -276,9 +229,19 @@ func _place_ghost(h: Dictionary) -> void:
 			_ghost.global_transform = Transform3D(b, p + n * 0.012 - fwd * 0.17)
 		"stetho":
 			_ghost.global_transform = Transform3D(b, p + n * 0.002)
-		"lampe", "thermometre", "seringue":
+		"lampe", "thermometre":
 			var axis := (to.normalized() * 0.6 - n * 0.4).normalized()
 			_ghost.global_transform = Transform3D(Basis(Quaternion(Vector3(0, 0, 1), axis)), p - axis * 0.07)
+		"seringue":
+			# Seringue tenue de profil, inclinée vers le point visé (embout à 1,5 cm de la peau). Avant,
+			# elle était alignée sur le regard : on voyait le poussoir blanc de face, avec toutes les
+			# parois transparentes empilées, comme une tache lumineuse sur la peau.
+			var route: String = inv.current()["data"].get("route", "IV")
+			(_ghost.find_child("Aiguille", true, false) as Node3D).visible = route == "IM"
+			var side_dir := fwd.cross(n).normalized()
+			var axis2 := (-n * 0.75 + fwd * 0.45 + side_dir * 0.3).normalized()
+			var x := axis2.cross(n).normalized()
+			_ghost.global_transform = Transform3D(Basis(x, axis2.cross(x), axis2).orthonormalized(), p + n * 0.015 - axis2 * 0.004)
 		"pads":
 			_ghost.global_transform = Transform3D(Basis(n.cross(Vector3(1, 0, 0)).normalized(), n, Vector3(1, 0, 0)).orthonormalized(), p + n * 0.003)
 		_:
@@ -288,6 +251,7 @@ func _place_ghost(h: Dictionary) -> void:
 # ---------------------------------------------------------------- Boucle
 
 func _process(delta: float) -> void:
+	iv_proc.tick(delta, zv.hit if zv.active else {})
 	if not zv.active:
 		if _ghost:
 			_ghost.visible = false
@@ -299,6 +263,13 @@ func _process(delta: float) -> void:
 	_place_ghost(h)
 	hover_label = ""
 	hint = _hint_for(id, h)
+	# Pose de voie veineuse en cours : l'étape guide l'aide ; seule la main qui palpe reste visible
+	if iv_proc.active and iv_proc.wants(id, h) and not h.get("device", false):
+		hint = iv_proc.hint(h)
+		if _ghost and not (id == "main" and IVProcedure.STEPS[iv_proc.step] == "veine"):
+			_ghost.visible = false
+	if _ghost and id == "seringue" and not _hold.is_empty():
+		_ghost.visible = false
 	if not _hold.is_empty():
 		_tick_hold(delta, h)
 	_tick_cpr(delta)
@@ -362,12 +333,10 @@ func _hint_for(id: String, h: Dictionary) -> String:
 			return "Clic : pince au bout du doigt" if _fingertip(p) != "" else "Vise le bout d'un doigt"
 		"brassard":
 			return "Clic : brassard au bras" if reg.begins_with("bras") else "Vise le haut d'un bras"
-		"garrot":
-			return "Clic : serrer le garrot au-dessus du coude" if reg.begins_with("bras") else "Vise un bras"
-		"antiseptique":
-			return "Clic maintenu en frottant : désinfecter la peau" if reg.begins_with("bras") or reg.begins_with("main") else "Vise le point de ponction"
-		"catheter18", "catheter20":
-			return "Clic sur une veine (sous garrot), puis glisse vers le coude pour monter le cathéter"
+		"garrot", "antiseptique", "catheter18", "catheter20":
+			if gear.has_iv():
+				return "Il a déjà une voie veineuse"
+			return "Clic sur le bras : commencer la pose de la voie veineuse (7 étapes)" if reg.begins_with("bras") or reg.begins_with("main") else "Vise un bras"
 		"tubes":
 			return "Clic sur le robinet du cathéter : prélever les tubes" if gear.has_iv() else "Il faut d'abord un cathéter veineux"
 		"perfuseur":
@@ -404,6 +373,9 @@ func press(h: Dictionary) -> void:
 		return
 	if id == "bavu" and bavu_on_face and _bag_hit():
 		_insufflate()
+		return
+	if iv_proc.wants(id, h):
+		iv_proc.press(h)
 		return
 	if h.is_empty():
 		return
@@ -444,17 +416,6 @@ func press(h: Dictionary) -> void:
 				inv.use_current()
 				game.get("monitor").call("measure_nibp")
 				ev("brassard", "Brassard posé au bras %s" % ("gauche" if side == "L" else "droit"))
-		"garrot":
-			if reg.begins_with("bras") or reg.begins_with("main"):
-				var side2 := reg.substr(reg.length() - 1)
-				gear.place_tourniquet(side2, 0.42)
-				_update_vein_vis()
-				ev("garrot", "Garrot posé")
-				toast("Garrot serré : les veines se gonflent")
-		"antiseptique":
-			_hold = {"kind": "desinf", "t": 0.0, "need": 2.5, "p": p, "reg": reg}
-		"catheter18", "catheter20":
-			_catheter_press(p)
 		"tubes":
 			if _near_port(p):
 				_gloves_check("prélèvement")
@@ -464,14 +425,7 @@ func press(h: Dictionary) -> void:
 				Sfx.play("plop", p, -8.0)
 		"perfuseur":
 			if _near_port(p):
-				if not gear.tourniquet.is_empty():
-					game.call("case_fault", "Perfusion branchée avec le garrot encore serré", 4.0)
-					return
-				gear.connect_line()
-				inv.use_current()
-				physio.give("nacl", 500.0, "PERF")
-				game.call("drug_given", "nacl", 500.0, "PERF")
-				ev("perfusion", "Perfusion de NaCl 0,9 % 500 mL en débit libre")
+				iv_proc.connect_perfusion()
 		"seringue":
 			_syringe_press(p, reg)
 		"bavu":
@@ -493,31 +447,27 @@ func release(_h: Dictionary) -> void:
 		if k in ["stetho", "pulse", "radial", "airway", "desinf", "crt", "syringe"] and _hold["t"] < _hold["need"]:
 			if k == "syringe":
 				toast("Injection interrompue : maintiens le clic jusqu'au bout", false)
+				iv_proc.hide_syringe()
 			_hold = {}
-		elif k == "iv":
-			pass
 		else:
 			_hold = {}
-	if not _iv_try.is_empty() and _iv_try.get("flash", false):
-		if float(_iv_try.get("drag", 0.0)) >= 70.0:
-			_iv_done()
-		else:
-			toast("Glisse le cathéter le long de la veine (vers le coude) en gardant le clic", false)
-			_iv_try = {}
+	iv_proc.release(_h)
 
 
 func drag(_h: Dictionary, rel: Vector2) -> void:
 	if cpr:
 		_push = clampf(_push + rel.y * PUSH_PER_PX * Settings.sensitivity, 0.0, 0.08)
 		return
-	if not _iv_try.is_empty() and _iv_try.get("flash", false):
-		_iv_try["drag"] = float(_iv_try.get("drag", 0.0)) + rel.length()
+	if iv_proc.busy():
+		iv_proc.drag(_h, rel)
 
 
 ## Échap en vue rapprochée : arrête ce qui est en cours (vrai si quelque chose a été annulé).
 func cancel_current() -> bool:
 	if cpr:
 		_stop_cpr()
+		return true
+	if iv_proc.cancel():
 		return true
 	return false
 
@@ -528,11 +478,15 @@ func _tick_hold(delta: float, h: Dictionary) -> void:
 	var k: String = _hold["kind"]
 	if not zv.mouse_left and k != "glyc" and k != "thermo":
 		_hold = {}
+		if k == "syringe":
+			iv_proc.hide_syringe()
 		return
 	_hold["t"] = float(_hold["t"]) + delta
 	var tt: float = _hold["t"]
 	var need: float = _hold["need"]
 	game.call("set_progress", tt / need, _hold_label(k))
+	if k == "syringe":
+		iv_proc.syringe_progress(clampf(tt / need, 0.0, 1.0))
 	if k == "stetho":
 		_stetho_sound(delta)
 	if k == "desinf" and not h.is_empty():
@@ -863,47 +817,7 @@ func _pad(p: Vector3) -> void:
 
 # ---------------------------------------------------------------- Voie veineuse
 
-func _catheter_press(p: Vector3) -> void:
-	if gear.has_iv():
-		toast("Il a déjà une voie veineuse", false)
-		return
-	var vh := _vein_hit(p)
-	var d: float = vh[0]
-	var side: String = vh[2]
-	_gloves_check("pose de cathéter")
-	if not _disinfected.get(side, false):
-		game.call("case_fault", "Peau non désinfectée avant la ponction", 2.0)
-	var tight := String(gear.tourniquet.get("side", "")) == side
-	var tol := 0.005 if tight else 0.0025
-	if physio.sys < 85.0:
-		tol *= 0.7
-	Sfx.play("pique", p, -8.0)
-	if d > tol:
-		_iv_misses += 1
-		toast("Pas de reflux de sang : la veine n'est pas là%s" % ("" if tight else " (pose un garrot pour la faire gonfler)"), false)
-		ev("vvp_echec", "Ponction veineuse ratée")
-		if _iv_misses == 2:
-			game.call("case_fault", "Plusieurs ponctions veineuses ratées", 2.0)
-		return
-	_iv_try = {"side": side, "p": p, "dir": vh[1], "flash": true, "drag": 0.0}
-	toast("Reflux de sang dans la chambre : glisse le cathéter dans la veine")
-
-
-func _iv_done() -> void:
-	var col := Color(0.2, 0.7, 0.3) if inv.current_id() == "catheter18" else Color(0.95, 0.45, 0.65)
-	var side: String = _iv_try["side"]
-	var dir: Vector3 = _iv_try["dir"]
-	# Le cathéter monte vers le coude (vers l'épaule)
-	var toward := (Patient.arm_point(side, 0.0) - Patient.arm_point(side, 1.0)).normalized()
-	if dir.dot(toward) < 0.0:
-		dir = -dir
-	gear.place_iv(side, _iv_try["p"], dir, col)
-	var label: String = inv.current()["name"]
-	inv.use_current()
-	_iv_try = {}
-	ev("vvp", "Voie veineuse périphérique posée (%s)" % label)
-	toast("Cathéter en place." + (" Desserre le garrot !" if not gear.tourniquet.is_empty() else ""))
-
+## Garrot, désinfection, choix de la veine, ponction, pansement, branchement : IVProcedure.
 
 func _near_port(p: Vector3) -> bool:
 	if not gear.has_iv():
@@ -911,7 +825,7 @@ func _near_port(p: Vector3) -> bool:
 		return false
 	var port: Vector3 = gear.iv["port"]
 	if p.distance_to(port) > 0.04:
-		toast("Vise le robinet du cathéter", false)
+		toast("Vise le bouchon du cathéter (site d'injection)", false)
 		return false
 	return true
 
@@ -942,6 +856,7 @@ func _syringe_press(p: Vector3, reg: String) -> void:
 		return
 	_gloves_check("injection")
 	_hold = {"kind": "syringe", "t": 0.0, "need": 2.0 if route == "IV" else 1.2, "p": p}
+	iv_proc.show_syringe(p, route)
 	Sfx.play("pique", p, -10.0)
 
 
@@ -952,7 +867,11 @@ func _inject_done() -> void:
 	var dose: float = data["dose"]
 	var route: String = data["route"]
 	inv.use_current()
+	iv_proc.syringe_progress(1.0)
+	get_tree().create_timer(0.6).timeout.connect(iv_proc.hide_syringe)
 	game.call("drug_given", drug, dose, route)
+	if route == "IV":
+		iv_proc.line_or_injection()
 
 
 # ---------------------------------------------------------------- Oxygène
