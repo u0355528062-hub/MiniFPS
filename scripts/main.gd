@@ -152,8 +152,10 @@ func _define_zones() -> void:
 	var zv := zone_view
 	var ideal := Vector3(-0.03, 1.06, 0.0)
 	zv.define("thorax", "Thorax", ideal + Vector3(0.08, -0.02, 0.0), 0.0, 58.0, 0.72, 0.25, 1.2)
-	zv.define("tete", "Tête et visage", Vector3(0.28, 1.0, 0.0), 0.55, 52.0, 0.42, 0.15, 0.9)
-	zv.define("cou", "Cou", Vector3(0.18, 0.98, 0.02), 0.25, 55.0, 0.36, 0.15, 0.8)
+	var nose := Patient.lm("nose_tip")
+	var neck_x := float(Patient.landmarks.get("neck", {"x": 0.18})["x"])
+	zv.define("tete", "Tête et visage", Vector3(nose.x + 0.01, nose.y - 0.03, 0.0), 0.55, 52.0, 0.42, 0.15, 0.9)
+	zv.define("cou", "Cou", Vector3(neck_x, 0.98, 0.02), 0.25, 55.0, 0.36, 0.15, 0.8)
 	zv.define("abdomen", "Abdomen", Vector3(-0.27, 1.0, 0.0), 0.0, 58.0, 0.55, 0.2, 1.0)
 	for side in ["L", "R"]:
 		var mid := Patient.arm_point(side, 0.55)

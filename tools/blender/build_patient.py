@@ -313,8 +313,14 @@ def sheet(body):
     return cloth
 
 
-def landmarks(t_body, joints, path):
+def landmarks(t_body, joints, path, eyes):
     lm = json.load(open(path))
+    # Yeux : devant du globe (centre de la cornée), gauche du patient en +Z
+    pts = np.array([game(eyes.matrix_world @ v.co) for v in eyes.data.vertices])
+    for side, sz in (("L", 1), ("R", -1)):
+        e = pts[pts[:, 2] * sz > 0]
+        c = (e.max(axis=0) + e.min(axis=0)) * 0.5
+        lm["eye_" + side] = [round(float(c[0]), 4), round(float(e[:, 1].max()), 4), round(float(c[2]), 4)]
 
     def bh(x, z):
         return top_hit(t_body, x, z)
@@ -374,7 +380,7 @@ def main():
     for ob in (body, eyes, hair):
         bl.bake_transforms(ob)
     t_body = height_map([body], os.path.join(DATA, "peau_dos_hauteur.bin"), os.path.join(DATA, "peau_dos_hauteur.bin"))
-    landmarks(t_body, joints, os.path.join(DATA, "patient_dos.json"))
+    landmarks(t_body, joints, os.path.join(DATA, "patient_dos.json"), eyes)
     cl = sheet(body)
     height_map([cl], os.path.join(DATA, "drap_dos_hauteur.bin"), os.path.join(DATA, "drap_dos_hauteur.bin"))
     bl.export("drap_dos", [cl])

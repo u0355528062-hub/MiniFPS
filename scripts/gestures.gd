@@ -146,9 +146,8 @@ func cpr_ideal() -> Vector3:
 
 
 func eye_point(side: float) -> Vector3:
-	var x := 1.5895 - 1.29927
-	var z := 0.0312 * side
-	return Vector3(x, Patient.body_height(x, z), z)
+	var e := Patient.lm("eye_" + ("L" if side > 0.0 else "R"))
+	return Vector3(e.x, Patient.body_height(e.x, e.z), e.z)
 
 
 func _carotid(p: Vector3) -> bool:
@@ -686,6 +685,7 @@ func _palpate(_p: Vector3) -> void:
 
 
 func _pupils() -> void:
+	patient.set_pupils(float(physio.pupils["size"]))
 	patient.set_eyes_open(0.7)
 	get_tree().create_timer(2.0).timeout.connect(func() -> void:
 		if not physio.conscious:

@@ -82,7 +82,8 @@ void vertex() {
 void fragment() {
 	vec3 n0 = normalize(wnorm) * (FRONT_FACING ? 1.0 : -1.0);
 	vec3 wp = wpos;
-	vec3 col = texture(peau_albedo, UV).rgb * skin_tint;
+	// Teint de la texture un peu trop orangé : ramené vers un rose-beige plus naturel
+	vec3 col = texture(peau_albedo, UV).rgb * vec3(0.96, 1.1, 1.13) * skin_tint;
 	vec3 msk = texture(peau_masques, UV).rgb;
 	vec3 hairs = texture(peau_poils, UV).rgb;
 	float lips = smoothstep(0.25, 0.8, msk.r);
@@ -100,21 +101,21 @@ void fragment() {
 	float n1 = bb_noise(wp * 2400.0);
 	float n2 = bb_noise(wp * 260.0);
 	// Cuir chevelu : racines sombres entre les cheveux (les mèches sont des coques à part)
-	float scalp = smoothstep(0.05, 0.6, hairs.r) * (1.0 - bald_mask(wp));
+	float scalp = smoothstep(0.2, 0.7, hairs.r) * (1.0 - bald_mask(wp));
 	col = mix(col, col * 0.45 + hair_col * 0.35, scalp * (0.55 + 0.25 * n2));
 	rough = mix(rough, 0.6, scalp);
 	// Sourcils : poils couchés vers l'extérieur
-	float brow = smoothstep(0.08, 0.7, hairs.g);
+	float brow = smoothstep(0.15, 0.8, hairs.g);
 	float strands = smoothstep(0.35, 0.75, bb_noise(vec3(wp.x * 600.0, wp.y * 2600.0, wp.z * 900.0)));
-	col = mix(col, hair_col * (0.8 + 0.4 * n2), clamp(brow * (0.45 + 0.5 * strands), 0.0, 1.0));
+	col = mix(col, hair_col * (0.8 + 0.4 * n2), clamp(brow * (0.3 + 0.35 * strands), 0.0, 1.0));
 	// Barbe naissante : ombre bleutée et points des poils coupés ras
 	float beard = smoothstep(0.05, 0.6, hairs.b) * stubble;
-	col *= mix(vec3(1.0), vec3(0.84, 0.84, 0.88), beard * 0.8);
-	float dots = smoothstep(0.62, 0.8, n1);
-	col = mix(col, hair_col * 0.9, beard * dots * 0.7);
+	col *= mix(vec3(1.0), vec3(0.86, 0.86, 0.9), beard * 0.7);
+	float dots = smoothstep(0.7, 0.85, n1);
+	col = mix(col, mix(col, hair_col, 0.6), beard * dots * 0.6);
 	// Lèvres et ongles : plus lisses, un peu brillants
-	rough = mix(rough, 0.34, lips);
-	spec = mix(spec, 0.45, lips);
+	rough = mix(rough, 0.42, lips);
+	spec = mix(spec, 0.38, lips);
 	rough = mix(rough, 0.22, nails);
 	spec = mix(spec, 0.55, nails);
 
