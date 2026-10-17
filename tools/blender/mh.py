@@ -327,74 +327,67 @@ def eye_centers(base, eyes_ob):
     return out
 
 
-
-
-def close_eyelids(base, eyes, lid=0.012, close_at=0.3, reach_up=0.55, reach_down=0.4):
+def close_eyelids(base, eyes, lid=0.012, close_at=0.3, reach_up=0.6, reach_down=0.45):
     """Positions des sommets paupières fermées (pour une cible de forme) : la paupière supérieure
     descend sur le globe jusqu'à la ligne de fermeture (au tiers inférieur de la fente), l'inférieure
     remonte un peu ; la peau suit en s'amortissant vers le sourcil et la joue. Calcul en coordonnées
-    sphériques autour du centre de chaque œil. Le maillage MakeHuman est fermé derrière l'œil : le
-    bord de la fente est là où la peau passe sous la surface du globe."""
+    sphériques autour du centre de chaque œil (phi : azimut, theta : hauteur). La fente palpébrale est
+    mesurée par des rayons lancés du centre de l'œil : là où ils ne rencontrent pas la peau, l'œil est
+    visible."""
+    from mathutils.bvhtree import BVHTree
     v = base.v.copy()
-    nbr = {}
-    for vi, ti, g in base.faces:
-        if g != "body":
-            continue
-        for a, b in zip(vi, vi[1:] + vi[:1]):
-            nbr.setdefault(a, set()).add(b)
-            nbr.setdefault(b, set()).add(a)
-    allv = np.array(sorted(nbr.keys()))
+    polys = [vi for vi, ti, g in base.faces if g == "body"]
+    tree = BVHTree.FromPolygons([Vector(p) for p in base.v], polys)
+    bodyv = np.array(sorted(base.groups["body"]))
 
     def fall(t):
         t = np.clip(t, 0.0, 1.0)
         return 1.0 - t * t * (3 - 2 * t)
 
     for s, (c, R) in eyes.items():
-
-        def sph(p):
-            q = p - c
-            phi = np.arctan2(q[..., 0], q[..., 2])
-            th = np.arctan2(q[..., 1], np.hypot(q[..., 0], q[..., 2]))
-            return phi, th, np.linalg.norm(q, axis=-1)
-
-        idx = allv[np.linalg.norm(base.v[allv] - c, axis=1) < R * 3.2]
-        idx = idx[(base.v[idx, 2] - c[2]) > R * 0.1]
-        phi, th, r = sph(base.v[idx])
-        inside = set(idx[r < R * 0.995].tolist())
-        margin = np.array([i for i in idx if i not in inside and nbr[i] & inside])
-        if len(margin) < 6:
-            print("fente palpébrale introuvable", s)
-            continue
-        bphi, bth, _ = sph(base.v[margin])
-        ia, ib = np.argmin(bphi), np.argmax(bphi)
-        pa, pb = bphi[ia], bphi[ib]
-        line = bth[ia] + (bth[ib] - bth[ia]) * (bphi - pa) / (pb - pa)
-        up = bth >= line
-        up[[ia, ib]] = True
-        lo = bth <= line
-        lo[[ia, ib]] = True
-        ou = np.argsort(bphi[up])
-        ol = np.argsort(bphi[lo])
+        # Fente : pour chaque azimut, bornes haute et basse des directions sans peau devant l'œil
+        phis = np.radians(np.arange(-80, 81, 2.0))
+        ths = np.radians(np.arange(-60, 61, 1.0))
+        cols = []
+        for ph in phis:
+            open_th = []
+            for th in ths:
+                d = Vector((math.cos(th) * math.sin(ph), math.sin(th), math.cos(th) * math.cos(ph)))
+                hit = tree.ray_cast(Vector(c), d, R * 1.8)
+                if hit[0] is None:
+                    open_th.append(th)
+            if open_th:
+                cols.append((ph, max(open_th), min(open_th)))
+        cols = np.array(cols)
+        pa, pb = cols[0, 0], cols[-1, 0]
+        q = base.v[bodyv] - c
+        rr = np.linalg.norm(q, axis=1)
+        sel = (rr < R * 3.2) & (q[:, 2] > -R * 0.2)
+        idx = bodyv[sel]
+        q = q[sel]
+        r = rr[sel]
+        phi = np.arctan2(q[:, 0], q[:, 2])
+        th = np.arctan2(q[:, 1], np.hypot(q[:, 0], q[:, 2]))
         pc = np.clip(phi, pa, pb)
-        th_u = np.interp(pc, bphi[up][ou], bth[up][ou])
-        th_l = np.interp(pc, bphi[lo][ol], bth[lo][ol])
+        th_u = np.interp(pc, cols[:, 0], cols[:, 1])
+        th_l = np.interp(pc, cols[:, 0], cols[:, 2])
         th_c = th_l + close_at * (th_u - th_l)
-        th_line = bth[ia] + (bth[ib] - bth[ia]) * (pc - pa) / (pb - pa)
-        wphi = 1.0 - np.clip(np.abs(phi - pc) / 0.18, 0.0, 1.0)
+        mid = (th_u + th_l) * 0.5
+        # Au-delà des coins : la peau ne bouge plus
+        wphi = 1.0 - np.clip(np.abs(phi - pc) / 0.12, 0.0, 1.0)
         wphi = wphi * wphi * (3 - 2 * wphi)
-        out = np.array([i not in inside for i in idx])
-        upper = out & (th >= th_line)
-        lower = out & (th < th_line)
-        shift = np.zeros_like(th)
-        shift[upper] = (th_c - th_u)[upper] * fall((th - th_u)[upper] / reach_up)
-        shift[lower] = (th_c - th_l)[lower] * fall((th_l - th)[lower] / reach_down)
+        upper = th >= mid
+        shift = np.where(upper, (th_c - th_u) * fall((th - th_u) / reach_up), (th_c - th_l) * fall((th_l - th) / reach_down))
         shift *= wphi
         th2 = th + shift
-        moved = np.abs(shift) > 1e-6
+        # Rebord replié sous le globe : reste de son côté de la ligne de fermeture
+        th2 = np.where(upper, np.maximum(th2, th_c), np.minimum(th2, th_c))
+        inside = r < R * 0.995
+        moved = np.abs(th2 - th) > 1e-6
         # La paupière glisse sur le globe : jamais à moins d'une épaisseur de sa surface
-        r2 = np.where(moved, np.maximum(r, R + lid * np.clip(np.abs(shift) / 0.05, 0.0, 1.0)), r)
+        r2 = np.where(moved & ~inside, np.maximum(r, R + lid), r)
         newp = c + np.stack([r2 * np.cos(th2) * np.sin(phi), r2 * np.sin(th2), r2 * np.cos(th2) * np.cos(phi)], 1)
         v[idx] = np.where(moved[:, None], newp, base.v[idx])
-        print("paupière", s, "bord", len(margin), "sommets déplacés", int(moved.sum()),
-              "fente %.2f..%.2f rad, R %.3f" % (pa, pb, R))
+        print("paupière", s, "sommets déplacés", int(moved.sum()),
+              "fente %.0f..%.0f°, hauteur max %.0f°, R %.3f" % (math.degrees(pa), math.degrees(pb), math.degrees((cols[:, 1] - cols[:, 2]).max()), R))
     return v
