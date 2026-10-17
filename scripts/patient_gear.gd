@@ -351,9 +351,11 @@ func tourniquet_node(side: String, t: float, slack := 0.0, preview := false) -> 
 	# qui descendent sous le niveau du matelas, et retour par-dessous.
 	# Dessous du bras : deux quarts d'ellipse du bord (la plus grande largeur) au point d'appui
 	var loop := PackedVector2Array()
-	var bottom := Patient.TABLE_TOP - 0.003
+	# (la carte de hauteur ne voit que le dessus : on suppose une section à peu près ronde)
 	var pa := prof[0] + Vector2(-0.0015 - lift * 0.5, lift)
 	var pb := prof[prof.size() - 1] + Vector2(0.0015 + lift * 0.5, lift)
+	var top_y := prof[prof.size() / 2].y
+	var bottom := maxf(Patient.TABLE_TOP - 0.003, top_y - (pb.x - pa.x) * 1.02)
 	var cm := (pa.x + pb.x) * 0.5
 	for i in 8:
 		var ph := PI * 0.5 * (1.0 - i / 8.0)

@@ -80,10 +80,10 @@ def build_echographe(m):
     p.append(bl.box("gel", (0.04, 0.04, 0.12), g(-0.34, 0.92, 0.0), bl.mat("Gel échographie", (0.2, 0.55, 0.85), 0.3), bev=0.01))
     # Bras et écran
     p.append(bl.cyl_between("bras", g(0, 0.88, -0.14), g(0, 1.12, -0.14), 0.025, m["grey"], verts=16))
-    p.append(bl.box("ecran_dos", (0.5, 0.36, 0.05), g(0, 1.32, -0.12), m["warm_white"], bev=0.02, rot=(D(-8), 0, 0)))
-    scr = bl.box("ecran", (0.44, 0.3, 0.006), g(0, 1.32, -0.092), m["screen_on"], rot=(D(-8), 0, 0))
+    p.append(bl.box("ecran_dos", (0.5, 0.05, 0.36), g(0, 1.32, -0.12), m["warm_white"], bev=0.02, rot=(D(-8), 0, 0)))
+    scr = bl.box("ecran", (0.44, 0.006, 0.3), g(0, 1.32, -0.092), m["screen_on"], rot=(D(-8), 0, 0))
     nodes["Ecran"].append(scr)
-    p.append(bl.box("logo", (0.08, 0.012, 0.004), g(0, 1.13, -0.094), m["pump_blue"]))
+    p.append(bl.box("logo", (0.08, 0.004, 0.012), g(0, 1.13, -0.094), m["pump_blue"]))
     return grouped(nodes)
 
 
@@ -316,17 +316,17 @@ def build_boites_gants(m):
     """Porte-boîtes de gants mural (inox) avec trois boîtes de gants nitrile S, M, L (bandes de
     couleur), gants qui dépassent. Dos contre le mur, centre à y = 0."""
     p = []
-    p.append(bl.box("support", (0.8, 0.13, 0.01), g(0, 0, 0.005), m["steel"], bev=0.003))
+    p.append(bl.box("support", (0.8, 0.01, 0.13), g(0, 0, 0.005), m["steel"], bev=0.003))
     for k, (taille, col) in enumerate((("S", (0.95, 0.75, 0.1)), ("M", (0.15, 0.6, 0.3)), ("L", (0.15, 0.4, 0.85)))):
         x = -0.26 + k * 0.26
-        p.append(bl.box("boite", (0.24, 0.12, 0.09), g(x, 0, 0.055), m["white"], bev=0.006))
-        p.append(bl.box("bande", (0.24, 0.035, 0.002), g(x, -0.035, 0.1005), bl.mat("Taille %s" % taille, col, 0.5)))
+        p.append(bl.box("boite", (0.24, 0.09, 0.12), g(x, 0, 0.055), m["white"], bev=0.006))
+        p.append(bl.box("bande", (0.24, 0.002, 0.035), g(x, -0.035, 0.1005), bl.mat("Taille %s" % taille, col, 0.5)))
         p.append(bl.text("taille", taille, 0.03, g(x + 0.08, -0.035, 0.102), m["white"], rot=(D(90), 0, 0), extrude=0.0005))
-        p.append(bl.box("fente", (0.12, 0.012, 0.003), g(x, 0.02, 0.1005), m["dark"]))
+        p.append(bl.box("fente", (0.12, 0.003, 0.012), g(x, 0.02, 0.1005), m["dark"]))
         glove = bl.bezier_pts(g(x - 0.02, 0.02, 0.1), g(x - 0.02, 0.03, 0.14), g(x + 0.03, 0.01, 0.15), g(x + 0.04, -0.03, 0.135), 10)
         p.append(bl.tube("gant", glove, 0.012, m["glove"], sides=8))
     for x in (-0.39, 0.39):
-        p.append(bl.box("joue", (0.01, 0.13, 0.1), g(x, 0, 0.05), m["steel"], bev=0.002))
+        p.append(bl.box("joue", (0.01, 0.1, 0.13), g(x, 0, 0.05), m["steel"], bev=0.002))
     return grouped({"boites_gants": p})
 
 
@@ -334,16 +334,16 @@ def build_prises(m):
     """Bloc de prises murales : 3 prises 230 V blanches, 1 rouge (secourue), 1 prise réseau, plaque
     d'identification. Dos contre le mur, centre à y = 0."""
     p = []
-    p.append(bl.box("plaque", (0.36, 0.09, 0.012), g(0, 0, 0.006), m["white"], bev=0.004))
+    p.append(bl.box("plaque", (0.36, 0.012, 0.09), g(0, 0, 0.006), m["white"], bev=0.004))
     for k in range(4):
         x = -0.135 + k * 0.08
         mt = m["red"] if k == 3 else m["white"]
-        p.append(bl.box("prise", (0.065, 0.065, 0.012), g(x, 0, 0.016), mt, bev=0.006))
+        p.append(bl.box("prise", (0.065, 0.012, 0.065), g(x, 0, 0.016), mt, bev=0.006))
         p.append(bl.cyl_between("puits", g(x, 0, 0.021), g(x, 0, 0.0225), 0.02, m["grey"] if k < 3 else m["dark"], verts=24))
         for sx in (-1, 1):
             p.append(bl.cyl_between("trou", g(x + sx * 0.0095, 0, 0.022), g(x + sx * 0.0095, 0, 0.0226), 0.0026, m["black_lid"], verts=8))
         p.append(bl.cyl_between("terre", g(x, 0.012, 0.022), g(x, 0.012, 0.03), 0.002, m["chrome"], verts=8))
-    p.append(bl.box("rj45", (0.035, 0.035, 0.012), g(0.175, 0, 0.016), m["white"], bev=0.004))
+    p.append(bl.box("rj45", (0.035, 0.012, 0.035), g(0.175, 0, 0.016), m["white"], bev=0.004))
     return grouped({"prises": p})
 
 
@@ -351,8 +351,8 @@ def build_panneau_sortie(m):
     """Bloc autonome d'éclairage de sécurité « SORTIE » : boîtier blanc, face verte lumineuse,
     texte et flèche blancs. Dos contre le mur, centre à y = 0."""
     p = []
-    p.append(bl.box("boitier", (0.36, 0.12, 0.06), g(0, 0, 0.03), m["white"], bev=0.008))
-    p.append(bl.box("face", (0.33, 0.1, 0.004), g(0, 0, 0.0605), m["exit_green"]))
+    p.append(bl.box("boitier", (0.36, 0.06, 0.12), g(0, 0, 0.03), m["white"], bev=0.008))
+    p.append(bl.box("face", (0.33, 0.004, 0.1), g(0, 0, 0.0605), m["exit_green"]))
     p.append(bl.text("sortie", "SORTIE", 0.045, g(0.03, 0, 0.063), m["white"], rot=(D(90), 0, 0), extrude=0.0008))
     arrow = bl.extrude_profile("fleche", [(-0.05, 0.0), (-0.02, 0.025), (-0.02, 0.01), (0.01, 0.01), (0.01, -0.01), (-0.02, -0.01), (-0.02, -0.025)], 0.0015, 0.0, m["white"])
     arrow.rotation_euler = (D(90), 0, 0)

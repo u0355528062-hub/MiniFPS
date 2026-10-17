@@ -295,7 +295,7 @@ static func _textures() -> Dictionary:
 			var r := (p * Vector2(1.0, 0.92)).length() + nn * 0.16
 			var a := 1.0 - smoothstep(0.55, 0.85, r)
 			var streak := 0.8 + 0.2 * noise.get_noise_2d(x * 4.0, y * 0.5)
-			st.set_pixel(x, y, Color(0.78, 0.42, 0.12, clampf(a * 0.42 * streak, 0.0, 1.0)))
+			st.set_pixel(x, y, Color(0.72, 0.33, 0.07, clampf(a * 0.62 * streak, 0.0, 1.0)))
 			# Hématome : bleu-violet au centre, jaunâtre au bord
 			var hr := p.length() + nn * 0.3
 			var ha := 1.0 - smoothstep(0.35, 0.85, hr)
