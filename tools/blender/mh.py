@@ -312,3 +312,89 @@ def curl(arm_ob, side, amounts, thumb=(0.0, 0.0, 0.0)):
             pb.rotation_mode = "XYZ"
             pb.rotation_euler = (math.radians(deg), 0.0, 0.0)
     bpy.context.view_layer.update()
+
+
+def eye_centers(base, eyes_ob):
+    """Centre et rayon de chaque globe oculaire (repère MakeHuman, décimètres) : {+1: (c, r), -1: ...}
+    (+1 : œil gauche du personnage, côté +X)."""
+    pts = np.array([(v.co.x / SCALE, v.co.z / SCALE, -v.co.y / SCALE) for v in eyes_ob.data.vertices])
+    out = {}
+    for s in (1, -1):
+        e = pts[pts[:, 0] * s > 0]
+        # Le globe est une sphère dont dépasse un rebord plat (la profondeur donne le rayon)
+        c = (e.max(axis=0) + e.min(axis=0)) * 0.5
+        out[s] = (c, float(e[:, 2].max() - e[:, 2].min()) * 0.5)
+    return out
+
+
+
+
+def close_eyelids(base, eyes, lid=0.012, close_at=0.3, reach_up=0.55, reach_down=0.4):
+    """Positions des sommets paupières fermées (pour une cible de forme) : la paupière supérieure
+    descend sur le globe jusqu'à la ligne de fermeture (au tiers inférieur de la fente), l'inférieure
+    remonte un peu ; la peau suit en s'amortissant vers le sourcil et la joue. Calcul en coordonnées
+    sphériques autour du centre de chaque œil. Le maillage MakeHuman est fermé derrière l'œil : le
+    bord de la fente est là où la peau passe sous la surface du globe."""
+    v = base.v.copy()
+    nbr = {}
+    for vi, ti, g in base.faces:
+        if g != "body":
+            continue
+        for a, b in zip(vi, vi[1:] + vi[:1]):
+            nbr.setdefault(a, set()).add(b)
+            nbr.setdefault(b, set()).add(a)
+    allv = np.array(sorted(nbr.keys()))
+
+    def fall(t):
+        t = np.clip(t, 0.0, 1.0)
+        return 1.0 - t * t * (3 - 2 * t)
+
+    for s, (c, R) in eyes.items():
+
+        def sph(p):
+            q = p - c
+            phi = np.arctan2(q[..., 0], q[..., 2])
+            th = np.arctan2(q[..., 1], np.hypot(q[..., 0], q[..., 2]))
+            return phi, th, np.linalg.norm(q, axis=-1)
+
+        idx = allv[np.linalg.norm(base.v[allv] - c, axis=1) < R * 3.2]
+        idx = idx[(base.v[idx, 2] - c[2]) > R * 0.1]
+        phi, th, r = sph(base.v[idx])
+        inside = set(idx[r < R * 0.995].tolist())
+        margin = np.array([i for i in idx if i not in inside and nbr[i] & inside])
+        if len(margin) < 6:
+            print("fente palpébrale introuvable", s)
+            continue
+        bphi, bth, _ = sph(base.v[margin])
+        ia, ib = np.argmin(bphi), np.argmax(bphi)
+        pa, pb = bphi[ia], bphi[ib]
+        line = bth[ia] + (bth[ib] - bth[ia]) * (bphi - pa) / (pb - pa)
+        up = bth >= line
+        up[[ia, ib]] = True
+        lo = bth <= line
+        lo[[ia, ib]] = True
+        ou = np.argsort(bphi[up])
+        ol = np.argsort(bphi[lo])
+        pc = np.clip(phi, pa, pb)
+        th_u = np.interp(pc, bphi[up][ou], bth[up][ou])
+        th_l = np.interp(pc, bphi[lo][ol], bth[lo][ol])
+        th_c = th_l + close_at * (th_u - th_l)
+        th_line = bth[ia] + (bth[ib] - bth[ia]) * (pc - pa) / (pb - pa)
+        wphi = 1.0 - np.clip(np.abs(phi - pc) / 0.18, 0.0, 1.0)
+        wphi = wphi * wphi * (3 - 2 * wphi)
+        out = np.array([i not in inside for i in idx])
+        upper = out & (th >= th_line)
+        lower = out & (th < th_line)
+        shift = np.zeros_like(th)
+        shift[upper] = (th_c - th_u)[upper] * fall((th - th_u)[upper] / reach_up)
+        shift[lower] = (th_c - th_l)[lower] * fall((th_l - th)[lower] / reach_down)
+        shift *= wphi
+        th2 = th + shift
+        moved = np.abs(shift) > 1e-6
+        # La paupière glisse sur le globe : jamais à moins d'une épaisseur de sa surface
+        r2 = np.where(moved, np.maximum(r, R + lid * np.clip(np.abs(shift) / 0.05, 0.0, 1.0)), r)
+        newp = c + np.stack([r2 * np.cos(th2) * np.sin(phi), r2 * np.sin(th2), r2 * np.cos(th2) * np.cos(phi)], 1)
+        v[idx] = np.where(moved[:, None], newp, base.v[idx])
+        print("paupière", s, "bord", len(margin), "sommets déplacés", int(moved.sum()),
+              "fente %.2f..%.2f rad, R %.3f" % (pa, pb, R))
+    return v

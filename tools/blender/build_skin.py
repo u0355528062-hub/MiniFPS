@@ -6,7 +6,8 @@
   - peau_poils.png : R cheveux courts, G sourcils, B barbe naissante (couleur choisie par le jeu).
 Masques de régions : textures MPFB2 (CC0) et zones calculées sur la tête du modèle.
 
-    /home/user/bpyenv/bin/python tools/blender/build_skin.py
+    /home/user/bpyenv/bin/python tools/blender/build_skin.py [albedo] [masques] [poils] [normal]
+(sans argument : toutes les textures)
 """
 import math
 import os
@@ -117,6 +118,11 @@ def bake(ob, mat_builder, name, kind="EMIT", res=RES, colorspace="sRGB"):
 
 
 def main():
+    only = [a for a in sys.argv[1:] if not a.startswith("-")]
+
+    def want(name):
+        return not only or name in only
+
     bl.reset()
     b = mh.Base()
     b.apply_target("macrodetails/caucasian-male-young", 0.55)
@@ -186,7 +192,8 @@ def main():
         nt.links.new(col, em.inputs["Color"])
         return em
 
-    bake(ob, albedo, "peau_albedo")
+    if want("albedo"):
+        bake(ob, albedo, "peau_albedo")
 
     def masks(nt):
         lips = tex(nt, "mpfb_lips.jpg", (-600, 300))
@@ -205,7 +212,8 @@ def main():
         nt.links.new(comb.outputs[0], em.inputs["Color"])
         return em
 
-    bake(ob, masks, "peau_masques", res=1024, colorspace="Non-Color")
+    if want("masques"):
+        bake(ob, masks, "peau_masques", res=1024, colorspace="Non-Color")
 
     def hairmask(nt):
         a = nt.nodes.new("ShaderNodeVertexColor")
@@ -214,26 +222,29 @@ def main():
         nt.links.new(a.outputs["Color"], em.inputs["Color"])
         return em
 
-    bake(ob, hairmask, "peau_poils", res=1024, colorspace="Non-Color")
+    if want("poils"):
+        bake(ob, hairmask, "peau_poils", res=1024, colorspace="Non-Color")
 
     def normal(nt):
         tc = node(nt, "ShaderNodeTexCoord", (-800, 0))
-        pores = node(nt, "ShaderNodeTexVoronoi", (-600, 0), Scale=2200.0)
+        pores = node(nt, "ShaderNodeTexVoronoi", (-600, 0), Scale=900.0)
         nt.links.new(tc.outputs["Object"], pores.inputs["Vector"])
-        fine = node(nt, "ShaderNodeTexNoise", (-600, -250), Scale=700.0, Detail=6.0)
+        fine = node(nt, "ShaderNodeTexNoise", (-600, -250), Scale=320.0, Detail=6.0)
         nt.links.new(tc.outputs["Object"], fine.inputs["Vector"])
         add = node(nt, "ShaderNodeMath", (-400, -100))
         add.operation = "MULTIPLY_ADD"
         nt.links.new(fine.outputs["Fac"], add.inputs[0])
         add.inputs[1].default_value = 0.6
         nt.links.new(pores.outputs["Distance"], add.inputs[2])
-        bump = node(nt, "ShaderNodeBump", (-200, 0), Strength=0.35, Distance=0.0006)
+        bump = node(nt, "ShaderNodeBump", (-200, 0), Strength=0.3, Distance=0.0005)
         nt.links.new(add.outputs[0], bump.inputs["Height"])
         bsdf = node(nt, "ShaderNodeBsdfPrincipled", (0, 0))
         nt.links.new(bump.outputs[0], bsdf.inputs["Normal"])
         return bsdf
 
-    bake(ob, normal, "peau_normal", kind="NORMAL", colorspace="Non-Color")
+    if want("normal"):
+        bake(ob, normal, "peau_normal", kind="NORMAL", colorspace="Non-Color")
 
 
-main()
+if __name__ == "__main__":
+    main()
