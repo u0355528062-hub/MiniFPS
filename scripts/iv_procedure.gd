@@ -249,7 +249,7 @@ func _tick_vis(delta: float) -> void:
 			changed = true
 			for e in _vein_decals[s]:
 				var d: Decal = e[0]
-				d.modulate.a = clampf((_vis[s] - 0.15) * 0.75, 0.0, 1.0)
+				d.modulate.a = clampf((_vis[s] - 0.15) * 0.95, 0.0, 1.0)
 				d.normal_fade = 0.2
 	if changed:
 		patient.skin_mat.set_shader_parameter("vein_vis", Vector2(_vis["L"], _vis["R"]) * 0.4)
@@ -291,11 +291,11 @@ static func _textures() -> Dictionary:
 		for x in s:
 			var p := Vector2(x + 0.5, y + 0.5) / s * 2.0 - Vector2.ONE
 			var nn := noise.get_noise_2d(x, y)
-			var r := p.length() + nn * 0.22
-			var a := 1.0 - smoothstep(0.62, 0.8, r)
-			var rim := smoothstep(0.5, 0.72, r) * a
-			var streak := 0.85 + 0.15 * noise.get_noise_2d(x * 3.0, y * 0.4)
-			st.set_pixel(x, y, Color(0.6 - 0.12 * rim, 0.27 - 0.06 * rim, 0.07, clampf(a * 0.62 * streak + rim * 0.25, 0.0, 1.0)))
+			# Antiseptique coloré : voile ambré translucide, passages de compresse, bord diffus
+			var r := (p * Vector2(1.0, 0.92)).length() + nn * 0.16
+			var a := 1.0 - smoothstep(0.55, 0.85, r)
+			var streak := 0.8 + 0.2 * noise.get_noise_2d(x * 4.0, y * 0.5)
+			st.set_pixel(x, y, Color(0.78, 0.42, 0.12, clampf(a * 0.42 * streak, 0.0, 1.0)))
 			# Hématome : bleu-violet au centre, jaunâtre au bord
 			var hr := p.length() + nn * 0.3
 			var ha := 1.0 - smoothstep(0.35, 0.85, hr)

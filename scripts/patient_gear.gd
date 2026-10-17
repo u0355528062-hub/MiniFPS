@@ -341,23 +341,29 @@ func tourniquet_node(side: String, t: float, slack := 0.0, preview := false) -> 
 	var lift := lerpf(-0.0006, 0.012, clampf(slack, 0.0, 1.0))
 	var thick := 0.0022
 	var band := _mat(Color(0.16, 0.4, 0.85), 0.7)
-	var clip := _mat(Color(0.62, 0.66, 0.72), 0.4)
-	var clip_dark := _mat(Color(0.3, 0.33, 0.38), 0.45)
+	var clip := _mat(Color(0.86, 0.88, 0.9), 0.35)
+	var clip_dark := _mat(Color(0.58, 0.62, 0.68), 0.4)
 	if preview:
 		for m in [band, clip, clip_dark]:
 			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			m.albedo_color.a = 0.45
 	# Boucle fermée dans le plan de la section : dessus du bras (soulevé si lâche), puis les côtés
 	# qui descendent sous le niveau du matelas, et retour par-dessous.
+	# Dessous du bras : deux quarts d'ellipse du bord (la plus grande largeur) au point d'appui
 	var loop := PackedVector2Array()
-	var e0 := float(pr["edges"][0]) - 0.003 - lift * 0.5
-	var e1 := float(pr["edges"][1]) + 0.003 + lift * 0.5
-	var bottom := Patient.TABLE_TOP - 0.012
-	loop.append(Vector2(e0, bottom))
-	for i in prof.size():
+	var bottom := Patient.TABLE_TOP - 0.003
+	var pa := prof[0] + Vector2(-0.0015 - lift * 0.5, lift)
+	var pb := prof[prof.size() - 1] + Vector2(0.0015 + lift * 0.5, lift)
+	var cm := (pa.x + pb.x) * 0.5
+	for i in 8:
+		var ph := PI * 0.5 * (1.0 - i / 8.0)
+		loop.append(Vector2(cm + (pa.x - cm) * cos(ph), pa.y - (pa.y - bottom) * sin(ph)))
+	for i in range(1, prof.size() - 1):
 		var q := prof[i]
 		loop.append(Vector2(q.x, q.y + lift))
-	loop.append(Vector2(e1, bottom))
+	for i in 8:
+		var ph := PI * 0.5 * i / 8.0
+		loop.append(Vector2(cm + (pb.x - cm) * cos(ph), pb.y - (pb.y - bottom) * sin(ph)))
 	var m := loop.size()
 	var norms := PackedVector2Array()
 	for i in m:
@@ -401,17 +407,17 @@ func tourniquet_node(side: String, t: float, slack := 0.0, preview := false) -> 
 	mi.material_override = dm
 	root.add_child(mi)
 	# Boucle à clip : sur le dessus du bras, un peu vers l'extérieur, à plat sur la bande
-	var ib := int(prof.size() * 0.62) + 1
+	var ib := 8 + int(prof.size() * 0.6)
 	var pos: Vector3 = to3.call(loop[ib])
 	var n0 := (perp * norms[ib].x + Vector3.UP * norms[ib].y).normalized()
 	var tan := n0.cross(dir).normalized()
 	var bas := Basis(tan, n0, dir).orthonormalized()
-	var body := MeshUtil.box_instance(root, Vector3(0.019, 0.0045, 0.029), Vector3.ZERO, clip, "Boucle")
-	body.transform = Transform3D(bas, pos + n0 * (thick + 0.0022))
-	var btn := MeshUtil.box_instance(root, Vector3(0.011, 0.0012, 0.018), Vector3.ZERO, clip_dark, "Poussoir")
-	btn.transform = Transform3D(bas, pos + n0 * (thick + 0.005))
+	var body := MeshUtil.box_instance(root, Vector3(0.02, 0.0035, 0.027), Vector3.ZERO, clip, "Boucle")
+	body.transform = Transform3D(bas, pos + n0 * (thick + 0.0018))
+	var btn := MeshUtil.box_instance(root, Vector3(0.014, 0.0012, 0.006), Vector3.ZERO, clip_dark, "Poussoir")
+	btn.transform = Transform3D(bas, pos + n0 * (thick + 0.0042))
 	# Bout libre : couché sur la bande, vers le milieu du bras
-	var it := maxi(1, int(prof.size() * 0.45))
+	var it := 8 + int(prof.size() * 0.4)
 	var pt: Vector3 = to3.call(loop[it])
 	var nt := (perp * norms[it].x + Vector3.UP * norms[it].y).normalized()
 	var tt := nt.cross(dir).normalized()

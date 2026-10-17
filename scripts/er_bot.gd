@@ -89,10 +89,9 @@ func shot_extra(args: Dictionary) -> void:
 				# Ponction en cours : aiguille dans la veine, sang dans la chambre de reflux
 				var h := {"pos": pr.chosen["p"], "normal": Vector3.UP, "collider": null}
 				pr.press(h)
-				for k in 3:
-					pr.drag(h, Vector2.UP * IVProcedure.PUSH_PX * 0.5)
+				pr._advance(IVProcedure.PUSH_PX * 1.5)
 				if args["ivpart"] == "avance":
-					pr.drag(h, Vector2.UP * IVProcedure.PUSH_PX * 0.6)
+					pr._advance(IVProcedure.PUSH_PX * 0.6)
 			"seringue":
 				_take("seringue", {"drug": "morphine", "dose": 3.0, "route": "IV", "name": "Morphine 3 mg IV"})
 				g._syringe_press(g.gear.iv["port"], "bras_R")
