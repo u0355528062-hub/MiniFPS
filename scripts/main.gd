@@ -221,7 +221,7 @@ func _vignette() -> void:
 # ---------------------------------------------------------------- Boucle
 
 func _process(delta: float) -> void:
-	if state == "menu" and _menu_cam:
+	if state in ["menu", "story_intro"] and _menu_cam:
 		_menu_t += delta * 0.06
 		var a := 0.9 + sin(_menu_t) * 0.6
 		var c := Vector3(-0.3, 1.0, 0.0)

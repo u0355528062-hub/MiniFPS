@@ -15,7 +15,7 @@ func _init() -> void:
 	profile = {"name": "Yanis K.", "age": 23, "skin": Color(0.86, 0.72, 0.6), "hair": Color(0.04, 0.03, 0.025), "bald": 0.0, "stubble": 0.4, "collar": false,
 		"reply": "J'peux… pas… respirer…"}
 	arrival = "Yanis, 23 ans, asthmatique depuis l'enfance, arrive en ambulance : crise depuis six heures, une dizaine de bouffées de Ventoline sans effet. Il est assis, penché en avant, parle mot par mot.\n\nOn l'a allongé, dossier relevé : il tire sur son cou à chaque inspiration."
-	arrival_vitals = "Ambulance : FC 128 · PA 135/80 · SpO2 88 % (air) · FR 34 · DEP impossible"
+	arrival_vitals = "Ambulance : cœur 128/min (FC) · tension 135/80 (PA) · oxygène 88 %, bas (SpO2) · respiration 34/min (FR) · souffle trop court pour être mesuré"
 	lines = ["J'peux… pas… respirer…", "Aidez… moi…", "Ça… siffle…"]
 	diag_ok = "Asthme aigu grave"
 	orient_ok = "Hospitalisation en pneumologie"
@@ -95,11 +95,11 @@ func on_drug(drug: String, dose: float, route: String) -> void:
 			_neb += 1
 			severity = maxf(0.05, severity - 0.08)
 		"midazolam", "morphine":
-			fault("Sédation dans un asthme aigu grave : il risque l'arrêt respiratoire", 12.0)
+			fault("Calmant (sédatif) dans une crise d'asthme grave : il risque d'arrêter de respirer", 12.0)
 			severity = minf(1.0, severity + 0.3)
 		"adrenaline":
 			if route == "IV":
-				fault("Adrénaline IV en bolus : pas en première intention", 6.0)
+				fault("Adrénaline d'un coup dans la veine : pas en premier traitement", 6.0)
 
 
 func lab(exam: String) -> String:
@@ -121,15 +121,15 @@ func xray() -> Dictionary:
 
 func objectives() -> Array:
 	return [
-		["Saturation surveillée (capteur SpO2)", 6.0, did("spo2")],
-		["Auscultation des poumons", 8.0, did("auscultation")],
-		["Oxygène", 10.0, did("o2_masque") or did("o2_nebu") or did("o2_lunettes")],
-		["Nébulisation de salbutamol", 22.0, did("drug:salbutamol")],
-		["Nébulisations répétées (2 ou plus)", 8.0, _neb >= 2],
-		["Ipratropium associé", 5.0, did("drug:ipratropium")],
-		["Corticoïdes IV", 12.0, did("drug:methylpred")],
-		["Gaz du sang", 5.0, did("exam:gds")],
-		["Crise contrôlée", 10.0, severity < 0.4],
-		["Diagnostic juste", 7.0, did("diag_ok")],
-		["Orientation juste", 7.0, did("orient_ok")],
+		["Surveiller l'oxygène (pince SpO2)", 6.0, did("spo2"), "Pour voir s'il manque d'oxygène et si le traitement marche."],
+		["Écouter les poumons (stéthoscope)", 8.0, did("auscultation"), "Des sifflements : les bronches sont serrées. Un silence : c'est très grave."],
+		["Oxygène", 10.0, did("o2_masque") or did("o2_nebu") or did("o2_lunettes"), "Il en manque : on en donne tout de suite."],
+		["Aérosol de salbutamol", 22.0, did("drug:salbutamol"), "Respiré, il ouvre les bronches en quelques minutes."],
+		["Répéter l'aérosol (2 fois ou plus)", 8.0, _neb >= 2, "Une crise grave a besoin de plusieurs aérosols."],
+		["Ajouter l'ipratropium dans l'aérosol", 5.0, did("drug:ipratropium"), "Il renforce l'effet du salbutamol."],
+		["Cortisone dans la veine", 12.0, did("drug:methylpred"), "Elle calme l'inflammation des bronches (effet en quelques heures)."],
+		["Gaz du sang (prise de sang)", 5.0, did("exam:gds"), "Mesure l'oxygène et le CO2 : montre s'il s'épuise."],
+		["Crise maîtrisée", 10.0, severity < 0.4, "Il respire mieux et peut parler."],
+		["Diagnostic : crise d'asthme grave", 7.0, did("diag_ok"), "Dans le dossier (Tab), onglet Conclusion."],
+		["Bonne orientation", 7.0, did("orient_ok"), "Hospitalisation (réanimation si la crise reste grave)."],
 	]

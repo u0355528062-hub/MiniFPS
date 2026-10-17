@@ -19,7 +19,7 @@ func _init() -> void:
 	profile = {"name": "Michel R.", "age": 58, "skin": Color(1.0, 0.95, 0.93), "hair": Color(0.35, 0.33, 0.32), "bald": 0.6, "stubble": 0.45, "collar": false,
 		"reply": "…"}
 	arrival = "Michel, 58 ans, est installé au déchocage pour une douleur dans la poitrine depuis 40 minutes. Vous entrez dans la salle : il pousse un râle, son regard se fige, il ne répond plus.\n\nVous êtes seul dans la salle pour l'instant. Le scope n'est pas encore branché ; le chariot d'urgence et le défibrillateur sont à côté du brancard."
-	arrival_vitals = "Avant le malaise (IAO) : FC 96 · PA 145/90 · SpO2 96 % · douleur 7/10"
+	arrival_vitals = "Avant le malaise : cœur 96/min (FC) · tension 145/90 (PA) · oxygène 96 % (SpO2) · douleur 7/10"
 	diag_ok = "Arrêt cardiaque sur fibrillation ventriculaire"
 	orient_ok = "Salle de coronarographie (cardiologue appelé)"
 	summary_good = "Le cœur a repris une activité efficace. Michel part en salle de coronarographie : son artère interventriculaire antérieure est débouchée. La réanimation commence."
@@ -73,11 +73,11 @@ func tick(delta: float) -> void:
 func on_shock(_energy: int) -> void:
 	var n: int = journal().count("choc")
 	if n >= 2 and t() - _last_shock_t < 60.0 and _cpr_since_shock < 30.0:
-		fault("Chocs rapprochés sans massage entre eux (2 min de massage après chaque choc)", 4.0)
+		fault("Chocs trop rapprochés : il faut 2 minutes de massage après chaque choc", 4.0)
 	_last_shock_t = t()
 	_cpr_since_shock = 0.0
 	if not physio.shockable():
-		fault("Choc délivré sur un rythme non choquable", 10.0)
+		fault("Choc sur un cœur qui ne fibrillait pas (rythme non choquable)", 10.0)
 		return
 	var adr := float(physio.totals.get("adrenaline", 0.0))
 	var amio := float(physio.totals.get("amiodarone", 0.0))
@@ -105,14 +105,14 @@ func on_drug(drug: String, dose: float, route: String) -> void:
 	match drug:
 		"adrenaline":
 			if route == "IV" and physio.in_arrest() and shocks < 2:
-				fault("Adrénaline trop tôt (dans une FV : après le 3e choc)", 3.0)
+				fault("Adrénaline trop tôt : dans une fibrillation, c'est après le 3e choc", 3.0)
 			if not physio.in_arrest():
-				fault("Adrénaline en bolus alors que le cœur est reparti", 8.0)
+				fault("Adrénaline d'un coup dans la veine alors que le cœur est reparti", 8.0)
 		"amiodarone":
 			if shocks < 3:
-				fault("Amiodarone trop tôt (après le 3e choc)", 3.0)
+				fault("Amiodarone trop tôt : c'est après le 3e choc", 3.0)
 		"atropine":
-			fault("Atropine : inutile dans l'arrêt cardiaque", 3.0)
+			fault("Atropine : inutile dans l'arrêt du cœur", 3.0)
 
 
 func lab(exam: String) -> String:
@@ -146,16 +146,16 @@ func objectives() -> Array:
 	var amio := journal().has("drug:amiodarone")
 	var rosc := journal().has("racs")
 	return [
-		["Arrêt reconnu (absence de réponse / respiration / pouls)", 10.0, reco < 30.0],
-		["Massage débuté dans la première minute", 15.0, cpr - arrest_t < 60.0],
-		["Électrodes de défibrillation collées", 5.0, journal().has("pads")],
-		["Premier choc en moins de 3 minutes", 15.0, shock1 < 180.0],
-		["Ventilation au ballon (30:2)", 5.0, vent],
-		["Voie veineuse posée", 5.0, journal().has("vvp")],
-		["Adrénaline 1 mg IV", 8.0, adr],
-		["Amiodarone 300 mg IV après le 3e choc", 8.0, amio],
-		["Reprise d'activité cardiaque (RACS)", 15.0, rosc],
-		["ECG 12 dérivations après la reprise", 6.0, journal().has("ecg12") and journal().first("ecg12") > journal().first("racs")],
-		["Diagnostic juste", 4.0, journal().has("diag_ok")],
-		["Orientation juste (coronarographie)", 4.0, journal().has("orient_ok")],
+		["Reconnaître l'arrêt : il ne répond pas, ne respire pas, pas de pouls", 10.0, reco < 30.0, "Moins de 10 secondes pour le constater : chaque seconde sans massage abîme le cerveau."],
+		["Masser dans la première minute", 15.0, cpr - arrest_t < 60.0, "Le massage fait circuler le sang à la place du cœur : c'est lui qui protège le cerveau."],
+		["Coller les électrodes du défibrillateur", 5.0, journal().has("pads"), "Une sous la clavicule droite, une sous l'aisselle gauche : le courant traverse le cœur."],
+		["Premier choc électrique en moins de 3 minutes", 15.0, shock1 < 180.0, "Dans une fibrillation, le cœur tremble sans pomper : seul le choc peut le remettre en rythme."],
+		["Donner de l'air au ballon (2 insufflations toutes les 30 compressions)", 5.0, vent, "Le sang qui circule doit aussi être oxygéné."],
+		["Poser une voie veineuse", 5.0, journal().has("vvp"), "Un petit tuyau dans la veine pour injecter les médicaments."],
+		["Adrénaline 1 mg dans la veine", 8.0, adr, "Après le 3e choc : elle resserre les vaisseaux et aide le cœur à repartir."],
+		["Amiodarone 300 mg dans la veine après le 3e choc", 8.0, amio, "Elle calme le cœur qui fibrille et aide les chocs à marcher."],
+		["Faire repartir le cœur (RACS)", 15.0, rosc, "Le pouls revient : c'est le but de toute la réanimation."],
+		["Faire un ECG après la reprise", 6.0, journal().has("ecg12") and journal().first("ecg12") > journal().first("racs"), "L'électrocardiogramme montre l'infarctus qui a causé l'arrêt."],
+		["Diagnostic : arrêt du cœur (fibrillation)", 4.0, journal().has("diag_ok"), "Dans le dossier (Tab), onglet Conclusion."],
+		["L'envoyer déboucher son artère (coronarographie)", 4.0, journal().has("orient_ok"), "Une artère du cœur est bouchée : il faut la rouvrir au plus vite."],
 	]

@@ -14,7 +14,7 @@ func _init() -> void:
 	profile = {"name": "Patrick B.", "age": 47, "skin": Color(0.98, 0.92, 0.88), "hair": Color(0.2, 0.14, 0.09), "bald": 0.1, "stubble": 0.3, "collar": false,
 		"reply": "Hmmm… laissez…"}
 	arrival = "Patrick, 47 ans, diabétique sous insuline, a été retrouvé par un collègue à son bureau, confus et agressif, puis il s'est endormi. Il n'a pas mangé à midi.\n\nIl est trempé de sueur et ne répond plus aux questions."
-	arrival_vitals = "SMUR : FC 108 · PA 138/82 · SpO2 97 % · FR 16 · Glasgow 8"
+	arrival_vitals = "SAMU : cœur 108/min (FC) · tension 138/82 (PA) · oxygène 97 % (SpO2) · respiration 16/min (FR) · conscience 8/15 (Glasgow)"
 	diag_ok = "Hypoglycémie sévère"
 	orient_ok = "Unité d'hospitalisation de courte durée (surveillance)"
 	summary_good = "Patrick s'est réveillé, a mangé un plateau-repas et sa glycémie reste stable. On revoit avec lui ses doses d'insuline avant sa sortie."
@@ -75,11 +75,11 @@ func on_drug(drug: String, dose: float, route: String) -> void:
 	match drug:
 		"glucose30":
 			if not did("glycemie"):
-				fault("Sucre injecté sans glycémie capillaire préalable", 3.0)
+				fault("Sucre injecté sans avoir mesuré la glycémie avant", 3.0)
 		"naloxone":
-			fault("Naloxone : pas d'argument pour une overdose (glycémie !)", 2.0)
+			fault("Naloxone (antidote de l'héroïne) : rien ne fait penser à une overdose", 2.0)
 		"midazolam":
-			fault("Sédation d'un patient agité par une hypoglycémie : il faut du sucre", 8.0)
+			fault("Calmant donné à un patient qui manque de sucre : il lui faut du sucre", 8.0)
 		"adrenaline":
 			fault("Adrénaline non indiquée", 6.0)
 
@@ -96,12 +96,12 @@ func lab(exam: String) -> String:
 func objectives() -> Array:
 	var sugar := did("drug:glucose30") or did("drug:glucagon")
 	return [
-		["Glycémie capillaire dans les 3 premières minutes", 20.0, when("glycemie") < 180.0],
-		["Resucrage (glucosé 30 % IV ou glucagon IM)", 25.0, sugar],
-		["Voie veineuse", 8.0, did("vvp")],
-		["Glycémie contrôlée après le resucrage", 12.0, _rechecked],
-		["Patient réveillé", 10.0, _woke],
-		["Interrogatoire au réveil", 5.0, journal().count("question") >= 2],
-		["Diagnostic juste", 10.0, did("diag_ok")],
-		["Orientation (surveillance)", 10.0, did("orient_ok")],
+		["Mesurer le sucre au bout du doigt (glycémie) dans les 3 minutes", 20.0, when("glycemie") < 180.0, "Devant quelqu'un qui ne se réveille pas, c'est le premier réflexe : rapide, et ça se soigne."],
+		["Lui donner du sucre (glucosé 30 % dans la veine)", 25.0, sugar, "Le cerveau ne fonctionne qu'avec du sucre : il se réveille en quelques secondes."],
+		["Poser une voie veineuse", 8.0, did("vvp"), "Un petit tuyau dans la veine pour injecter le sucre."],
+		["Recontrôler le sucre après", 12.0, _rechecked, "L'insuline agit encore : le sucre peut redescendre."],
+		["Patient réveillé", 10.0, _woke, "Le signe que le traitement a marché."],
+		["Lui parler à son réveil (T)", 5.0, journal().count("question") >= 2, "Comprendre pourquoi c'est arrivé, pour que ça ne recommence pas."],
+		["Diagnostic : manque de sucre grave (hypoglycémie)", 10.0, did("diag_ok"), "Dans le dossier (Tab), onglet Conclusion."],
+		["Le garder en surveillance quelques heures (UHCD)", 10.0, did("orient_ok"), "Le sucre peut rechuter tant que l'insuline agit."],
 	]

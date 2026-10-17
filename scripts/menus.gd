@@ -223,7 +223,7 @@ func _build_main() -> Control:
 	prog.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	prog.offset_left = -470
 	prog.offset_right = -60
-	prog.offset_top = -270
+	prog.offset_top = -70
 	prog.offset_bottom = -70
 	prog.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	prog.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -303,7 +303,7 @@ func _menu_button(title: String, sub: String, icon_kind: String, primary := fals
 	row.add_child(tv)
 	tv.add_child(UIKit.text(title, 25, fg, 800 if primary else 700))
 	if sub != "":
-		tv.add_child(UIKit.text(sub, 16, Color(fg, 0.75) if primary else UIKit.TEXT_DIM, 500))
+		tv.add_child(UIKit.text(sub, 17, Color(fg, 0.75) if primary else UIKit.TEXT_DIM, 500))
 	var arrow := UIKit.icon("arrow", 20, Color(fg, 0.6))
 	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(arrow)
