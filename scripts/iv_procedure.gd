@@ -634,10 +634,10 @@ func _pull_band(px: float) -> void:
 		_next()
 
 
-func _show_band(slack: float) -> void:
+func _show_band(slack: float, preview := false) -> void:
 	if _band:
 		_band.queue_free()
-	_band = gear.tourniquet_node(side, _band_t, slack, slack > 0.0)
+	_band = gear.tourniquet_node(side, _band_t, slack, preview)
 	add_child(_band)
 	gear_layer(_band)
 
@@ -946,6 +946,13 @@ func tick(delta: float, h: Dictionary) -> void:
 		_ring.visible = false
 		return
 	var id := inv.current_id()
+	# Hors de la vue rapprochée : rien ne reste en l'air (cathéter pas encore piqué, garrot pas serré)
+	var here := zv.active and zv.zone.begins_with("perf_")
+	if _cath:
+		_cath.visible = (here or _phase >= 1) and not chosen.is_empty()
+	if _band and not here and _pull <= 0.0 and _loosen < 0.0:
+		_band.queue_free()
+		_band = null
 	if active and step != _auto_selected:
 		_auto_selected = step
 		_select_needed()
@@ -964,7 +971,7 @@ func tick(delta: float, h: Dictionary) -> void:
 			var t := clampf(arm_t(h["pos"]), 0.2, ELBOW_T - 0.06)
 			if absf(t - _band_t) > 0.01 or _band == null:
 				_band_t = t
-				_show_band(1.0 - _pull / PULL_PX)
+				_show_band(1.0 - _pull / PULL_PX, _pull <= 0.0)
 		elif _band and _pull <= 0.0:
 			_band.queue_free()
 			_band = null
