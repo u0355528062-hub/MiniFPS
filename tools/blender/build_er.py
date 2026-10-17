@@ -56,7 +56,7 @@ TOP = 0.80
 
 def build_brancard(m):
     """Brancard de déchocage : châssis sur 4 grandes roues, colonne hydraulique, plateau, matelas
-    (dessus à 0,80 m), barrières latérales (baissée côté joueur +Z, levée côté -Z), poignées, mât
+    (dessus à 0,80 m), barrières latérales baissées (soins des deux côtés), poignées, mât
     porte-sérum. Tête vers +X, plateau de x = -1,45 à 0,67."""
     p = []
     x0, x1 = -1.45, 0.67
@@ -88,7 +88,7 @@ def build_brancard(m):
     # Oreiller mince sous la tête
     p.append(bl.box("oreiller", (0.3, 0.42, 0.035), g(x1 - 0.2, TOP + 0.012, 0), bl.mat("Taie", (0.9, 0.92, 0.95), 0.85), bev=0.016, seg=4))
     # Barrières latérales : tubes
-    for side, up in ((1, False), (-1, True)):
+    for side, up in ((1, False), (-1, False)):  # barrières baissées des deux côtés (gestes au bras droit)
         z = side * (w / 2 + 0.02)
         ys = (TOP + 0.2, TOP + 0.03) if up else (deck - 0.06, deck - 0.14)
         for xx in (x0 + 0.35, x1 - 0.55):

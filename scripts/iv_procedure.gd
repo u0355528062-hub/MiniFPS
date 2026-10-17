@@ -87,7 +87,7 @@ func setup(p_gestures: Node) -> void:
 	for s in ["L", "R"]:
 		var mid := Patient.arm_top(s, 0.55)
 		var yaw := 0.0 if s == "L" else PI
-		zv.define("perf_" + s, "Voie veineuse — bras %s" % ("gauche" if s == "L" else "droit"), mid + Vector3(0, 0.01, 0), yaw, 60.0, 0.36, 0.1, 0.8)
+		zv.define("perf_" + s, "Voie veineuse — bras %s" % ("gauche" if s == "L" else "droit"), mid + Vector3(0, 0.01, 0), yaw, 64.0, 0.36, 0.1, 0.8)
 	zv.entered.connect(_on_zone_entered)
 	_ring = MeshInstance3D.new()
 	var tm := TorusMesh.new()
@@ -144,7 +144,7 @@ func build_veins() -> void:
 		if v["id"] == "pli":
 			continue
 		for q in (v["pts"] as PackedVector3Array):
-			arr.append(Vector4(q.x, q.y, q.z, v["w"]))
+			arr.append(Vector4(q.x, q.y, q.z, float(v["w"]) * 1.6))
 		arr.append(Vector4(0, 0, 0, -1.0))
 	patient.skin_mat.set_shader_parameter("veins", arr)
 	patient.skin_mat.set_shader_parameter("vein_n", arr.size())
@@ -213,7 +213,7 @@ func _vein_decal(v: Dictionary) -> void:
 		along = (along - n * along.dot(n)).normalized()
 		var d := Decal.new()
 		d.name = "Veine"
-		d.size = Vector3(w * 4.0, 0.03, a.distance_to(b) + w * 2.5)
+		d.size = Vector3(w * 7.0, 0.03, a.distance_to(b) + w * 2.5)
 		d.texture_albedo = tx["vein"]
 		d.texture_normal = tx["vein_n"]
 		d.normal_fade = 0.2
@@ -249,10 +249,10 @@ func _tick_vis(delta: float) -> void:
 			changed = true
 			for e in _vein_decals[s]:
 				var d: Decal = e[0]
-				d.modulate.a = clampf((_vis[s] - 0.15) * 1.25, 0.0, 1.0)
+				d.modulate.a = clampf((_vis[s] - 0.15) * 0.75, 0.0, 1.0)
 				d.normal_fade = 0.2
 	if changed:
-		patient.skin_mat.set_shader_parameter("vein_vis", Vector2(_vis["L"], _vis["R"]))
+		patient.skin_mat.set_shader_parameter("vein_vis", Vector2(_vis["L"], _vis["R"]) * 0.4)
 
 
 # ---------------------------------------------------------------- Textures (décalcomanies)
@@ -270,11 +270,11 @@ static func _textures() -> Dictionary:
 		var fade := smoothstep(0.0, 0.2, fy) * smoothstep(1.0, 0.8, fy)
 		for x in w:
 			var u := (x + 0.5) / w * 2.0 - 1.0
-			var prof := exp(-u * u / 0.09)
+			var prof := exp(-u * u / 0.2)
 			var a := prof * fade
-			img.set_pixel(x, y, Color(0.36, 0.42, 0.66, a * 0.85))
-			var slope := -2.0 * u / 0.09 * prof
-			var n := Vector3(-slope * 0.22 * fade, 0.0, 1.0).normalized()
+			img.set_pixel(x, y, Color(0.5, 0.55, 0.7, a * 0.55))
+			var slope := -2.0 * u / 0.2 * prof
+			var n := Vector3(-slope * 0.5 * fade, 0.0, 1.0).normalized()
 			nimg.set_pixel(x, y, Color(n.x * 0.5 + 0.5, 0.5, n.z * 0.5 + 0.5, a))
 	img.generate_mipmaps()
 	nimg.generate_mipmaps()
