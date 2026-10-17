@@ -1,7 +1,8 @@
 class_name Records
 extends RefCounted
-## Meilleur résultat de chaque intervention (user://records.cfg) : note, points et temps, affichés
-## sur la carte de l'intervention au menu ; l'écran de fin signale un nouveau record.
+## Sauvegarde (user://records.cfg) : meilleur résultat de chaque cas (note, points et temps, affichés
+## sur la carte du cas en entraînement ; l'écran de fin signale un nouveau record) et progression
+## de l'histoire « Première garde ».
 
 const PATH := "user://records.cfg"
 const RANKS := ["D", "C", "B", "A", "S"]
@@ -36,3 +37,27 @@ static func submit(op_id: String, grade: String, score: float, time: float) -> b
 	cfg.set_value(op_id, "temps", snappedf(time, 0.1))
 	cfg.save(PATH)
 	return true
+
+
+# ---------------------------------------------------------------- Mode histoire
+
+## Progression de l'histoire « Première garde » : prochain patient (0 à 3), histoire finie au moins
+## une fois, résultat de chaque patient {note, points, vivant}.
+static func story() -> Dictionary:
+	var cfg := ConfigFile.new()
+	var out := {"chapter": 0, "done": false, "results": {}}
+	if cfg.load(PATH) != OK or not cfg.has_section("histoire"):
+		return out
+	out["chapter"] = int(cfg.get_value("histoire", "chapitre", 0))
+	out["done"] = bool(cfg.get_value("histoire", "terminee", false))
+	out["results"] = cfg.get_value("histoire", "resultats", {})
+	return out
+
+
+static func save_story(chapter: int, results: Dictionary, done := false) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(PATH)
+	cfg.set_value("histoire", "chapitre", chapter)
+	cfg.set_value("histoire", "resultats", results)
+	cfg.set_value("histoire", "terminee", done or bool(cfg.get_value("histoire", "terminee", false)))
+	cfg.save(PATH)
