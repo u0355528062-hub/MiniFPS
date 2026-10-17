@@ -37,7 +37,7 @@ func _draw() -> void:
 			var pts2 := PackedVector2Array()
 			pts2.append(P.call(0.5, 0.06))
 			for i in 25:
-				var a := PI * 1.15 - (PI * 1.3) * i / 24.0
+				var a := PI - 0.35 + (PI + 0.7) * i / 24.0
 				pts2.append(P.call(0.5 + cos(a) * 0.3, 0.62 - sin(a) * 0.3))
 			draw_colored_polygon(pts2, c)
 			draw_string(UIKit.bold(), P.call(0.36, 0.76), "O₂", HORIZONTAL_ALIGNMENT_LEFT, -1, int(s * 0.26), Color(0, 0, 0, 0.55))
