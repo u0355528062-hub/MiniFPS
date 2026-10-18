@@ -1034,9 +1034,32 @@ func _start_cpr(p: Vector3) -> void:
 		_hands = Hands.load_model("mains_rcp")
 		add_child(_hands)
 	_hands.visible = true
+	_cpr_camera(true)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if not game.get("journal").has("rcp"):
 		ev("rcp", "Massage cardiaque externe débuté")
+
+
+## Pendant le massage, la vue se place de trois quarts côté tête : on voit les mains sur le sternum
+## et les bras tendus de profil (vus du côté du soignant, ils boucheraient l'écran).
+var _cam_before := []
+
+
+func _cpr_camera(on: bool) -> void:
+	if on and _cam_before.is_empty():
+		_cam_before = [zv.get("_yaw"), zv.get("_pitch"), zv.get("_dist")]
+		_cam_move(PI * 0.5 - 0.45, deg_to_rad(38.0), 0.95)
+	elif not on and not _cam_before.is_empty():
+		_cam_move(_cam_before[0], _cam_before[1], _cam_before[2])
+		_cam_before = []
+
+
+func _cam_move(yaw: float, pitch: float, dist: float) -> void:
+	zv.set("_from", zv.camera.global_transform)
+	zv.set("_t", 0.0)
+	zv.set("_yaw", yaw)
+	zv.set("_pitch", pitch)
+	zv.set("_dist", dist)
 
 
 func _stop_cpr() -> void:
@@ -1045,6 +1068,7 @@ func _stop_cpr() -> void:
 	_push = 0.0
 	if _hands:
 		_hands.visible = false
+	_cpr_camera(false)
 	patient.set_compression(0.0)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
