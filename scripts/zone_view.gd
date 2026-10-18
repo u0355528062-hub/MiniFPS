@@ -82,6 +82,37 @@ func enter(id: String) -> void:
 	entered.emit(id)
 
 
+## Passe à une autre vue sans quitter la vue rapprochée (transition douce depuis la vue actuelle).
+func focus(id: String) -> void:
+	if not active or _leaving:
+		enter(id)
+		return
+	var pr: Dictionary = _presets[id]
+	zone = id
+	title = pr["label"]
+	_pivot0 = pr["p"]
+	_pivot = _pivot0
+	_yaw = pr["yaw"]
+	_pitch = pr["pitch"]
+	_dist = pr["d"]
+	_dmin = pr["min"]
+	_dmax = pr["max"]
+	_from = camera.global_transform
+	_t = 0.0
+	entered.emit(id)
+
+
+## Recentre la vue sur un point (même angle), à la distance voulue, en douceur.
+func glide(pivot: Vector3, dist: float) -> void:
+	if not active or _leaving:
+		return
+	_from = camera.global_transform
+	_t = 0.0
+	_pivot0 = pivot
+	_pivot = pivot
+	_dist = clampf(dist, _dmin, _dmax)
+
+
 func exit() -> void:
 	if not active or _leaving:
 		return

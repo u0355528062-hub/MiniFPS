@@ -69,6 +69,48 @@ func run_steps(n: int) -> void:
 	await wait(0.2)
 
 
+## Capture : souris posée sur un point du monde (--aim=x,y,z), pour voir l'aperçu sous la souris.
+func shot_extra(args: Dictionary) -> void:
+	g = game.gestures
+	inv = game.inv
+	if args.has("iv"):
+		# Voie veineuse sur le bras droit, faite jusqu'à l'étape N (8 : perfusion branchée)
+		var n := int(args["iv"])
+		game.flags["gants"] = true
+		game.zone_view.enter("perf_R")
+		await wait(0.5)
+		_iv("R", clampi(n - 1, 0, 6))
+		var pr: IVProcedure = g.iv_proc
+		if n >= 8:
+			_take("perfuseur")
+			pr.press({"pos": g.gear.iv["hub"], "normal": Vector3.UP, "collider": null})
+		match String(args.get("ivpart", "")):
+			"reflux", "avance":
+				# Ponction en cours : aiguille dans la veine, sang dans la chambre de reflux
+				var h := {"pos": pr.chosen["p"], "normal": Vector3.UP, "collider": null}
+				pr.press(h)
+				pr._advance(IVProcedure.PUSH_PX * 1.5)
+				if args["ivpart"] == "avance":
+					pr._advance(IVProcedure.PUSH_PX * 0.6)
+			"seringue":
+				_take("seringue", {"drug": "morphine", "dose": 3.0, "route": "IV", "name": "Morphine 3 mg IV"})
+				g._syringe_press(g.gear.iv["port"], "bras_R")
+				g._hold = {}
+				g.iv_proc.syringe_progress(0.4)
+		await wait(float(args.get("wait", "2.5")))
+	if args.has("aim"):
+		var a: PackedFloat64Array = String(args["aim"]).split_floats(",")
+		_aim_at(Vector3(a[0], a[1], a[2]))
+
+
+## Garde la souris sur un point du monde (vue rapprochée) pendant toute la capture.
+func _aim_at(p: Vector3) -> void:
+	var cb := func() -> void:
+		if game.zone_view.active:
+			get_viewport().warp_mouse(game.zone_view.camera.unproject_position(p))
+	get_tree().process_frame.connect(cb)
+
+
 func _take(id: String, data := {}) -> void:
 	if not inv.has(id) or id == "seringue":
 		inv.add(id, data)
@@ -109,31 +151,63 @@ func _monitor() -> void:
 	_log("scope branché")
 
 
-func _iv(side := "R") -> void:
+## Voie veineuse complète, étape par étape, avec les mêmes gestes que la souris (clic, glisser).
+func _iv(side := "R", stop_after := 7) -> void:
 	if not game.flags["gants"]:
 		game._on_interact(_find_interactable("gants"))
-	_take("antiseptique")
-	g._disinfected[side] = true
-	_take("garrot")
-	g.gear.place_tourniquet(side, 0.42)
-	g._update_vein_vis()
-	_take("catheter18")
-	var p: Vector3 = g.veins[side][3]
-	g._catheter_press(p)
-	if g._iv_try.is_empty():
-		_log("ÉCHEC : ponction ratée sur la veine")
-		return
-	g._iv_try["drag"] = 100.0
-	g._iv_done()
-	g.gear.remove_tourniquet()
-	_take("tubes")
-	g._process(0.0)
-	var port: Vector3 = g.gear.iv["port"]
-	inv.select_id("tubes")
-	if g._near_port(port):
-		inv.use_current()
-		game.event("prelevement", "Tubes prélevés")
-	_log("voie veineuse : %s" % game.journal.has("vvp"))
+	for id in ["garrot", "antiseptique", "catheter18"]:
+		if not inv.has(id):
+			inv.add(id)
+	var pr: IVProcedure = g.iv_proc
+	pr.start(side, false)
+	var arm := func(t: float) -> Dictionary:
+		var q := Patient.arm_top(side, t)
+		return {"pos": q, "normal": Vector3.UP, "collider": null}
+	var steps := [
+		func() -> void:  # 1. garrot au-dessus du coude, on tire pour serrer
+			var h: Dictionary = arm.call(0.34)
+			pr.press(h)
+			pr.drag(h, Vector2(IVProcedure.PULL_PX, 0.0))
+			pr.release(h),
+		func() -> void:  # 2. désinfection en frottant
+			var h: Dictionary = arm.call(0.5)
+			pr.press(h)
+			for k in 10:
+				pr.drag(h, Vector2(IVProcedure.RUB_PX / 10.0, 0.0))
+			pr.release(h),
+		func() -> void:  # 3. palpation de la veine du pli du coude
+			var q: Vector3 = (pr.vein_by("pli", side)["pts"] as PackedVector3Array)[1]
+			pr.press({"pos": q, "normal": Vector3.UP, "collider": null})
+			pr._palpate(pr.vein_near(q, side)),
+		func() -> void:  # 4. ponction : l'aiguille entre, reflux, on avance le cathéter, on retire l'aiguille
+			var h: Dictionary = {"pos": pr.chosen["p"], "normal": Vector3.UP, "collider": null}
+			pr.press(h)
+			for k in 6:
+				pr.drag(h, pr._screen_dir() * IVProcedure.PUSH_PX * 0.5)
+			for k in 6:
+				pr.drag(h, -pr._screen_dir() * IVProcedure.PUSH_PX * 0.5)
+			pr.release(h),
+		func() -> void:  # 5. garrot desserré
+			pr.press(arm.call(0.36)),
+		func() -> void:  # 6. pansement transparent
+			var h := {"pos": g.gear.iv["hub"], "normal": Vector3.UP, "collider": null}
+			pr.press(h)
+			pr.drag(h, Vector2(IVProcedure.DRESS_PX, 0.0))
+			pr.release(h),
+	]
+	for i in mini(stop_after, steps.size()):
+		if not pr.active or pr.step != i:
+			_log("ÉCHEC : voie veineuse bloquée à l'étape %d (%s)" % [pr.step + 1, IVProcedure.STEPS[pr.step]])
+			return
+		(steps[i] as Callable).call()
+		if i == 3 and stop_after > 4 and g.gear.has_iv():
+			# Prélèvement sur le cathéter (avant de desserrer le garrot)
+			_take("tubes")
+			inv.select_id("tubes")
+			if g._near_port(g.gear.iv["port"]):
+				inv.use_current()
+				game.event("prelevement", "Tubes prélevés")
+	_log("voie veineuse : %s (étape %d/7)" % [game.journal.has("vvp"), pr.step + 1])
 
 
 func _find_interactable(id: String) -> Interactable:

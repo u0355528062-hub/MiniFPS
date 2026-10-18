@@ -56,7 +56,7 @@ TOP = 0.80
 
 def build_brancard(m):
     """Brancard de déchocage : châssis sur 4 grandes roues, colonne hydraulique, plateau, matelas
-    (dessus à 0,80 m), barrières latérales (baissée côté joueur +Z, levée côté -Z), poignées, mât
+    (dessus à 0,80 m), barrières latérales baissées (soins des deux côtés), poignées, mât
     porte-sérum. Tête vers +X, plateau de x = -1,45 à 0,67."""
     p = []
     x0, x1 = -1.45, 0.67
@@ -88,7 +88,7 @@ def build_brancard(m):
     # Oreiller mince sous la tête
     p.append(bl.box("oreiller", (0.3, 0.42, 0.035), g(x1 - 0.2, TOP + 0.012, 0), bl.mat("Taie", (0.9, 0.92, 0.95), 0.85), bev=0.016, seg=4))
     # Barrières latérales : tubes
-    for side, up in ((1, False), (-1, True)):
+    for side, up in ((1, False), (-1, False)):  # barrières baissées des deux côtés (gestes au bras droit)
         z = side * (w / 2 + 0.02)
         ys = (TOP + 0.2, TOP + 0.03) if up else (deck - 0.06, deck - 0.14)
         for xx in (x0 + 0.35, x1 - 0.55):
@@ -496,22 +496,159 @@ def build_armoire(m):
 
 # ---------------------------------------------------------------- Petit matériel (tenu en main)
 
+def _set_origin(ob, p):
+    """Déplace l'origine d'un objet (sans bouger sa géométrie) au point Blender p."""
+    p = Vector(p)
+    ob.data.transform(Matrix.Translation(-p))
+    ob.location = p
+    return ob
+
+
+def _zlathe(name, profile, material, segments=32):
+    """Révolution autour de l'axe +Z du jeu : profil [(rayon, z du jeu), ...]."""
+    return bl.lathe(name, profile, material, segments=segments, rot=(D(90), 0, 0))
+
+
 def build_seringue(m):
-    """Seringue 10 mL graduée : corps transparent, piston (nœud « Piston ») et embout luer. Axe +Z
-    du jeu vers l'embout ; origine au milieu du corps."""
-    nodes = {"seringue": [], "Piston": [], "Liquide": []}
+    """Seringue 10 mL graduée, type luer-lock : corps en polypropylène transparent (paroi épaisse),
+    graduations imprimées tous les 0,5 mL et chiffres, collerette, embout luer avec bague filetée,
+    piston blanc à section en croix et joint caoutchouc (nœud « Piston », position « pleine »),
+    liquide (nœud « Liquide », origine à l'avant du corps : l'échelle Z vide la seringue), aiguille
+    à embase colorée (nœud « Aiguille », pour l'IM ; retirée pour l'IV sur le robinet).
+    Axe +Z du jeu vers l'embout ; origine au bout de l'embout luer.
+    Matériaux volontairement peu brillants (rugosité >= 0,16, pas de spéculaire renforcé) : un
+    plastique trop lisse donnait des reflets éblouissants sous la lampe d'examen."""
+    nodes = {"seringue": [], "Piston": [], "Liquide": [], "Aiguille": []}
     s = nodes["seringue"]
-    L = 0.085
-    s.append(bl.lathe("corps", [(0.0075, -L / 2), (0.0078, -L / 2 + 0.002), (0.0078, L / 2), (0.003, L / 2 + 0.006), (0.0018, L / 2 + 0.014)], m["clear"], segments=24, rot=(D(-90), 0, 0)))
-    s.append(bl.box("ailettes", (0.03, 0.002, 0.012), g(0, 0, -L / 2), m["clear"], bev=0.0008))
-    for k in range(10):
-        s.append(bl.box("grad", (0.003 if k % 5 else 0.005, 0.0004, 0.0004), g(0.0072, 0, -L / 2 + 0.01 + k * 0.0075), m["dark"]))
+    pp = bl.mat("Seringue PP", (0.93, 0.95, 0.97), 0.18, 0.0, 0.5, alpha=0.2)
+    ink = bl.mat("Encre graduations", (0.03, 0.03, 0.035), 0.6)
+    white = bl.mat("PP blanc", (0.94, 0.94, 0.92), 0.45)
+    R, RI = 0.0082, 0.0073
+    Z_FRONT, Z_BACK = -0.0135, -0.088
+    # Corps : paroi extérieure et intérieure (un seul maillage fermé), épaulement, embout
+    prof = [(0.0007, 0.0), (0.0019, 0.0), (0.0021, -0.0095), (0.0026, -0.0105), (R - 0.0008, -0.0125), (R, Z_FRONT),
+            (R, Z_BACK + 0.001), (R + 0.0004, Z_BACK + 0.0005), (R + 0.0004, Z_BACK), (RI, Z_BACK), (RI, Z_FRONT + 0.0004),
+            (RI - 0.0012, Z_FRONT + 0.0018), (0.0007, -0.0105), (0.0007, 0.0)]
+    s.append(_zlathe("corps", prof, pp, 40))
+    # Bague luer-lock autour de l'embout (filet suggéré par trois anneaux)
+    s.append(_zlathe("bague", [(0.0042, -0.0012), (0.0048, -0.0012), (0.0048, -0.0115), (0.0042, -0.0115), (0.0042, -0.0012)], pp, 32))
+    for k in range(3):
+        s.append(bl.torus("filet", 0.0042, 0.00025, g(0, 0, -0.003 - k * 0.0025), pp, rot=(D(90), 0, 0), major=24, minor=5))
+    # Collerette (appui des doigts)
+    fl = [(pt.x, pt.y) for pt in bl.rounded_rect_path(0.034, 0.018, 0.0075, n=6)]
+    col = bl.extrude_profile("collerette", fl, 0.0022, -0.0011, pp, bev=0.0005)
+    col.rotation_euler = (D(90), 0, 0)
+    col.location = g(0, 0, Z_BACK)
+    s.append(col)
+    # Graduations (0 à 10 mL, 6 mm par mL, traits tous les 0,5 mL) sur le dessus, chiffres tous les 2 mL
+    for k in range(21):
+        z = Z_FRONT - k * 0.003
+        w = 0.0062 if k % 10 == 0 else (0.0046 if k % 2 == 0 else 0.0028)
+        arc = w / R
+        pts = [g(math.sin(a) * (R + 0.00006), math.cos(a) * (R + 0.00006), z) for a in [(-arc / 2) + arc * i / 6 for i in range(7)]]
+        s.append(bl.tube("grad", pts, 0.00011, ink, sides=4, caps=True))
+        if k % 4 == 0:
+            s.append(bl.text("chiffre", str(k // 2), 0.0026, g(-0.0045, R + 0.00008, z), ink, rot=(0, 0, D(-90)), extrude=0.0))
+    s.append(bl.text("marque", "10 mL", 0.0022, g(0.0042, R + 0.00008, -0.05), ink, rot=(0, 0, D(-90)), extrude=0.0))
+    # Piston : joint caoutchouc à deux lèvres et pointe conique, tige en croix, poussoir
     pis = nodes["Piston"]
-    pis.append(bl.cyl_between("tige", g(0, 0, -L / 2 - 0.06), g(0, 0, -L / 2 + 0.01), 0.003, m["white"], verts=8))
-    pis.append(bl.cyl_between("joint", g(0, 0, -L / 2 + 0.008), g(0, 0, -L / 2 + 0.014), 0.0074, m["black_rubber"], verts=20))
-    pis.append(bl.cyl_between("poussoir", g(0, 0, -L / 2 - 0.062), g(0, 0, -L / 2 - 0.058), 0.009, m["white"], verts=20))
-    nodes["Liquide"].append(bl.cyl_between("liquide", g(0, 0, -L / 2 + 0.014), g(0, 0, L / 2), 0.0068, bl.mat("Liquide", (0.85, 0.9, 0.95), 0.05, 0.0, 0.5, alpha=0.4), verts=20))
-    return grouped(nodes)
+    z0 = Z_FRONT - 0.06  # joint en position « pleine » (10 mL)
+    rub = m["black_rubber"]
+    pis.append(_zlathe("joint", [(0.0, z0), (0.0035, z0 - 0.0002), (RI - 0.0002, z0 - 0.0016), (RI, z0 - 0.0022), (RI - 0.0006, z0 - 0.0036),
+                                 (RI, z0 - 0.0052), (RI - 0.0004, z0 - 0.0072), (0.004, z0 - 0.0074), (0.0, z0 - 0.0074)], rub, 32))
+    rod_a, rod_b = z0 - 0.0074, z0 - 0.058
+    for rot in (0, 90):
+        b = bl.box("tige", (0.0105, abs(rod_b - rod_a), 0.0011), g(0, 0, (rod_a + rod_b) / 2), white, bev=0.0002)
+        b.rotation_euler = (0, D(rot), 0)
+        pis.append(b)
+    pis.append(bl.cyl_between("disque_avant", g(0, 0, rod_a - 0.0006), g(0, 0, rod_a), 0.0062, white, verts=28))
+    pis.append(_zlathe("poussoir", [(0.0, rod_b - 0.0022), (0.0085, rod_b - 0.0022), (0.0089, rod_b - 0.0011), (0.0085, rod_b), (0.0, rod_b)], white, 32))
+    # Liquide : de l'avant du corps au joint
+    liq = _zlathe("liquide", [(0.0, Z_FRONT - 0.0002), (RI - 0.0012, Z_FRONT - 0.0004), (RI - 0.0001, Z_FRONT - 0.0018), (RI - 0.0001, z0), (0.0, z0)],
+                  bl.mat("Liquide", (0.86, 0.92, 0.98), 0.14, 0.0, 0.5, alpha=0.3), 32)
+    bl.finalize([liq])
+    liq.name = "Liquide"
+    nodes["Liquide"] = [_set_origin(liq, g(0, 0, Z_FRONT))]
+    # Aiguille IM (embase verte 21G, 40 mm)
+    ndl = nodes["Aiguille"]
+    hub_col = bl.mat("Embase verte", (0.12, 0.6, 0.3), 0.4, alpha=0.85)
+    ndl.append(_zlathe("embase", [(0.0021, -0.0085), (0.0034, -0.0085), (0.0034, -0.0035), (0.0028, 0.0), (0.0016, 0.004), (0.0009, 0.006),
+                                  (0.0009, 0.0065), (0.0, 0.0065)], hub_col, 24))
+    for k in range(4):
+        a = k * math.pi / 2
+        ndl.append(bl.box("ailette_embase", (0.0012, 0.0012, 0.005), g(math.cos(a) * 0.0036, math.sin(a) * 0.0036, -0.006), hub_col))
+    ndl.append(bl.cyl_between("canule", g(0, 0, 0.006), g(0, 0, 0.044), 0.0004, m["chrome"], verts=10))
+    ndl.append(bl.cyl_between("biseau", g(0, 0, 0.044), g(0, -0.0003, 0.0468), 0.0004, m["chrome"], verts=10, r2=0.00002))
+    out = grouped({k: v for k, v in nodes.items() if k != "Liquide"})
+    out.append(nodes["Liquide"][0])
+    return out
+
+
+def build_catheter(m, gauge="18"):
+    """Cathéter veineux périphérique court (type Venflon) : canule souple translucide, embase
+    transparente teintée, ailettes et bouchon du site d'injection à la couleur du calibre (18G vert,
+    20G rose) ; mandrin : aiguille inox à biseau, chambre de reflux transparente, poignée blanche
+    striée, bouchon filtre.
+    Nœuds : « Catheter » (reste dans la veine), « Aiguille » (mandrin retiré après la pose),
+    « Reflux » (sang de la chambre de reflux, origine à l'avant : échelle Z = remplissage ; suit
+    l'aiguille), « Obturateur » (bouchon luer vissé après le retrait de l'aiguille).
+    Axe +Z du jeu vers la pointe ; origine à la pointe de la canule."""
+    L = 0.045 if gauge == "18" else 0.032
+    rc = 0.00066 if gauge == "18" else 0.00055
+    tint = (0.02, 0.55, 0.2) if gauge == "18" else (0.95, 0.32, 0.58)
+    colour = bl.mat("Calibre %sG" % gauge, tint, 0.4)
+    hub_tint = bl.mat("Embase %sG" % gauge, tuple(0.3 + 0.7 * c for c in tint), 0.22, 0.0, 0.5, alpha=0.55)
+    clear = bl.mat("Chambre transparente", (0.95, 0.97, 0.98), 0.16, 0.0, 0.5, alpha=0.25)
+    fep = bl.mat("Canule FEP", (0.92, 0.94, 0.95), 0.25, 0.0, 0.5, alpha=0.8)
+    white = bl.mat("PP blanc", (0.94, 0.94, 0.92), 0.45)
+    nodes = {"Catheter": [], "Aiguille": [], "Reflux": [], "Obturateur": []}
+    c = nodes["Catheter"]
+    # Canule (pointe effilée) et embase
+    c.append(_zlathe("canule", [(0.0, 0.0), (rc * 0.75, -0.0002), (rc, -0.0016), (rc, -L + 0.002), (rc * 1.5, -L), (0.0, -L)], fep, 16))
+    hz = -L
+    c.append(_zlathe("embase", [(0.0013, hz + 0.0005), (0.0022, hz - 0.002), (0.0031, hz - 0.006), (0.0034, hz - 0.0075), (0.0034, hz - 0.016),
+                                (0.0039, hz - 0.0165), (0.0039, hz - 0.0185), (0.0026, hz - 0.0185), (0.0026, hz - 0.006), (0.0009, hz - 0.002),
+                                (0.0009, hz + 0.0005), (0.0013, hz + 0.0005)], hub_tint, 32))
+    # Ailettes (posées à plat sur la peau)
+    wing = [(0.0028, 0.0), (0.0125, -0.0015), (0.0135, -0.004), (0.0125, -0.0105), (0.0028, -0.013)]
+    for sx in (-1, 1):
+        pts = [(sx * x, -(hz - 0.003 + z)) for (x, z) in wing]
+        c.append(bl.extrude_profile("ailette", pts, 0.0008, -0.0028, colour, bev=0.0002))
+        for k in range(3):
+            c.append(bl.box("strie", (0.006, 0.0004, 0.0005), g(sx * 0.0085, -0.0018, hz - 0.0055 - k * 0.0018), colour))
+    # Site d'injection (dessus) et son bouchon à charnière, fermé
+    pz = hz - 0.0085
+    c.append(bl.cyl_between("site", g(0, 0.0025, pz), g(0, 0.0072, pz), 0.0024, hub_tint, verts=24))
+    c.append(bl.cyl_between("bouchon", g(0, 0.0068, pz), g(0, 0.0088, pz), 0.0031, colour, verts=24))
+    c.append(bl.box("charniere", (0.0028, 0.004, 0.0009), g(0, 0.0066, pz + 0.0042), colour))
+    c.append(bl.box("languette", (0.003, 0.0028, 0.001), g(0, 0.0084, pz - 0.0038), colour))
+    # Mandrin : aiguille à biseau, chambre de reflux, poignée striée, bouchon filtre
+    a = nodes["Aiguille"]
+    rn = rc * 0.7
+    a.append(bl.cyl_between("aiguille", g(0, 0, -0.0005), g(0, 0, hz - 0.02), rn, m["chrome"], verts=12))
+    a.append(bl.cyl_between("biseau", g(0, 0, -0.0005), g(0, -rn * 0.8, 0.0035), rn, m["chrome"], verts=12, r2=rn * 0.05))
+    cz0, cz1 = hz - 0.019, hz - 0.034
+    a.append(_zlathe("chambre", [(0.0012, cz0), (0.0033, cz0 - 0.001), (0.0033, cz1), (0.0012, cz1), (0.0012, cz0 - 0.0005), (0.0012, cz0)], clear, 32))
+    a.append(_zlathe("poignee", [(0.0, cz1), (0.0036, cz1), (0.0036, cz1 - 0.016), (0.0, cz1 - 0.016)], white, 32))
+    for k in range(5):
+        a.append(bl.torus("strie_poignee", 0.0036, 0.00035, g(0, 0, cz1 - 0.003 - k * 0.0025), white, rot=(D(90), 0, 0), major=24, minor=5))
+    a.append(bl.cyl_between("filtre", g(0, 0, cz1 - 0.016), g(0, 0, cz1 - 0.0195), 0.0026, colour, verts=20))
+    # Sang de la chambre de reflux
+    blood = _zlathe("sang", [(0.0, cz0 - 0.0012), (0.0029, cz0 - 0.0012), (0.0029, cz1 + 0.0004), (0.0, cz1 + 0.0004)],
+                    bl.mat("Sang", (0.42, 0.02, 0.02), 0.3, 0.0, 0.5, alpha=0.92), 24)
+    bl.finalize([blood])
+    blood.name = "Reflux"
+    nodes["Reflux"] = [_set_origin(blood, g(0, 0, cz0 - 0.0012))]
+    # Obturateur luer (bouchon blanc vissé à l'arrière de l'embase)
+    o = nodes["Obturateur"]
+    o.append(_zlathe("obturateur", [(0.0, hz - 0.017), (0.0024, hz - 0.017), (0.0024, hz - 0.019), (0.0042, hz - 0.019), (0.0042, hz - 0.027),
+                                    (0.0036, hz - 0.028), (0.0, hz - 0.028)], white, 24))
+    for k in range(8):
+        aa = k * math.pi / 4
+        o.append(bl.box("cran", (0.0008, 0.0008, 0.007), g(math.cos(aa) * 0.0043, math.sin(aa) * 0.0043, hz - 0.0235), white))
+    out = grouped({k: v for k, v in nodes.items() if k != "Reflux"})
+    out.append(nodes["Reflux"][0])
+    return out
 
 
 def build_stethoscope(m):
@@ -578,16 +715,39 @@ def build_thermometre(m):
 
 
 def build_poche(m):
-    """Poche de soluté (500 mL) avec tubulure et chambre compte-gouttes, accrochée par l'œillet en
-    (0, 0, 0)."""
+    """Poche souple de soluté (NaCl 0,9 % 500 mL) : enveloppe en coussin translucide, soudures haut
+    et bas, étiquette imprimée et graduations, deux sites en bas (perforateur de la tubulure, site
+    d'injection), perforateur et chambre compte-gouttes avec niveau de liquide. Accrochée par
+    l'œillet en (0, 0, 0) ; le bas de la chambre compte-gouttes est à y = -0,322."""
     p = []
-    bag = bl.box("poche", (0.11, 0.03, 0.2), g(0, -0.12, 0), bl.mat("Poche", (0.9, 0.94, 0.97), 0.1, 0.0, 0.5, alpha=0.35), bev=0.012)
+    film = bl.mat("Poche", (0.9, 0.94, 0.97), 0.18, 0.0, 0.5, alpha=0.32)
+    fluid = bl.mat("Soluté", (0.8, 0.88, 0.96), 0.12, 0.0, 0.5, alpha=0.28)
+    ink = bl.mat("Encre poche", (0.1, 0.3, 0.65), 0.5)
+    # Enveloppe en coussin (boîte très arrondie aplatie), soudure du haut avec l'œillet
+    bag = bl.box("poche", (0.12, 0.034, 0.19), g(0, -0.125, 0), film, bev=0.016, seg=4)
     p.append(bag)
-    p.append(bl.box("liquide", (0.1, 0.022, 0.15), g(0, -0.145, 0), bl.mat("Soluté", (0.82, 0.88, 0.95), 0.05, 0.0, 0.5, alpha=0.3), bev=0.008))
-    p.append(bl.box("etiquette", (0.07, 0.032, 0.06), g(0, -0.1, 0), m["white"]))
-    p.append(bl.torus("oeillet", 0.008, 0.002, g(0, -0.01, 0), m["clear"], rot=(D(90), 0, 0), major=16, minor=6))
-    p.append(bl.cyl_between("embout", g(0, -0.22, 0), g(0, -0.25, 0), 0.005, m["clear"], verts=12))
-    p.append(bl.cyl_between("chambre", g(0, -0.25, 0), g(0, -0.31, 0), 0.009, m["clear"], verts=16))
+    p.append(bl.box("soudure_haut", (0.12, 0.004, 0.018), g(0, -0.025, 0), film, bev=0.002))
+    p.append(bl.box("soudure_bas", (0.11, 0.004, 0.014), g(0, -0.222, 0), film, bev=0.002))
+    p.append(bl.box("liquide", (0.108, 0.026, 0.15), g(0, -0.142, 0), fluid, bev=0.012, seg=3))
+    p.append(bl.torus("oeillet", 0.008, 0.0022, g(0, -0.012, 0), film, rot=(D(90), 0, 0), major=16, minor=6))
+    # Étiquette imprimée (face avant +Z) et graduations
+    p.append(bl.box("etiquette", (0.08, 0.001, 0.07), g(0, -0.105, 0.0175), m["white"]))
+    p.append(bl.text("produit", "NaCl 0,9 %", 0.012, g(0, -0.09, 0.0182), ink, extrude=0.0002))
+    p.append(bl.text("volume", "500 mL", 0.014, g(0, -0.11, 0.0182), ink, extrude=0.0002))
+    p.append(bl.box("bande", (0.08, 0.001, 0.008), g(0, -0.13, 0.0182), ink))
+    for k in range(5):
+        p.append(bl.box("grad", (0.012 if k % 2 == 0 else 0.007, 0.001, 0.0012), g(0.048, -0.15 - k * 0.012, 0.0175), ink))
+    # Sites en bas : perforateur (vers la tubulure) et site d'injection bleu
+    p.append(bl.cyl_between("site_perf", g(-0.018, -0.226, 0), g(-0.018, -0.25, 0), 0.0045, film, verts=14))
+    p.append(bl.cyl_between("site_inj", g(0.02, -0.226, 0), g(0.02, -0.245, 0), 0.0045, film, verts=14))
+    p.append(bl.cyl_between("bouchon_inj", g(0.02, -0.245, 0), g(0.02, -0.252, 0), 0.0055, m["blue"], verts=14))
+    # Perforateur et chambre compte-gouttes
+    clear = bl.mat("Chambre gouttes", (0.94, 0.96, 0.98), 0.15, 0.0, 0.5, alpha=0.35)
+    p.append(bl.cyl_between("perforateur", g(-0.018, -0.25, 0), g(-0.018, -0.262, 0), 0.006, m["white"], verts=16))
+    p.append(bl.box("ailette_perf", (0.022, 0.003, 0.008), g(-0.018, -0.257, 0), m["white"]))
+    p.append(bl.lathe("chambre", [(0.0035, 0.0), (0.0095, 0.004), (0.0095, 0.05), (0.004, 0.056), (0.0025, 0.06)], clear, segments=24,
+                      loc=g(-0.018, -0.322, 0)))
+    p.append(bl.cyl_between("niveau", g(-0.018, -0.316, 0), g(-0.018, -0.296, 0), 0.0085, fluid, verts=20))
     return grouped({"poche": p})
 
 
@@ -604,7 +764,9 @@ BUILDERS = {
     "ecg": (build_ecg, ((0.9, -1.2, 1.4), (0.0, 0.0, 0.8))),
     "poste": (build_poste, ((0.9, -1.6, 1.6), (0.0, 0.0, 1.15))),
     "armoire": (build_armoire, ((1.5, -2.6, 1.6), (0.0, 0.0, 0.95))),
-    "seringue": (build_seringue, ((0.12, -0.12, 0.08), (0.0, 0.0, 0.0))),
+    "seringue": (build_seringue, ((0.09, -0.07, 0.05), (0.0, -0.035, 0.0))),
+    "catheter18": (lambda m: build_catheter(m, "18"), ((0.07, -0.05, 0.04), (0.0, -0.035, 0.0))),
+    "catheter20": (lambda m: build_catheter(m, "20"), ((0.07, -0.05, 0.04), (0.0, -0.03, 0.0))),
     "stethoscope": (build_stethoscope, ((0.5, -0.6, 0.4), (0.05, 0.2, 0.2))),
     "glucometre": (build_glucometre, ((0.12, -0.15, 0.1), (0.0, 0.0, 0.0))),
     "ampoule": (build_ampoule, ((0.06, -0.08, 0.05), (0.0, 0.0, 0.0))),

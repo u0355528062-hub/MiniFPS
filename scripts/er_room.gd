@@ -11,6 +11,7 @@ const Z0 := -2.4
 const Z1 := 2.6
 const HEIGHT := 2.9
 const M := "res://assets/models/"
+const IMAGING_X := -0.05  ## écran d'imagerie (mur nord)
 
 var room_shader: Shader = preload("res://shaders/room.gdshader")
 var defib_root: Node3D
@@ -18,7 +19,7 @@ var monitor_anchor := Transform3D.IDENTITY
 var ecg_root: Node3D
 var computer_screen: MeshInstance3D
 var imaging_screen: MeshInstance3D
-var clock_label: Label3D
+var _clock: Node3D
 var _clock_t := 0.0
 var _solids: StaticBody3D
 
@@ -92,7 +93,7 @@ func _shell() -> void:
 	pm.size = Vector2(sx, sz)
 	floor_mi.mesh = pm
 	floor_mi.position = Vector3(cx, 0, cz)
-	floor_mi.material_override = _room_mat(0, Color(0.62, 0.64, 0.62))
+	floor_mi.material_override = _room_mat(0, Color(0.55, 0.62, 0.66))
 	floor_mi.name = "Sol"
 	add_child(floor_mi)
 	var ceil := MeshInstance3D.new()
@@ -104,7 +105,7 @@ func _shell() -> void:
 	ceil.material_override = _room_mat(2, Color(0.93, 0.94, 0.94))
 	ceil.name = "Plafond"
 	add_child(ceil)
-	var wall := _room_mat(1, Color(0.80, 0.84, 0.85))
+	var wall := _room_mat(1, Color(0.91, 0.9, 0.86))
 	var t := 0.12
 	MeshUtil.box_instance(self, Vector3(sx, HEIGHT, t), Vector3(cx, HEIGHT / 2, Z0 - t / 2), wall, "Mur_N")
 	MeshUtil.box_instance(self, Vector3(sx, HEIGHT, t), Vector3(cx, HEIGHT / 2, Z1 + t / 2), wall, "Mur_S")
@@ -115,18 +116,25 @@ func _shell() -> void:
 	_solid(Vector3(X0 - 0.15, HEIGHT / 2, cz), Vector3(0.3, HEIGHT, sz))
 	_solid(Vector3(X1 + 0.15, HEIGHT / 2, cz), Vector3(0.3, HEIGHT, sz))
 	_solid(Vector3(cx, -0.05, cz), Vector3(sx, 0.1, sz))
-	# Soubassement de protection (stratifié bleu) et lisse anti-chocs
-	var guard := MeshUtil.mat(Color(0.28, 0.42, 0.55), 0.45)
+	# Murs bicolores : soubassement bleu-vert (panneaux stratifiés) jusqu'à la lisse anti-chocs,
+	# frise orangée, haut des murs blanc cassé ; plinthe inox
+	var low := _room_mat(1, Color(0.36, 0.6, 0.64))
+	var frieze := MeshUtil.mat(Color(0.95, 0.6, 0.22), 0.5)
+	var guard := MeshUtil.mat(Color(0.2, 0.36, 0.5), 0.45)
 	var rail := MeshUtil.mat(Color(0.88, 0.89, 0.9), 0.35)
 	var steel := MeshUtil.mat(Color(0.75, 0.77, 0.78), 0.3, 0.9)
 	for side in [-1.0, 1.0]:
 		var z: float = Z0 + 0.01 if side < 0 else Z1 - 0.01
+		MeshUtil.box_instance(self, Vector3(sx, 0.9, 0.012), Vector3(cx, 0.5, z), low, "Soubassement")
 		MeshUtil.box_instance(self, Vector3(sx, 0.1, 0.02), Vector3(cx, 0.05, z), steel, "Plinthe")
 		MeshUtil.box_instance(self, Vector3(sx, 0.16, 0.035), Vector3(cx, 0.92, z), rail, "Lisse")
 		MeshUtil.box_instance(self, Vector3(sx, 0.012, 0.03), Vector3(cx, 0.83, z), guard, "Filet")
+		MeshUtil.box_instance(self, Vector3(sx, 0.06, 0.008), Vector3(cx, 1.32, z), frieze, "Frise")
 	for x in [X0 + 0.01, X1 - 0.01]:
+		MeshUtil.box_instance(self, Vector3(0.012, 0.9, sz), Vector3(x, 0.5, cz), low, "Soubassement")
 		MeshUtil.box_instance(self, Vector3(0.02, 0.1, sz), Vector3(x, 0.05, cz), steel, "Plinthe")
 		MeshUtil.box_instance(self, Vector3(0.035, 0.16, sz), Vector3(x, 0.92, cz), rail, "Lisse")
+		MeshUtil.box_instance(self, Vector3(0.008, 0.06, sz), Vector3(x, 1.32, cz), frieze, "Frise")
 	# Porte coulissante vitrée (mur ouest) et signalétique
 	var door := Node3D.new()
 	door.name = "Porte"
@@ -152,16 +160,8 @@ func _shell() -> void:
 	sign_lbl.rotation_degrees = Vector3(0, 90, 0)
 	door.add_child(sign_lbl)
 	MeshUtil.box_instance(door, Vector3(0.02, 0.16, 0.7), Vector3(0.03, 2.45, 0), MeshUtil.mat(Color(0.12, 0.3, 0.55), 0.4), "Panneau")
-	# Horloge murale (mur nord)
-	clock_label = Label3D.new()
-	clock_label.text = "08:42"
-	clock_label.font_size = 96
-	clock_label.pixel_size = 0.0018
-	clock_label.modulate = Color(1.0, 0.25, 0.2)
-	clock_label.outline_size = 0
-	clock_label.position = Vector3(-1.0, 2.4, Z0 + 0.04)
-	add_child(clock_label)
-	MeshUtil.box_instance(self, Vector3(0.5, 0.2, 0.03), Vector3(-1.0, 2.4, Z0 + 0.016), MeshUtil.mat(Color(0.05, 0.05, 0.06), 0.3), "Cadran")
+	# Horloge murale à aiguilles (mur nord, au-dessus des armoires) : l'heure réelle
+	_clock = _place("horloge", Vector3(-1.2, 2.33, Z0), 0.0, false)
 	# Dalles lumineuses
 	for p in [Vector3(-0.3, 0, -0.9), Vector3(-0.3, 0, 0.9), Vector3(-2.1, 0, -0.9), Vector3(-2.1, 0, 0.9)]:
 		MeshUtil.box_instance(self, Vector3(1.2, 0.03, 0.6), Vector3(p.x, HEIGHT - 0.015, p.z), MeshUtil.emissive(Color(0.97, 0.98, 1.0), 1.4), "Dalle")
@@ -234,7 +234,6 @@ func _equipment() -> void:
 	PatientGear.monitor_in = Vector3(1.0, 1.3, -0.6)
 	_place("rampe", Vector3(X1, 0.0, 0.0), -90.0, false)
 	PatientGear.o2_out = Vector3(1.44, 1.36, -0.35)
-	PatientGear.iv_bag = Vector3(0.64, 1.62, -0.31)
 	# Chariot d'urgence et défibrillateur (à droite du soignant)
 	_place("chariot_pharmacie", Vector3(1.0, 0.0, 0.95), -90.0)
 	defib_root = _place("defibrillateur", Vector3(0.98, 1.02, 0.92), -70.0, false)
@@ -248,19 +247,25 @@ func _equipment() -> void:
 	_place("lavabo", Vector3(0.2, 0.0, Z1 - 0.32), 180.0)
 	_place("chariot", Vector3(-2.3, 0.0, -1.2), 90.0)
 	_place("tabouret", Vector3(-1.5, 0.0, 0.85), 0.0, false)
-	_place("perfusion", Vector3(-0.2, 0.0, -0.75), 0.0)
-	# Distributeurs muraux : gants, solution hydro-alcoolique (près du lavabo)
-	var white := MeshUtil.mat(Color(0.92, 0.93, 0.94), 0.4)
-	MeshUtil.box_instance(self, Vector3(0.26, 0.14, 0.09), Vector3(-0.55, 1.35, Z1 - 0.05), white, "BoiteGants")
-	MeshUtil.box_instance(self, Vector3(0.24, 0.04, 0.005), Vector3(-0.55, 1.36, Z1 - 0.096), MeshUtil.mat(Color(0.2, 0.4, 0.85), 0.5), "Gants")
-	MeshUtil.box_instance(self, Vector3(0.1, 0.22, 0.09), Vector3(-0.85, 1.3, Z1 - 0.05), white, "SHA")
-	MeshUtil.box_instance(self, Vector3(0.06, 0.03, 0.05), Vector3(-0.85, 1.17, Z1 - 0.08), MeshUtil.mat(Color(0.15, 0.6, 0.35), 0.4), "Pompe")
-	# Collecteur à aiguilles sur la rampe
-	MeshUtil.box_instance(self, Vector3(0.12, 0.16, 0.1), Vector3(X1 - 0.08, 1.05, 0.62), MeshUtil.mat(Color(0.95, 0.8, 0.05), 0.4), "Collecteur")
+	# Pied à perfusion près du bras droit (la poche pend au crochet tourné vers le brancard) et
+	# deux pousse-seringues fixés sur le mât
+	var stand := Vector3(-0.25, 0.0, -0.62)
+	_place("perfusion", stand, 0.0)
+	PatientGear.iv_bag = stand + Vector3(0.092, 1.865, 0.092)
+	_place("pompes", stand + Vector3(0.0, 1.12, 0.0), 0.0, false)
+	# Distributeurs muraux : gants (S, M, L), solution hydro-alcoolique (près du lavabo, à la porte,
+	# à la tête du brancard)
+	_place("boites_gants", Vector3(-0.55, 1.35, Z1), 180.0, false)
+	_place("distributeur_sha", Vector3(-0.92, 1.17, Z1), 180.0, false)
+	_place("distributeur_sha", Vector3(X0, 1.17, 1.85), 90.0, false)
+	_place("distributeur_sha", Vector3(X1, 1.17, 1.1), -90.0, false)
+	# Collecteur à aiguilles au mur, près de la tête du brancard
+	_place("collecteur", Vector3(X1, 0.97, 0.62), -90.0, false)
+	_decor()
 	# Écran d'imagerie (radios) au mur nord
 	var scr := Node3D.new()
 	scr.name = "EcranImagerie"
-	scr.position = Vector3(0.35, 1.7, Z0 + 0.04)
+	scr.position = Vector3(IMAGING_X, 1.7, Z0 + 0.04)
 	add_child(scr)
 	MeshUtil.box_instance(scr, Vector3(0.9, 0.56, 0.05), Vector3.ZERO, MeshUtil.mat(Color(0.06, 0.06, 0.07), 0.3), "Cadre")
 	imaging_screen = MeshInstance3D.new()
@@ -273,6 +278,93 @@ func _equipment() -> void:
 	sm.albedo_color = Color(0.02, 0.025, 0.03)
 	imaging_screen.material_override = sm
 	scr.add_child(imaging_screen)
+
+
+## Décor : échographe, étagère à bacs, poubelles DASRI et ménagère, fauteuil roulant, rideau,
+## prises murales, panneau « Sortie » lumineux, plaque de la salle, affiches. Aucune lumière en
+## plus : seuls le panneau de sortie et l'écran de l'échographe sont émissifs.
+func _decor() -> void:
+	var echo := _place("echographe", Vector3(-0.85, 0.0, -1.05), 25.0)
+	if echo:
+		for mi in echo.find_children("Ecran", "MeshInstance3D", true, false):
+			var sm := StandardMaterial3D.new()
+			sm.albedo_texture = _echo_texture()
+			sm.emission_enabled = true
+			sm.emission_texture = sm.albedo_texture
+			sm.emission_energy_multiplier = 0.8
+			sm.roughness = 0.2
+			(mi as MeshInstance3D).material_override = sm
+	_place("etagere_bacs", Vector3(1.0, 0.95, Z0), 0.0, false)
+	_place("poubelle_dasri", Vector3(-0.32, 0.0, Z0 + 0.2), 0.0)
+	_place("poubelle_daom", Vector3(0.1, 0.0, Z0 + 0.2), 0.0)
+	_place("poubelle_dasri", Vector3(0.45, 0.0, 1.45), -20.0)
+	_place("fauteuil_roulant", Vector3(-1.35, 0.0, 2.05), 160.0)
+	_place("rideau", Vector3(X1 - 0.05, 0.0, 2.05), 180.0, false)
+	for p in [[Vector3(-0.85, 0.42, Z0), 0.0], [Vector3(-1.3, 0.42, Z1), 180.0], [Vector3(X1, 0.42, 1.2), -90.0], [Vector3(X1, 0.42, -1.3), -90.0]]:
+		_place("prises", p[0], p[1], false)
+	_place("panneau_sortie", Vector3(X0, 2.45, 1.08), 90.0, false)
+	# Plaque de la salle (mur nord, à côté des armoires)
+	var plate := MeshUtil.box_instance(self, Vector3(0.62, 0.16, 0.015), Vector3(0.95, 2.2, Z0 + 0.008), MeshUtil.mat(Color(0.12, 0.3, 0.55), 0.4), "Plaque")
+	var lbl := Label3D.new()
+	lbl.text = "DÉCHOCAGE — Box 1"
+	lbl.font_size = 56
+	lbl.pixel_size = 0.0016
+	lbl.outline_size = 0
+	lbl.modulate = Color(0.95, 0.98, 1.0)
+	lbl.position = Vector3(0, 0, 0.009)
+	plate.add_child(lbl)
+	# Affiches
+	_poster("affiche_hygiene", Vector3(-1.3, 1.62, Z1 - 0.004), 180.0)
+	_poster("affiche_acr", Vector3(X1 - 0.004, 1.62, -1.65), -90.0)
+	_poster("affiche_douleur", Vector3(X1 - 0.004, 1.62, 1.85), -90.0)
+
+
+func _poster(tex: String, pos: Vector3, yaw: float) -> void:
+	var path := "res://assets/textures/%s.png" % tex
+	if not ResourceLoader.exists(path):
+		return
+	var root := Node3D.new()
+	root.name = "Affiche"
+	root.position = pos
+	root.rotation_degrees.y = yaw
+	add_child(root)
+	MeshUtil.box_instance(root, Vector3(0.44, 0.6, 0.008), Vector3(0, 0, 0.002), MeshUtil.mat(Color(0.75, 0.77, 0.8), 0.35, 0.6), "Cadre")
+	var q := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = Vector2(0.42, 0.58)
+	q.mesh = qm
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load(path)
+	m.roughness = 0.55
+	q.material_override = m
+	q.position = Vector3(0, 0, 0.0065)
+	root.add_child(q)
+
+
+## Image d'échographie (secteur gris granuleux sur fond noir) pour l'écran de l'échographe.
+func _echo_texture() -> ImageTexture:
+	var w := 160
+	var h := 110
+	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
+	var noise := FastNoiseLite.new()
+	noise.frequency = 0.15
+	for y in h:
+		for x in w:
+			var c := Color(0.02, 0.02, 0.03)
+			var dx := (x - w * 0.5) / (h * 0.9)
+			var dy := (y - 8.0) / (h * 0.9)
+			var r := sqrt(dx * dx + dy * dy)
+			var a := atan2(dx, dy)
+			if r < 1.0 and r > 0.08 and absf(a) < 0.62:
+				var v := 0.35 + 0.35 * noise.get_noise_2d(x * 1.0, y * 2.0) + 0.2 * noise.get_noise_2d(x * 5.0, y * 5.0)
+				# Cavité sombre (cœur) au milieu
+				var cav := Vector2(dx - 0.05, dy - 0.55).length()
+				v *= smoothstep(0.12, 0.2, cav) * (1.0 - r * 0.35)
+				c = Color(v, v, v * 1.04)
+			if y > h - 12 and x > 8 and x < 60:
+				c = Color(0.1, 0.8, 0.4) if (y + x) % 7 < 3 else c
+			img.set_pixel(x, y, c)
+	return ImageTexture.create_from_image(img)
 
 
 ## Affiche une image (radiographie) sur l'écran d'imagerie.
@@ -294,13 +386,19 @@ func add_interactables(owner_node: Node3D) -> void:
 	Interactable.make(owner_node, "gants", "Gants d'examen", "Mettre des gants", Vector3(0.28, 0.16, 0.12), Vector3(-0.55, 1.35, Z1 - 0.05))
 	Interactable.make(owner_node, "sha", "Solution hydro-alcoolique", "Se frictionner les mains", Vector3(0.14, 0.3, 0.12), Vector3(-0.85, 1.28, Z1 - 0.05))
 	Interactable.make(owner_node, "lavabo", "Lavabo", "Se laver les mains", Vector3(1.4, 0.4, 0.6), Vector3(0.2, 0.9, Z1 - 0.32))
-	Interactable.make(owner_node, "imagerie", "Écran d'imagerie", "Regarder les images", Vector3(0.9, 0.56, 0.1), Vector3(0.35, 1.7, Z0 + 0.04))
+	Interactable.make(owner_node, "imagerie", "Écran d'imagerie", "Regarder les images", Vector3(0.9, 0.56, 0.1), Vector3(IMAGING_X, 1.7, Z0 + 0.04))
 
 
-## Horloge murale : l'heure réelle.
+## Horloge murale : l'heure réelle (aiguilles mises à jour deux fois par seconde).
 func _process(delta: float) -> void:
 	_clock_t -= delta
-	if _clock_t <= 0.0 and clock_label:
-		_clock_t = 10.0
+	if _clock_t <= 0.0 and _clock:
+		_clock_t = 0.5
 		var tm := Time.get_time_dict_from_system()
-		clock_label.text = "%02d:%02d" % [tm.hour, tm.minute]
+		var s := float(tm.second)
+		var mn := float(tm.minute) + s / 60.0
+		var hr := fmod(float(tm.hour), 12.0) + mn / 60.0
+		for e in [["Aiguille_H", hr / 12.0], ["Aiguille_M", mn / 60.0], ["Aiguille_S", s / 60.0]]:
+			var hand := _clock.find_child(e[0], true, false) as Node3D
+			if hand:
+				hand.rotation.z = -TAU * float(e[1])
