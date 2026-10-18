@@ -417,6 +417,15 @@ func _anaphylaxie() -> void:
 	var port: Vector3 = g.gear.iv["port"]
 	g.press({"pos": port, "normal": Vector3.UP, "collider": null})
 	_inject("methylpred", 80.0, "IV")
+	# Comme un urgentiste : tant que le choc persiste, nouvelle dose d'adrénaline IM toutes les 5 min
+	var case_a := game.case as CaseAnaphylaxie
+	var last_adr := game.physio.time
 	await wait(60.0)
-	_log("choc %.2f, PA %d/%d" % [(game.case as CaseAnaphylaxie).shock, int(game.physio.sys), int(game.physio.dia)])
-	await wait(60.0)
+	_log("choc %.2f, PA %d/%d" % [case_a.shock, int(game.physio.sys), int(game.physio.dia)])
+	while case_a.shock >= 0.3 and game.physio.time < 900.0 and not game.physio.dead:
+		if game.physio.time - last_adr >= 300.0:
+			_inject("adrenaline", 0.5, "IM")
+			last_adr = game.physio.time
+		await wait(15.0)
+	_log("choc %.2f, PA %d/%d" % [case_a.shock, int(game.physio.sys), int(game.physio.dia)])
+	await wait(30.0)
