@@ -34,6 +34,7 @@ var _zone_title: Label
 var _zone_hint: Label
 var _zone_hint_box: PanelContainer
 var _keys: HBoxContainer
+var _keys_box: PanelContainer
 var _panel_host: Control
 var _panel: Control
 var _beat := 0.0
@@ -119,6 +120,8 @@ func _build_header() -> void:
 	col.custom_minimum_size.x = 440
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(col)
+	if Story.is_tutorial():
+		col.z_index = 2  # la consigne reste lisible au-dessus des panneaux (chariot, dossier)
 	var head := UIKit.panel(UIKit.PANEL, 16, 20)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(head)
@@ -290,19 +293,21 @@ func _build_hotbar() -> void:
 
 
 func _build_keys() -> void:
+	_keys_box = PanelContainer.new()
+	_keys_box.add_theme_stylebox_override("panel", UIKit.flat(Color(0.03, 0.045, 0.065, 0.78), 12, 12))
+	_keys_box.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_keys_box.offset_left = 28
+	_keys_box.offset_top = -74
+	_keys_box.offset_bottom = -28
+	_keys_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_keys_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_keys_box)
 	_keys = UIKit.hbox(8)
-	_keys.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_keys.offset_left = 28
-	_keys.offset_top = -62
-	_keys.offset_bottom = -28
 	_keys.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_keys)
+	_keys_box.add_child(_keys)
 	for kv in [["E", "Utiliser"], ["T", "Parler"], ["Tab", "Dossier"], ["O", "Liste"], ["Échap", "Pause"]]:
-		_keys.add_child(UIKit.key(kv[0], 14))
-		var l := _label(kv[1], 15, UIKit.TEXT_DIM, 500)
-		l.add_theme_constant_override("outline_size", 5)
-		l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
-		_keys.add_child(l)
+		_keys.add_child(UIKit.key(kv[0], 15))
+		_keys.add_child(_label(kv[1], 16, UIKit.TEXT_DIM, 500))
 		_keys.add_child(UIKit.spacer(0, 6))
 
 
@@ -424,7 +429,7 @@ func _process(delta: float) -> void:
 	if zone:
 		_zone_hint.text = Lexique.simple(game.gestures.hint)
 		_zone_hint_box.visible = _zone_hint.text != ""
-	_keys.visible = Settings.show_hints and not zone
+	_keys_box.visible = Settings.show_hints and not zone
 	_tasks_t -= delta
 	if _tasks_t <= 0.0:
 		_tasks_t = 0.25
@@ -465,6 +470,7 @@ func _update_vitals(delta: float) -> void:
 			var sev: int = vals[k][1]
 			var col := Lexique.severity_color(sev)
 			lv.text = vals[k][0]
+			(e["unit"] as Label).modulate.a = 1.0
 			lv.add_theme_color_override("font_color", col)
 			lv.modulate.a = blink if sev == 2 else 1.0
 			ic.color = col
@@ -474,6 +480,7 @@ func _update_vitals(delta: float) -> void:
 			row.add_theme_stylebox_override("panel", UIKit.flat(Color(col, 0.13 if sev == 2 else (0.08 if sev == 1 else 0.05)), 10, 10))
 		else:
 			lv.text = "--"
+			(e["unit"] as Label).modulate.a = 0.0
 			lv.add_theme_color_override("font_color", UIKit.TEXT_FAINT)
 			lv.modulate.a = 1.0
 			ic.color = UIKit.TEXT_FAINT
@@ -625,9 +632,14 @@ func _frame(title: String, icon_kind: String, w := 1100.0, h := 760.0) -> Array:
 	var p := UIKit.panel(UIKit.PANEL_SOLID, 20, 28)
 	p.set_anchors_preset(Control.PRESET_CENTER)
 	p.custom_minimum_size = Vector2(w, h)
-	p.offset_left = -w * 0.5
+	# En tutoriel, la fenêtre se décale à droite pour laisser la consigne visible
+	var shift := 0.0
+	if Story.is_tutorial():
+		var half := _root.size.x * 0.5
+		shift = clampf(500.0 - (half - w * 0.5), 0.0, maxf(0.0, half - 12.0 - w * 0.5))
+	p.offset_left = -w * 0.5 + shift
 	p.offset_top = -h * 0.5
-	p.offset_right = w * 0.5
+	p.offset_right = w * 0.5 + shift
 	p.offset_bottom = h * 0.5
 	dim.add_child(p)
 	var v := UIKit.vbox(16)

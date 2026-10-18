@@ -206,7 +206,7 @@ func _tutorial_steps() -> Array:
 			"keys": ["Clic", "E"], "target": func() -> Vector3: return _interactable("gants"), "done": func() -> bool: return bool(g.flags.get("gants", false))},
 		{"title": "Approche-toi de sa tête", "text": "Vise la tête du patient et clique : la vue rapprochée s'ouvre. La souris devient libre pour viser précisément ; clic droit maintenu pour tourner autour.",
 			"keys": ["Clic"], "input": true, "target": func() -> Vector3: return _zone_pos("tete"), "done": func() -> bool: return g.zone_view.zone in ["tete", "cou"]},
-		{"title": "Appelle-le", "text": "Les Mains en main (touche 1), clique sur son front : tu l'appelles fort et tu le secoues. Est-ce qu'il répond ?",
+		{"title": "Appelle-le", "text": "Avec les Mains (touche 1), clique sur son front : tu l'appelles fort et tu le secoues. Est-ce qu'il répond ?",
 			"keys": ["1", "Clic"], "ui": ["hotbar:main"], "target": func() -> Vector3: return _skin(Patient.lm("nose_tip").x + 0.07, 0.0), "done": func() -> bool: return _did("stimulation")},
 		{"title": "Vérifie qu'il respire", "text": "Maintiens le clic sur son menton : tu bascules sa tête en arrière et tu regardes si sa poitrine se soulève (5 secondes).",
 			"keys": ["Clic maintenu"], "target": func() -> Vector3: return _skin(Patient.lm("nose_tip").x - 0.06, 0.0), "done": func() -> bool: return _did("respiration")},
