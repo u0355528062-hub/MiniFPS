@@ -44,11 +44,16 @@ s'améliore si tu fais ce qu'il faut… ou s'aggrave, jusqu'à mourir.
 - **ECG 12 dérivations** : 10 électrodes jugées sur les vraies côtes du patient (V1/V2 au 4e espace
   intercostal, V4 au 5e sur la ligne médio-claviculaire…), enregistrement, tracé sur papier
   millimétré avec interprétation.
-- **Voie veineuse** : gants, garrot (les veines se gonflent), antiseptique, cathéter 18G / 20G piqué
-  **sur la veine visible** (reflux de sang) puis glissé le long de la veine ; desserrer le garrot,
-  prélever les tubes, brancher la perfusion.
-- **Médicaments** : préparés au chariot (produit, dose, voie) puis injectés IV sur le robinet du
-  cathéter ou IM dans le deltoïde ou la cuisse ; nébulisation au masque.
+- **Voie veineuse** (clic sur le bras avec le garrot, l'antiseptique ou un cathéter : la caméra se
+  rapproche du pli du coude), 7 étapes dans l'ordre : 1. garrot au-dessus du coude (on tire la
+  souris pour serrer, les veines se gonflent) ; 2. désinfection en frottant (l'antiseptique colore
+  la peau) ; 3. choix de la veine en la palpant (une veine fine ou qui roule peut faire rater la
+  ponction : hématome) ; 4. ponction à angle faible en glissant dans le sens de l'aiguille, reflux de
+  sang dans la chambre, on avance le cathéter puis on retire l'aiguille ; 5. desserrer le garrot ;
+  6. pansement transparent ; 7. brancher la perfusion (tubulure jusqu'à la poche sur la potence) ou
+  injecter. Les tubes se prélèvent sur le cathéter.
+- **Médicaments** : préparés au chariot (produit, dose, voie) puis injectés IV sur le bouchon du
+  cathéter (le piston descend) ou IM dans le deltoïde ou la cuisse ; nébulisation au masque.
 - **Examen** : stéthoscope (bruits du cœur, murmure vésiculaire, sibilants, crépitants, silence), lampe
   (pupilles), thermomètre tympanique, glycémie capillaire.
 - **Oxygène** : lunettes, masque à haute concentration, débitmètre mural (0 à 15 L/min).
@@ -85,7 +90,10 @@ Carte graphique compatible Vulkan conseillée ; la qualité se règle dans **Opt
 
 - Équipement modélisé dans Blender (`tools/blender/`) : brancard, défibrillateur, scope et bras
   plafonnier, rampe murale (O2, vide), chariot d'urgence, électrocardiographe, poste informatique,
-  armoires, BAVU, mains gantées, seringue, stéthoscope, glucomètre, électrodes…
+  armoires, BAVU, mains gantées, seringue graduée, cathéters type Venflon 18G / 20G, poche de
+  soluté, stéthoscope, glucomètre, électrodes… et le décor de la salle (`build_salle.py`) :
+  échographe, pousse-seringues, étagère à bacs colorés, poubelles DASRI, fauteuil roulant, rideau,
+  horloge, panneau Sortie, distributeurs de gel et de gants, prises ; affiches (`tools/build_affiches.py`).
 - Patient : peau de l'atlas **Z-Anatomy** (CC BY-SA 4.0), signes cliniques dessinés en temps réel
   (pâleur, cyanose, sueurs, marbrures, urticaire, rougeur, veines sous garrot), respiration, thorax
   qui s'enfonce sous le massage.

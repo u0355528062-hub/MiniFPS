@@ -8,7 +8,7 @@ extends Node3D
 ##  - stéthoscope (cœur, poumons), lampe (pupilles), thermomètre (oreille), glycémie (doigt) ;
 ##  - électrodes du scope, de l'ECG 12 dérivations, de défibrillation ; oxymètre, brassard ;
 ##  - garrot, antiseptique, cathéter (sur la veine visible), tubes, perfusion, seringues (IV sur
-##    le robinet du cathéter, IM dans le deltoïde ou la cuisse) ;
+##    le bouchon du cathéter, IM dans le deltoïde ou la cuisse) ;
 ##  - oxygène (lunettes, masque, nébulisation), BAVU (masque sur le visage, clic sur le ballon),
 ##    LUCAS (massage automatique) ;
 ##  - boutons des appareils (défibrillateur, scope, électrocardiographe, débitmètre).
@@ -338,14 +338,14 @@ func _hint_for(id: String, h: Dictionary) -> String:
 				return "Il a déjà une voie veineuse"
 			return "Clic sur le bras : commencer la pose de la voie veineuse (7 étapes)" if reg.begins_with("bras") or reg.begins_with("main") else "Vise un bras"
 		"tubes":
-			return "Clic sur le robinet du cathéter : prélever les tubes" if gear.has_iv() else "Il faut d'abord un cathéter veineux"
+			return "Clic sur le cathéter : prélever les tubes" if gear.has_iv() else "Il faut d'abord un cathéter veineux"
 		"perfuseur":
-			return "Clic sur le robinet du cathéter : brancher la perfusion" if gear.has_iv() else "Il faut d'abord un cathéter veineux"
+			return "Clic sur le cathéter : brancher la perfusion" if gear.has_iv() else "Il faut d'abord un cathéter veineux"
 		"seringue":
 			var d: Dictionary = inv.current()["data"]
 			if d.get("route", "") == "IM":
 				return "Clic maintenu sur le deltoïde ou la cuisse : injection IM (%s)" % inv.current()["name"]
-			return "Clic maintenu sur le robinet du cathéter : injecter (%s)" % inv.current()["name"]
+			return "Clic maintenu sur le bouchon du cathéter : injecter (%s)" % inv.current()["name"]
 		"bavu":
 			if bavu_on_face:
 				return "Clic sur le ballon : insuffler (1 s, le thorax doit se soulever)"
