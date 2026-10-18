@@ -719,7 +719,7 @@ func show_end(res: Dictionary) -> void:
 	var cols := UIKit.hbox(30)
 	v.add_child(cols)
 	var sc := ScrollContainer.new()
-	sc.custom_minimum_size = Vector2(900, 380)
+	sc.custom_minimum_size = Vector2(900, 420)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	cols.add_child(sc)
 	var left := UIKit.vbox(8)
@@ -736,9 +736,9 @@ func show_end(res: Dictionary) -> void:
 		var tv := UIKit.vbox(1)
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(tv)
-		tv.add_child(UIKit.para(o[0], 19, UIKit.TEXT if ok else Color(1.0, 0.82, 0.8), 760.0, 600))
+		tv.add_child(UIKit.para(o[0], 20, UIKit.TEXT if ok else Color(1.0, 0.82, 0.8), 760.0, 600))
 		if o.size() > 3 and String(o[3]) != "":
-			tv.add_child(UIKit.para(o[3], 16, UIKit.TEXT_DIM, 760.0, 450))
+			tv.add_child(UIKit.para(o[3], 17, UIKit.TEXT_DIM, 760.0, 450))
 		var pts := UIKit.text("%d pts" % int(o[1]), 15, UIKit.TEXT_FAINT, 600)
 		pts.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		row.add_child(pts)
