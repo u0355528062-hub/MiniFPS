@@ -13,9 +13,9 @@ uniform float pupil_mm = 4.0;
 uniform float pallor = 0.0;
 
 void fragment() {
-	// La coque transparente de la cornée (zone sans opacité de la texture) n'est pas dessinée : le
-	// globe lui-même est verni (clearcoat)
-	if (texture(iris_tex, UV).a < 0.5) {
+	// La coque transparente de la cornée (disque bleuté en bas à droite de la texture) n'est pas
+	// dessinée : le globe lui-même est verni (clearcoat)
+	if (distance(UV, vec2(0.935, 0.935)) < 0.1) {
 		discard;
 	}
 	vec2 c = distance(UV, centres.xy) < distance(UV, centres.zw) ? centres.xy : centres.zw;

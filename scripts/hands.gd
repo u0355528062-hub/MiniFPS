@@ -1,6 +1,7 @@
 class_name Hands
 ## Mains gantées du soignant (modèles MakeHuman de tools/blender/build_mains.py) : matériaux (gant
 ## nitrile, peau de l'avant-bras, manche de la tunique) et pose sur le patient sans le traverser.
+## Le bras entier (manche courte de la tunique) va jusqu'à l'épaule : il sort du bord de l'écran.
 ## Repère des modèles : origine au point de contact du geste, dos de la main vers +Y, doigts vers -Z,
 ## avant-bras vers +Z.
 
@@ -89,35 +90,22 @@ static func mat_for(name: String) -> Material:
 	return null
 
 
-## Variante qui s'efface selon l'alpha des couleurs de sommets (avant-bras des mains de geste).
-static func faded(m: Material) -> Material:
-	var key := "fondu_%d" % m.get_instance_id()
-	if not _mats.has(key):
-		var f := (m as StandardMaterial3D).duplicate() as StandardMaterial3D
-		f.vertex_color_use_as_albedo = true
-		f.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_HASH
-		f.alpha_hash_scale = 1.0
-		_mats[key] = f
-	return _mats[key]
-
-
-## Applique les matériaux du soignant à toutes les surfaces d'un modèle (fade : avant-bras qui
-## s'efface, d'après les couleurs de sommets).
-static func dress(root: Node, fade := false) -> void:
+## Applique les matériaux du soignant à toutes les surfaces d'un modèle.
+static func dress(root: Node) -> void:
 	for mi in root.find_children("*", "MeshInstance3D", true, false):
 		var m3 := mi as MeshInstance3D
 		for i in m3.mesh.get_surface_count():
 			var src := m3.mesh.surface_get_material(i)
 			var mat := mat_for(src.resource_name if src else "")
 			if mat:
-				m3.set_surface_override_material(i, faded(mat) if fade else mat)
+				m3.set_surface_override_material(i, mat)
 
 
 ## Modèle de mains (fichier .glb de assets/models), habillé.
 static func load_model(file: String) -> Node3D:
 	var sc: PackedScene = load("res://assets/models/%s.glb" % file)
 	var n: Node3D = sc.instantiate()
-	dress(n, true)
+	dress(n)
 	n.set_meta("fichier", file)
 	return n
 
