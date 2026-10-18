@@ -35,6 +35,8 @@ var bavu_on_face := false
 var lucas_on := false
 
 var _ghost: Node3D
+var _ghost_hand: Node3D  ## main gantée qui fait le geste ou tient l'objet
+var _ghost_plate: Node3D  ## main à plat (stimulation, palpation)
 var _ghost_id := ""
 var _hold := {}  ## geste en cours (maintien) : {"kind", "t", "need", ...}
 var _models := {}
@@ -115,7 +117,7 @@ func _region(p: Vector3) -> String:
 		return "cou"
 	for side in ["L", "R"]:
 		var tip := Patient.arm_point(side, 1.0)
-		var wr := Patient.arm_point(side, 0.8)
+		var wr := Patient.arm_point(side, Patient.ARM_WRIST)
 		if _flat(p, tip) < 0.06 or (_seg_dist(p, wr, tip) < 0.035):
 			return "main_" + side
 		var sh := Patient.arm_point(side, 0.0)
@@ -157,14 +159,15 @@ func _carotid(p: Vector3) -> bool:
 
 func _radial(p: Vector3) -> String:
 	for side in ["L", "R"]:
-		if _flat(p, Patient.arm_point(side, 0.83)) < 0.035:
+		# Gouttière radiale, juste au-dessus du pli du poignet
+		if _flat(p, Patient.arm_point(side, Patient.ARM_WRIST - 0.015)) < 0.035:
 			return side
 	return ""
 
 
 func _fingertip(p: Vector3) -> String:
 	for side in ["L", "R"]:
-		if _flat(p, Patient.lm("fingertip_" + side)) < 0.045:
+		if _flat(p, Patient.lm("fingertip_" + side)) < 0.045 or _flat(p, Patient.lm("index_tip_" + side)) < 0.03:
 			return side
 	return ""
 
@@ -233,17 +236,31 @@ func _vein_hit(p: Vector3) -> Array:
 func _set_ghost(id: String) -> void:
 	if id == _ghost_id:
 		return
-	if _ghost:
-		_ghost.queue_free()
-		_ghost = null
+	for g in [_ghost, _ghost_hand, _ghost_plate]:
+		if g:
+			g.queue_free()
+	_ghost = null
+	_ghost_hand = null
+	_ghost_plate = null
 	_ghost_id = id
 	var file := ""
+	var hand := ""
 	match id:
 		"main":
-			file = "main_pouls"
+			hand = "main_pouls"
+			_ghost_plate = Hands.load_model("main_plate")
+			add_child(_ghost_plate)
+			_ghost_plate.visible = false
 		"stetho":
 			file = "stethoscope"
-		"lampe", "glucometre", "thermometre", "garrot", "seringue":
+			hand = "main_pouls"
+		"lampe", "thermometre":
+			file = id
+			hand = "main_pince"
+		"glucometre":
+			file = id
+			hand = "main_pouls"
+		"garrot", "seringue":
 			file = id
 		"pads":
 			file = "electrode_defib"
@@ -251,13 +268,27 @@ func _set_ghost(id: String) -> void:
 		_ghost = _model(file)
 		add_child(_ghost)
 		_ghost.visible = false
+	if hand != "":
+		_ghost_hand = Hands.load_model(hand)
+		add_child(_ghost_hand)
+		_ghost_hand.visible = false
+
+
+## La main pouls (index et majeur) pour les pouls, le menton, l'ongle ; la main à plat ailleurs
+## (stimulation, palpation).
+func _fingers_spot(p: Vector3, reg: String) -> bool:
+	if _carotid(p) or _radial(p) != "" or _fingertip(p) != "":
+		return true
+	return reg == "tete" and p.x < Patient.lm("nose_tip").x + 0.01
 
 
 func _place_ghost(h: Dictionary) -> void:
-	if _ghost == null:
+	if _ghost == null and _ghost_hand == null:
 		return
 	if h.is_empty() or h.get("device", false) or cpr:
-		_ghost.visible = false
+		for g in [_ghost, _ghost_hand, _ghost_plate]:
+			if g:
+				g.visible = false
 		return
 	var p: Vector3 = h["pos"]
 	var n: Vector3 = h["normal"]
@@ -268,28 +299,71 @@ func _place_ghost(h: Dictionary) -> void:
 		fwd = Vector3(0, 0, -1)
 	var right := n.cross(-fwd).normalized()
 	var b := Basis(right, n, -fwd).orthonormalized()
-	_ghost.visible = true
+	if _ghost:
+		_ghost.visible = true
+	# La main droite arrive de l'épaule du soignant (en bas à droite de la vue), pas de la caméra
+	var reach := _reach_dir(p, n)
 	match _ghost_id:
 		"main":
-			# Bout de l'index et du majeur sur le point visé, poignet vers le soignant
-			_ghost.global_transform = Transform3D(b, p + n * 0.012 - fwd * 0.17)
+			# Pulpe de l'index et du majeur sur le point visé (pouls, menton, ongle), sinon main à plat
+			var fingers := _fingers_spot(p, _region(p))
+			_ghost_hand.visible = fingers
+			_ghost_plate.visible = not fingers
+			Hands.seat(_ghost_hand if fingers else _ghost_plate, p, n, reach, 8.0 if fingers else 0.0)
 		"stetho":
 			_ghost.global_transform = Transform3D(b, p + n * 0.002)
+			# Index et majeur appuient sur le pavillon
+			_ghost_hand.visible = true
+			Hands.seat(_ghost_hand, p + n * 0.016, n, reach, 10.0)
 		"lampe", "thermometre", "seringue":
 			var axis := (to.normalized() * 0.6 - n * 0.4).normalized()
 			_ghost.global_transform = Transform3D(Basis(Quaternion(Vector3(0, 0, 1), axis)), p - axis * 0.07)
+			if _ghost_hand:
+				# Tenu en pince entre le pouce et l'index, par l'arrière
+				_ghost_hand.visible = true
+				_hold_in_pinch(p - axis * 0.13, axis)
+		"glucometre":
+			# Bout de la bandelette sur la goutte au bout du doigt, appareil incliné vers le soignant
+			var axis2 := (to.normalized() * 0.5 - n * 0.6).normalized()
+			var up2 := (n - axis2 * n.dot(axis2)).normalized()
+			var gb := Basis(up2.cross(-axis2).normalized(), up2, -axis2).orthonormalized()
+			# Le modèle a la bandelette vers +Z : on le retourne pour qu'elle pointe vers le doigt
+			gb = Basis(gb.x * -1.0, gb.y, gb.z * -1.0)
+			_ghost.global_transform = Transform3D(gb, p - axis2 * 0.073 + n * 0.001)
+			# Index et majeur posés sur le dessus de l'appareil, qu'ils guident vers le doigt
+			_ghost_hand.visible = true
+			Hands.seat(_ghost_hand, p - axis2 * 0.085 + n * 0.001 + up2 * 0.0105, up2, axis2, 0.0)
 		"pads":
 			_ghost.global_transform = Transform3D(Basis(n.cross(Vector3(1, 0, 0)).normalized(), n, Vector3(1, 0, 0)).orthonormalized(), p + n * 0.003)
 		_:
 			_ghost.global_transform = Transform3D(b, p + n * 0.01)
 
 
+## Direction des doigts quand la main droite vient de l'épaule du soignant : épaule supposée en bas
+## à droite de la caméra, direction ramenée dans le plan de la peau.
+func _reach_dir(p: Vector3, n: Vector3) -> Vector3:
+	var cb := zv.camera.global_basis
+	var shoulder := zv.camera.global_position + cb.x * 0.25 - cb.y * 0.3
+	var d := p - shoulder
+	d -= n * d.dot(n)
+	return d.normalized() if d.length() > 0.01 else -cb.z
+
+
+## Main en pince (pouce-index) qui tient un objet au point donné, l'objet pointant selon axis.
+func _hold_in_pinch(at: Vector3, axis: Vector3) -> void:
+	var up := Vector3.UP - axis * axis.y
+	if up.length() < 0.05:
+		up = Vector3(0, 0, 1)
+	Hands.seat(_ghost_hand, at, up.normalized(), axis, 0.0)
+
+
 # ---------------------------------------------------------------- Boucle
 
 func _process(delta: float) -> void:
 	if not zv.active:
-		if _ghost:
-			_ghost.visible = false
+		for g in [_ghost, _ghost_hand, _ghost_plate]:
+			if g:
+				g.visible = false
 		hint = ""
 		return
 	var id := inv.current_id()
@@ -1038,7 +1112,7 @@ func _start_cpr(p: Vector3) -> void:
 	if not _cpr_ok_spot:
 		toast("Mains mal placées : le talon de la main sur la moitié inférieure du sternum", false)
 	if _hands == null:
-		_hands = _model("mains_rcp")
+		_hands = Hands.load_model("mains_rcp")
 		add_child(_hands)
 	_hands.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

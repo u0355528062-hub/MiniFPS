@@ -4,7 +4,8 @@ MakeHuman (CC0) et de son squelette « game_engine » : doigts posés pour chaqu
 
     /home/user/bpyenv/bin/python tools/blender/build_mains.py [--preview] [nom ...]
 
-Écrit assets/models/<nom>.glb. Repère de chaque modèle (jeu, Y vers le haut) : origine au point de
+Écrit assets/models/<nom>.glb ; « medecin » : le corps de l'urgentiste (tunique, pantalon, sabots)
+vu en baissant la tête. Repère de chaque modèle (jeu, Y vers le haut) : origine au point de
 contact du geste (pulpe de l'index et du majeur, paume, talon de la main, pince pouce-index), dos de
 la main vers +Y, doigts vers -Z, avant-bras vers +Z (vers le soignant).
 Surfaces : « Gant », « Peau medecin » (texture de peau du jeu), « Tunique ».
@@ -26,6 +27,7 @@ PREVIEW_DIR = os.environ.get("APERCU", "/tmp/apercus")
 FINGERS = ("index", "middle", "ring", "pinky")
 CUFF = 0.065  # haut du gant au-dessus du pli du poignet (m)
 SLEEVE = 0.11  # longueur du bras gardée au-dessus du coude (m)
+FADE = (0.12, 0.22)  # l'avant-bras s'efface entre ces distances au-dessus du poignet (m)
 
 
 def materials():
@@ -159,6 +161,14 @@ def extract(base, side, pose, contact, m, name):
     bm.to_mesh(me)
     bm.free()
     body.data = me
+    # Fondu de l'avant-bras (couleur de sommet, alpha) : il s'efface en remontant vers le coude pour ne
+    # pas boucher la vue rapprochée
+    col = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
+    for v in me.vertices:
+        d = (v.co - wrist).dot(fore)
+        a = 1.0 - min(1.0, max(0.0, (d - FADE[0]) / (FADE[1] - FADE[0])))
+        col.data[v.index].color = (1.0, 1.0, 1.0, a * a * (3 - 2 * a))
+    me.color_attributes.active_color = col
     me.materials.clear()
     for k in ("glove", "skin", "scrub"):
         me.materials.append(m[k])
@@ -217,9 +227,156 @@ def build_rcp(base, m):
     return [bl.join([bottom, top], "mains_rcp")]
 
 
+EYE = 1.66  # hauteur des yeux du joueur (scripts/player.gd)
+
+
+def build_medecin(base, m):
+    """Corps de l'urgentiste vu à la première personne (sans tête ni cou : la caméra est à la place
+    des yeux) : tunique et pantalon de pyjama de bloc, sabots, avant-bras nus, mains (gantées ou non
+    dans le jeu). Deux nœuds : « Buste » (pivot aux hanches, se penche avec le joueur) et « Jambes ».
+    Repère du joueur : pieds en (0, 0, 0), yeux à la verticale de l'origine, regard vers -Z."""
+    m = dict(m)
+    m["pants"] = bl.mat("Pantalon", (0.08, 0.3, 0.37), 0.9)
+    m["shoes"] = bl.mat("Chaussures", (0.86, 0.87, 0.88), 0.45)
+    m["hand"] = bl.mat("Main", (0.75, 0.55, 0.45), 0.5)
+    eye = (base.joint("joint-l-eye") + base.joint("joint-r-eye")) * 0.5
+    body = mh.build_mesh(base, {"body"}, "Medecin")
+    arm = mh.build_armature(base)
+    mh.skin(body, arm)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="POSE")
+    # Bras détendus, avant-bras un peu en avant : les mains se voient devant le ventre
+    for s, sx in (("l", 1), ("r", -1)):
+        mh.aim(arm, "upperarm_" + s, Vector((0.16 * sx, -0.12, -1)))
+        mh.aim(arm, "lowerarm_" + s, Vector((-0.12 * sx, -0.75, -0.75)))
+        mh.aim(arm, "hand_" + s, Vector((-0.2 * sx, -0.7, -0.75)))
+        mh.curl(arm, s, {"index": (18, 22, 10), "middle": (22, 26, 12), "ring": (26, 28, 12), "pinky": (30, 30, 14)}, (10, 15, 10))
+    bpy.ops.object.mode_set(mode="OBJECT")
+    hip = (mh.bone_head(arm, "thigh_l") + mh.bone_head(arm, "thigh_r")) * 0.5
+    sh = {s: mh.bone_head(arm, "upperarm_" + s).copy() for s in "lr"}
+    el = {s: mh.bone_head(arm, "lowerarm_" + s).copy() for s in "lr"}
+    mh.bake_pose([body])
+    bpy.data.objects.remove(arm)
+    groups = {g.index: g.name for g in body.vertex_groups}
+
+    def w(v, keys):
+        return sum(g.weight for g in v.groups if any(k in groups[g.group] for k in keys))
+
+    head_ids = {v.index for v in body.data.vertices if w(v, ("head", "neck")) > 0.35}
+    hand_ids = {v.index for v in body.data.vertices if w(v, ("hand", "index", "middle", "ring", "pinky", "thumb")) > 0.5}
+    fore_ids = {v.index for v in body.data.vertices if w(v, ("lowerarm",)) > 0.5}
+    # Haut du bras : manche courte jusqu'à 60 % de l'épaule au coude
+    sleeve_ids = set()
+    for v in body.data.vertices:
+        if w(v, ("upperarm",)) > 0.4:
+            s = "l" if v.co.x > 0 else "r"
+            a = el[s] - sh[s]
+            if (v.co - sh[s]).dot(a) / a.length_squared < 0.6:
+                sleeve_ids.add(v.index)
+    hem = hip.z - 0.12  # bas de la tunique
+    ankle = 0.1
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=[bm.verts[i] for i in head_ids], context="VERTS")
+    bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=0)
+    bm.normal_update()
+    bm.verts.ensure_lookup_table()
+    kind = {}
+    # Les indices ont changé après la suppression de la tête : on retrouve les sommets par position
+    pos_kind = {}
+    for v in body.data.vertices:
+        key = (round(v.co.x, 5), round(v.co.y, 5), round(v.co.z, 5))
+        if v.index in hand_ids:
+            pos_kind[key] = "hand"
+        elif v.index in fore_ids or (w(v, ("upperarm",)) > 0.4 and v.index not in sleeve_ids):
+            pos_kind[key] = "skin"
+        elif v.index in sleeve_ids:
+            pos_kind[key] = "sleeve"
+    for v in bm.verts:
+        key = (round(v.co.x, 5), round(v.co.y, 5), round(v.co.z, 5))
+        k = pos_kind.get(key)
+        if k is None:
+            if v.co.z < ankle:
+                k = "shoes"
+            elif v.co.z < hem:
+                k = "pants"
+            else:
+                k = "tunic"
+        kind[v.index] = k
+    # Vêtements amples : décalage le long des normales (bas de tunique évasé, jambes de pantalon larges)
+    for v in bm.verts:
+        k = kind[v.index]
+        n = v.normal
+        if k == "tunic":
+            v.co += n * (0.02 + 0.016 * max(0.0, min(1.0, (hem + 0.15 - v.co.z) / 0.15)))
+        elif k == "sleeve":
+            v.co += n * 0.016
+        elif k == "pants":
+            v.co += n * (0.016 + 0.016 * max(0.0, min(1.0, (0.6 - v.co.z) / 0.5)))
+        elif k == "shoes":
+            v.co += n * 0.01
+            v.co.z = max(v.co.z, 0.0)
+    for v in bm.verts:
+        if kind[v.index] == "shoes" and v.co.z < 0.012:
+            v.co.z = 0.0
+    me = bpy.data.meshes.new("Medecin")
+    bm.to_mesh(me)
+    bm.free()
+    body.data = me
+    for g in list(body.vertex_groups):
+        body.vertex_groups.remove(g)
+    order = ["tunic", "pants", "shoes", "skin", "hand"]
+    mats = {"tunic": m["scrub"], "pants": m["pants"], "shoes": m["shoes"], "skin": m["skin"], "hand": m["hand"]}
+    for k in order:
+        me.materials.append(mats[k])
+    for p in me.polygons:
+        ks = [kind[i] for i in p.vertices]
+        ks = ["tunic" if k == "sleeve" else k for k in ks]
+        # Une face prend la matière majoritaire de ses sommets
+        k = max(set(ks), key=ks.count)
+        p.material_index = order.index(k)
+    # Repère du joueur : yeux à la verticale de l'origine, à la hauteur EYE, regard vers -Z (jeu)
+    eye_bl = mh.to_bl(eye)
+    sc = EYE / eye_bl.z
+    # MakeHuman regarde vers -Y (Blender) = +Z du jeu : demi-tour
+    M = Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Scale(sc, 4) @ Matrix.Translation(Vector((-eye_bl.x, -eye_bl.y, 0.0)))
+    body.data.transform(M)
+    hip_g = M @ hip
+    bl.smooth(body, 70)
+    # Buste et jambes séparés au bas de la tunique
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    legs_faces = [f for f in bm.faces if f.calc_center_median().z < hip_g.z - 0.02]
+    out = []
+    for name, keep_legs in (("Jambes", True), ("Buste", False)):
+        b2 = bm.copy()
+        b2.faces.ensure_lookup_table()
+        drop = [f for f in b2.faces if (f.calc_center_median().z < hip_g.z - 0.02) != keep_legs]
+        bmesh.ops.delete(b2, geom=drop, context="FACES")
+        me2 = bpy.data.meshes.new(name)
+        b2.to_mesh(me2)
+        b2.free()
+        for mt in me.materials:
+            me2.materials.append(mt)
+        ob = bpy.data.objects.new(name, me2)
+        bpy.context.scene.collection.objects.link(ob)
+        for p in me2.polygons:
+            p.use_smooth = True
+        out.append(ob)
+    bm.free()
+    bpy.data.objects.remove(body)
+    # Pivot du buste aux hanches (le joueur se penche en avant)
+    buste = out[1]
+    buste.data.transform(Matrix.Translation(-hip_g))
+    buste.location = hip_g
+    print("hanches", tuple(round(c, 3) for c in hip_g), "échelle", round(sc, 3))
+    return out
+
+
 def main():
     args = sys.argv[1:]
-    names = [a for a in args if not a.startswith("--")] or list(POSES) + ["mains_rcp"]
+    names = [a for a in args if not a.startswith("--")] or list(POSES) + ["mains_rcp", "medecin"]
     os.makedirs(PREVIEW_DIR, exist_ok=True)
     for name in names:
         bl.reset()
@@ -228,10 +385,12 @@ def main():
         base = doctor_base()
         if name == "mains_rcp":
             objs = build_rcp(base, m)
+        elif name == "medecin":
+            objs = build_medecin(base, m)
         else:
             side, pose, contact = POSES[name]
             objs = [extract(base, side, pose, contact, m, name)]
-        bl.export(name, objs)
+        bl.export(name, objs, export_vertex_color="ACTIVE")
         if "--preview" in args:
             bl.preview(os.path.join(PREVIEW_DIR, name + ".png"), bl.g(0.25, 0.22, 0.3), bl.g(0.0, 0.02, 0.05), size=(640, 480), samples=12, lens=45, floor=False)
 

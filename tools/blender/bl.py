@@ -439,7 +439,7 @@ def tri_count():
     return n
 
 
-def export(name, objs=None):
+def export(name, objs=None, **options):
     path = os.path.join(OUT, name + ".glb")
     bpy.ops.object.select_all(action="DESELECT")
     sel = objs or [o for o in bpy.context.scene.objects if o.type == "MESH"]
@@ -447,7 +447,7 @@ def export(name, objs=None):
         o.select_set(True)
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True,
                               export_yup=True, export_texcoords=True, export_normals=True, export_materials="EXPORT",
-                              export_cameras=False, export_lights=False)
+                              export_cameras=False, export_lights=False, **options)
     print("EXPORT", path, "triangles", tri_count())
     return path
 

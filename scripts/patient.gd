@@ -28,6 +28,9 @@ const LAYER_DEVICE := 8
 const CHEST_X := Vector4(-0.36, -0.2, 0.08, 0.2)
 const CHEST_Z := Vector2(0.1, 0.2)
 const CHEST_H := Vector2(0.06, 0.16)
+## Repères le long du bras (ligne centrale, 0 : épaule, 1 : bout du majeur) : coude, poignet
+const ARM_ELBOW := 0.333
+const ARM_WRIST := 0.667
 ## Coques des cheveux courts (nombre, longueur des cheveux en m)
 const HAIR_SHELLS := 10
 const HAIR_LEN := 0.0065
@@ -205,6 +208,11 @@ static func arm_point(side: String, t: float) -> Vector3:
 	return Vector3(lerpf(a[0], b[0], k), lerpf(a[1], b[1], k), lerpf(a[2], b[2], k))
 
 
+## Dernière phalange de l'index : [articulation, bout] (oxymètre, glycémie capillaire).
+static func index_finger(side: String) -> Array:
+	return [lm("index_dip_" + side), lm("index_tip_" + side)]
+
+
 static func arm_dir(side: String, t: float) -> Vector3:
 	return (arm_point(side, minf(1.0, t + 0.04)) - arm_point(side, maxf(0.0, t - 0.04))).normalized()
 
@@ -335,7 +343,7 @@ func _build_zones() -> void:
 	for side in ["L", "R"]:
 		var s := 1.0 if side == "L" else -1.0
 		var sh := arm_point(side, 0.05)
-		var wr := arm_point(side, 0.8)
+		var wr := arm_point(side, ARM_WRIST)
 		var tip := arm_point(side, 1.0)
 		var c := (sh + wr) * 0.5
 		var len := Vector2(sh.x - wr.x, sh.z - wr.z).length()

@@ -80,6 +80,7 @@ def build_body():
         joints[bn] = (mh.bone_head(arm, bn).copy(), mh.bone_tail(arm, bn).copy())
     for s in "lr":
         joints["tip_" + s] = (mh.bone_tail(arm, "middle_03_" + s).copy(), None)
+        joints["index_03_" + s] = (mh.bone_head(arm, "index_03_" + s).copy(), mh.bone_tail(arm, "index_03_" + s).copy())
     mh.bake_pose([body, eyes, closed, hair, hair_open])
     bpy.data.objects.remove(arm)
     add_shape_key(body, closed, "yeux_fermes")
@@ -343,6 +344,10 @@ def landmarks(t_body, joints, path, eyes):
         tip = game(joints["tip_" + s][0])
         lm["fingertip_" + side] = [tip[0], bh(tip[0], tip[2]), tip[2]]
         lm["arm_top_y_" + side] = max(l[1] + l[3] for l in line)
+        # Dernière phalange de l'index (oxymètre, glycémie capillaire) : articulation et bout
+        h, t = joints["index_03_" + s]
+        lm["index_dip_" + side] = [round(c, 4) for c in game(h)]
+        lm["index_tip_" + side] = [round(c, 4) for c in game(t)]
     hd = game(joints["head"][0])
     ht = game(joints["head"][1])
     nk = game(joints["neck_01"][0])

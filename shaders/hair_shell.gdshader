@@ -51,8 +51,11 @@ void fragment() {
 	vec3 jitter = (vec3(r, r2, bb_hash(cell + vec3(3.1))) - 0.5) * 0.4;
 	float d = length(f - jitter);
 	float thick = mix(0.36, 0.14, shell) * mix(1.0, 0.8, brow);
-	// De loin, un poil fait moins d'un pixel : on l'épaissit pour éviter le scintillement
-	thick = max(thick, min(length(fwidth(p)) * 0.45, 0.5));
+	// De loin, un poil fait moins d'un pixel : on l'épaissit pour éviter le scintillement, et les zones
+	// clairsemées (bords) disparaissent au lieu de faire des points isolés
+	float fw = length(fwidth(p));
+	thick = max(thick, min(fw * 0.45, 0.5));
+	dens = mix(dens, smoothstep(0.45, 0.7, dens), smoothstep(0.6, 1.6, fw));
 	float keep = step(d, thick) * step(r2, dens * mix(1.0, 0.8, shell));
 	if (keep < 0.5) {
 		discard;
