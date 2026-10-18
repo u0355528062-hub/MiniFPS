@@ -597,7 +597,7 @@ def build_catheter(m, gauge="18"):
     rc = 0.00066 if gauge == "18" else 0.00055
     tint = (0.02, 0.55, 0.2) if gauge == "18" else (0.95, 0.32, 0.58)
     colour = bl.mat("Calibre %sG" % gauge, tint, 0.4)
-    hub_tint = bl.mat("Embase %sG" % gauge, tuple(0.3 + 0.7 * c for c in tint), 0.22, 0.0, 0.5, alpha=0.55)
+    hub_tint = bl.mat("Embase %sG" % gauge, tuple(0.3 + 0.7 * c for c in tint), 0.22, 0.0, 0.5, alpha=0.72)
     clear = bl.mat("Chambre transparente", (0.95, 0.97, 0.98), 0.16, 0.0, 0.5, alpha=0.25)
     fep = bl.mat("Canule FEP", (0.92, 0.94, 0.95), 0.25, 0.0, 0.5, alpha=0.8)
     white = bl.mat("PP blanc", (0.94, 0.94, 0.92), 0.45)

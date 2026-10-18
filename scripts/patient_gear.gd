@@ -260,7 +260,7 @@ func remove_cuff() -> void:
 
 # ---------------------------------------------------------------- Garrot, voie veineuse
 
-const IV_LIFT := 0.0018  ## hauteur de l'axe du cathéter posé au point de ponction (embase à plat sur la peau)
+const IV_LIFT := 0.0026  ## hauteur de l'axe du cathéter posé au point de ponction (embase à plat sur la peau)
 static var _scenes := {}
 
 
@@ -495,23 +495,27 @@ func dressing_node() -> Node3D:
 	d = Vector3(d.x, 0.0, d.z).normalized()
 	var lat := Vector3(-d.z, 0.0, d.x)
 	var c := p + d * 0.012
-	var u0 := -0.026
-	var u1 := 0.03
-	var v0 := 0.032
-	var nu := 30
-	var nv := 26
+	var u0 := -0.024
+	var u1 := 0.028
+	var v0 := 0.024
+	var nu := 28
+	var nv := 22
 	var film := SurfaceTool.new()
 	film.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var frame := SurfaceTool.new()
 	frame.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var verts := []
+	var ok := []  ## sommet sur le dessus du bras (le film ne pend pas dans le vide)
+	var hc := Patient.body_height(c.x, c.z)
 	for j in nv + 1:
 		var row := []
+		var okr := []
 		for i in nu + 1:
 			var u := lerpf(u0, u1, float(i) / nu)
 			var v := lerpf(-v0, v0, float(j) / nv)
 			var w := c + d * u + lat * v
 			var y := Patient.body_height(w.x, w.z) + 0.0006
+			okr.append(y > hc - 0.014 and y > Patient.TABLE_TOP + 0.01)
 			# Le film recouvre les ailettes et l'embase (encoche autour du site d'injection)
 			var uh := u + 0.012  # 0 au point de ponction
 			var hub := (1.0 - smoothstep(0.0036, 0.0075, absf(v))) * smoothstep(0.004, -0.004, uh) * 0.0068
@@ -519,18 +523,21 @@ func dressing_node() -> Node3D:
 			y += maxf(hub, wing)
 			row.append(Vector3(w.x, y, w.z) - c)
 		verts.append(row)
+		ok.append(okr)
 	for j in nv:
 		for i in nu:
+			if not (ok[j][i] and ok[j][i + 1] and ok[j + 1][i] and ok[j + 1][i + 1]):
+				continue
 			var a: Vector3 = verts[j][i]
 			var b: Vector3 = verts[j][i + 1]
 			var cc: Vector3 = verts[j + 1][i]
 			var dd: Vector3 = verts[j + 1][i + 1]
 			var u := lerpf(u0, u1, (i + 0.5) / nu)
 			var v := lerpf(-v0, v0, (j + 0.5) / nv)
-			var notch := u < u0 + 0.014 and absf(v) < 0.007
+			var notch := u < u0 + 0.012 and absf(v) < 0.0065
 			if notch:
 				continue
-			var border := u < u0 + 0.0045 or u > u1 - 0.0045 or absf(v) > v0 - 0.0045 or (u < u0 + 0.0185 and absf(v) < 0.0115)
+			var border := u < u0 + 0.003 or u > u1 - 0.003 or absf(v) > v0 - 0.003 or (u < u0 + 0.015 and absf(v) < 0.0095)
 			var stt := frame if border else film
 			var lift := Vector3(0, 0.00025, 0) if border else Vector3.ZERO
 			for q in [a, b, cc, b, dd, cc]:
@@ -539,12 +546,12 @@ func dressing_node() -> Node3D:
 	for stt in [film, frame]:
 		stt.generate_normals()
 	var fm := StandardMaterial3D.new()
-	fm.albedo_color = Color(0.93, 0.96, 1.0, 0.16)
+	fm.albedo_color = Color(0.93, 0.96, 1.0, 0.12)
 	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fm.roughness = 0.14
 	fm.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var frm := StandardMaterial3D.new()
-	frm.albedo_color = Color(0.97, 0.97, 0.95, 0.88)
+	frm.albedo_color = Color(0.97, 0.97, 0.95, 0.7)
 	frm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	frm.roughness = 0.65
 	frm.cull_mode = BaseMaterial3D.CULL_DISABLED
