@@ -168,7 +168,9 @@ func xray() -> Dictionary:
 	return {"tex": "", "text": "Radio du thorax : pas d'anomalie."}
 
 
-## Ce qui est attendu (et noté) : [libellé, points, fait (bool)].
+## Ce qui est attendu (et noté) : [libellé, points, fait (bool), explication simple pour le bilan,
+## « si besoin » (bool, facultatif : objectif conditionnel pas encore d'actualité, grisé dans la
+## liste « À faire » au lieu d'être coché d'office)].
 func objectives() -> Array:
 	return []
 

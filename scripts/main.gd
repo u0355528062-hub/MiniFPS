@@ -393,7 +393,7 @@ func evaluate(alive: bool) -> Dictionary:
 		total += float(o[1])
 		if o[2]:
 			got += float(o[1])
-		lines.append([o[0], o[1], o[2], o[3] if o.size() > 3 else ""])
+		lines.append([o[0], o[1], o[2], o[3] if o.size() > 3 else "", o.size() > 4 and o[4]])
 	var pen := 0.0
 	for e in case.errors:
 		pen += float(e[1])

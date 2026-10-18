@@ -736,7 +736,8 @@ func show_end(res: Dictionary) -> void:
 		var tv := UIKit.vbox(1)
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(tv)
-		tv.add_child(UIKit.para(o[0], 20, UIKit.TEXT if ok else Color(1.0, 0.82, 0.8), 760.0, 600))
+		var lbl: String = o[0] + ("  — pas nécessaire cette fois" if o.size() > 4 and o[4] else "")
+		tv.add_child(UIKit.para(lbl, 20, UIKit.TEXT if ok else Color(1.0, 0.82, 0.8), 760.0, 600))
 		if o.size() > 3 and String(o[3]) != "":
 			tv.add_child(UIKit.para(o[3], 17, UIKit.TEXT_DIM, 760.0, 450))
 		var pts := UIKit.text("%d pts" % int(o[1]), 15, UIKit.TEXT_FAINT, 600)

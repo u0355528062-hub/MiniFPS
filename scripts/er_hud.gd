@@ -525,7 +525,7 @@ func _refresh_tasks() -> void:
 	else:
 		var objs := game.case.objectives()
 		for o in objs:
-			sig += "%s%d" % [o[0], 1 if o[2] else 0]
+			sig += "%s%d%d" % [o[0], 1 if o[2] else 0, 1 if o.size() > 4 and o[4] else 0]
 		data = {"mode": "objectives", "list": objs}
 	if sig == _tasks_sig:
 		return
@@ -571,20 +571,24 @@ func _refresh_tasks() -> void:
 		top2.add_child(sp)
 		var objs2: Array = data["list"]
 		var n_done := 0
+		var n_total := 0
 		for o in objs2:
-			if o[2]:
-				n_done += 1
-		top2.add_child(_label("%d / %d" % [n_done, objs2.size()], 15, UIKit.TEXT_DIM, 700))
+			var maybe: bool = o.size() > 4 and o[4]
+			if not maybe:
+				n_total += 1
+				if o[2]:
+					n_done += 1
+		top2.add_child(_label("%d / %d" % [n_done, n_total], 15, UIKit.TEXT_DIM, 700))
 		for o in objs2:
 			var row := UIKit.hbox(10)
 			_tasks_body.add_child(row)
-			var done: bool = o[2]
-			var ic := UIKit.icon("check" if done else "dot", 20, UIKit.OK if done else Color(1, 1, 1, 0.25))
-			if not done:
-				ic.kind = "ring"
+			# Objectif conditionnel pas encore d'actualité : grisé, « si besoin »
+			var maybe2: bool = o.size() > 4 and o[4]
+			var done: bool = o[2] and not maybe2
+			var ic := UIKit.icon("check" if done else "ring", 20, UIKit.OK if done else Color(1, 1, 1, 0.12 if maybe2 else 0.25))
 			ic.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 			row.add_child(ic)
-			var l := UIKit.para(o[0], 17, UIKit.TEXT_FAINT if done else UIKit.TEXT, 370.0, 500)
+			var l := UIKit.para(o[0] + ("  (si besoin)" if maybe2 else ""), 17, UIKit.TEXT_FAINT if done or maybe2 else UIKit.TEXT, 370.0, 400 if maybe2 else 500)
 			row.add_child(l)
 	UIKit.pass_mouse(_tasks_body)
 

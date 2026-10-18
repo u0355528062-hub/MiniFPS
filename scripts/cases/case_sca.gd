@@ -151,7 +151,7 @@ func objectives() -> Array:
 		["Héparine dans la veine", 10.0, did("drug:heparine"), "Elle fluidifie le sang autour du caillot."],
 		["Soulager la douleur (morphine, petites doses)", 6.0, did("drug:morphine") or not morph_needed, "La douleur fatigue le cœur ; par petites doses de 2 à 3 mg."],
 		["Prise de sang : marqueur d'infarctus (troponine)", 4.0, did("exam:trop"), "Elle confirme que le muscle du cœur souffre."],
-		["Choquer si le cœur fibrille", 10.0, not _vf_done or _shocked_ok, "Si le cœur se met à trembler, seul le choc électrique le sauve."],
+		["Choquer si le cœur fibrille", 10.0, not _vf_done or _shocked_ok, "Si le cœur se met à trembler, seul le choc électrique le sauve.", not _vf_done],
 		["Diagnostic : infarctus", 8.0, did("diag_ok"), "Dans le dossier (Tab), onglet Conclusion."],
 		["L'envoyer déboucher son artère (coronarographie)", 13.0, did("orient_ok"), "Chaque minute compte : le muscle du cœur meurt tant que l'artère est bouchée."],
 	]
