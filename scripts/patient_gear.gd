@@ -613,7 +613,7 @@ func connect_line() -> void:
 	MeshUtil.cylinder_instance(rob, 0.0032, 0.003, Vector3(0, 0.0145, 0), blue, "Bouchon")
 	# Tubulure jusqu'à la chambre compte-gouttes
 	var start := sk + back * 0.026
-	var drip := iv_bag + Vector3(0, -0.322, 0)
+	var drip := iv_bag + Vector3(-0.018, -0.322, 0)
 	var s := 1.0 if rear.z > 0.0 else -1.0
 	var path := PackedVector3Array([start, start + back * 0.02 + Vector3.UP * 0.003, _on(start.x - 0.06, s * 0.29, 0.002),
 		Vector3(start.x - 0.08, 0.6, s * 0.4), Vector3(lerpf(start.x, iv_bag.x, 0.5), 1.05, lerpf(s * 0.4, iv_bag.z, 0.6)), drip])
