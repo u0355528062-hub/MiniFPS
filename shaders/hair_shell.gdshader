@@ -40,7 +40,7 @@ void vertex() {
 void fragment() {
 	vec3 hw = texture(peau_poils, UV).rgb;
 	float scalp = smoothstep(0.3, 0.75, hw.r) * (1.0 - bald_mask(wrest));
-	float brow = smoothstep(0.35, 0.85, hw.g) * step(shell, 0.32) * 0.6;
+	float brow = smoothstep(0.4, 0.9, hw.g) * step(shell, 0.22) * 0.45;
 	float dens = max(scalp, brow);
 	// Un poil par cellule (≈ 0,45 mm), rayon décroissant vers la pointe
 	vec3 p = rest * 2200.0;
@@ -52,13 +52,13 @@ void fragment() {
 	float d = length(f - jitter);
 	float thick = mix(0.36, 0.14, shell) * mix(1.0, 0.8, brow);
 	// De loin, un poil fait moins d'un pixel : on l'épaissit pour éviter le scintillement
-	thick = max(thick, min(length(fwidth(p)) * 0.3, 0.48));
+	thick = max(thick, min(length(fwidth(p)) * 0.45, 0.5));
 	float keep = step(d, thick) * step(r2, dens * mix(1.0, 0.8, shell));
 	if (keep < 0.5) {
 		discard;
 	}
 	// Racines plus sombres (ombre entre les cheveux), pointes plus claires, cheveux un peu différents
-	vec3 col = hair_col * mix(0.5, 1.25, shell) * (0.8 + 0.4 * r);
+	vec3 col = hair_col * mix(0.7, 1.12, shell) * (0.9 + 0.2 * r);
 	ALBEDO = col;
 	ROUGHNESS = 0.42;
 	SPECULAR = 0.5;

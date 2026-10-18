@@ -107,12 +107,15 @@ void fragment() {
 	// Sourcils : poils couchés vers l'extérieur
 	float brow = smoothstep(0.15, 0.8, hairs.g);
 	float strands = smoothstep(0.35, 0.75, bb_noise(vec3(wp.x * 600.0, wp.y * 2600.0, wp.z * 900.0)));
-	col = mix(col, hair_col * (0.8 + 0.4 * n2), clamp(brow * (0.3 + 0.35 * strands), 0.0, 1.0));
+	col = mix(col, hair_col * (0.85 + 0.3 * n2), clamp(brow * (0.4 + 0.2 * strands), 0.0, 1.0));
 	// Barbe naissante : ombre bleutée et points des poils coupés ras
 	float beard = smoothstep(0.05, 0.6, hairs.b) * stubble;
 	col *= mix(vec3(1.0), vec3(0.86, 0.86, 0.9), beard * 0.7);
-	float dots = smoothstep(0.7, 0.85, n1);
-	col = mix(col, mix(col, hair_col, 0.6), beard * dots * 0.6);
+	// Points de poils ras, estompés de loin (anti-crénelage)
+	float dots = smoothstep(0.7, 0.85, n1) * (1.0 - smoothstep(0.3, 1.0, length(fwidth(wp * 2400.0))));
+	col = mix(col, mix(col, hair_col, 0.45), beard * dots * 0.45);
+	// Lèvres moins sombres que la texture (rose discret), ongles plus clairs
+	col = mix(col, col * vec3(1.3, 1.22, 1.2), lips * 0.8);
 	// Lèvres et ongles : plus lisses, un peu brillants
 	rough = mix(rough, 0.42, lips);
 	spec = mix(spec, 0.38, lips);

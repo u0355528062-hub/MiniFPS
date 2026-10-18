@@ -52,15 +52,16 @@ def bone_set(side, arm=True):
     return names
 
 
-def pose_hand(arm, side, curls, thumb, spread=0.0, wrist=(0.0, 0.0)):
+def pose_hand(arm, side, curls, thumb, spread=0.0, wrist=(0.0, 0.0), pal=None):
     """curls : {doigt: (p1, p2, p3)} en degrés ; thumb : (rx, rz) de la base puis flexion (p2, p3) ;
-    spread : écartement des doigts (degrés) ; wrist : (flexion, inclinaison) du poignet."""
+    spread : écartement des doigts (degrés) ; wrist : (extension, inclinaison) du poignet en degrés
+    (extension > 0 : dos de la main vers l'avant-bras ; il faut alors pal, direction de la paume)."""
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode="POSE")
     for pb in arm.pose.bones:
         pb.rotation_mode = "XYZ"
     hb = arm.pose.bones["hand_" + side]
-    hb.rotation_euler = (math.radians(wrist[0]), 0.0, math.radians(wrist[1]))
+    hb.rotation_euler = (0.0, 0.0, 0.0)
     sgn = 1.0 if side == "l" else -1.0
     for i, f in enumerate(FINGERS):
         a = curls.get(f, (0, 0, 0))
@@ -72,6 +73,16 @@ def pose_hand(arm, side, curls, thumb, spread=0.0, wrist=(0.0, 0.0)):
     t.rotation_euler = (math.radians(thumb[0]), 0.0, math.radians(thumb[1] * sgn))
     arm.pose.bones["thumb_02_" + side].rotation_euler = (math.radians(thumb[2]), 0.0, 0.0)
     arm.pose.bones["thumb_03_" + side].rotation_euler = (math.radians(thumb[3]), 0.0, 0.0)
+    bpy.context.view_layer.update()
+    if pal is not None and (wrist[0] or wrist[1]):
+        # Le poignet plie autour de l'axe index-auriculaire (les axes locaux de l'os sont tournés)
+        h = hb.head.copy()
+        f = (arm.pose.bones["middle_01_" + side].head - h).normalized()
+        p = (pal - f * pal.dot(f)).normalized()
+        ext = Matrix.Rotation(math.radians(wrist[0]), 4, f.cross(-p).normalized())
+        dev = Matrix.Rotation(math.radians(wrist[1]), 4, p)
+        hb.matrix = Matrix.Translation(h) @ dev @ ext @ Matrix.Translation(-h) @ hb.matrix
+        bpy.context.view_layer.update()
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.context.view_layer.update()
 
@@ -85,10 +96,11 @@ def joints(arm, side):
 
 
 def palmar(arm, side):
-    """Direction de la paume (côté vers lequel les doigts se plient), mesurée en pliant l'annulaire à sa base."""
+    """Direction de la paume (côté vers lequel les doigts se plient), mesurée en pliant un peu l'annulaire à sa base
+    (le bout du doigt part perpendiculairement au doigt, vers la paume)."""
     pose_hand(arm, side, {}, (0, 0, 0, 0))
     a = joints(arm, side)["ring_03"][1].copy()
-    pose_hand(arm, side, {"ring": (90, 0, 0)}, (0, 0, 0, 0))
+    pose_hand(arm, side, {"ring": (10, 0, 0)}, (0, 0, 0, 0))
     b = joints(arm, side)["ring_03"][1].copy()
     pose_hand(arm, side, {}, (0, 0, 0, 0))
     return (b - a).normalized()
@@ -100,7 +112,11 @@ def extract(base, side, pose, contact, m, name):
     arm = mh.build_armature(base)
     mh.skin(body, arm)
     pal0 = palmar(arm, side)
-    pose_hand(arm, side, *pose)
+    # La direction de la paume suit l'os de la main
+    hb = arm.pose.bones["hand_" + side]
+    pal_local = hb.matrix.to_3x3().inverted() @ pal0
+    pose_hand(arm, side, *pose, pal=pal0)
+    pal0 = (arm.matrix_world.to_3x3() @ hb.matrix.to_3x3() @ pal_local).normalized()
     j = joints(arm, side)
     mh.bake_pose([body])
     bpy.data.objects.remove(arm)

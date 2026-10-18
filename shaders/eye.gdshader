@@ -31,14 +31,15 @@ void fragment() {
 	vec3 col = texture(iris_tex, uv).rgb;
 	// Sclérotique un peu moins blanche (pas d'effet « émissif »)
 	float sclera = smoothstep(iris_r * 1.02, iris_r * 1.25, r);
-	col = mix(col, col * vec3(0.72, 0.7, 0.68), sclera);
+	col = mix(col, col * vec3(0.66, 0.63, 0.6), sclera);
 	col = mix(col, vec3(dot(col, vec3(0.33))), pallor * 0.3 * sclera);
 	ALBEDO = col;
 	// Ombre de la paupière sur le haut du globe (le patient regarde le plafond : haut = +X)
 	AO = mix(1.0, 0.55, smoothstep(0.2, 0.9, dot(normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz), vec3(0.85, 0.5, 0.0))));
 	AO_LIGHT_AFFECT = 0.6;
-	ROUGHNESS = 0.06;
-	SPECULAR = 0.6;
-	CLEARCOAT = 1.0;
-	CLEARCOAT_ROUGHNESS = 0.02;
+	// Sclérotique mate, cornée (iris) lisse : un petit reflet net, pas d'éclat
+	ROUGHNESS = mix(0.12, 0.38, sclera);
+	SPECULAR = 0.35;
+	CLEARCOAT = mix(0.8, 0.25, sclera);
+	CLEARCOAT_ROUGHNESS = 0.04;
 }
