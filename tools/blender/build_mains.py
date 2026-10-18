@@ -26,8 +26,8 @@ import mh  # noqa: E402
 PREVIEW_DIR = os.environ.get("APERCU", "/tmp/apercus")
 FINGERS = ("index", "middle", "ring", "pinky")
 CUFF = 0.065  # haut du gant au-dessus du pli du poignet (m)
-SLEEVE = 0.11  # longueur du bras gardée au-dessus du coude (m)
-FADE = (0.12, 0.22)  # l'avant-bras s'efface entre ces distances au-dessus du poignet (m)
+SLEEVE = 0.45  # longueur du bras gardée au-dessus du coude (m) : tout le bras, il sort de l'écran
+HEM = 0.07  # bas de la manche courte au-dessus du coude (m)
 
 
 def materials():
@@ -130,7 +130,7 @@ def extract(base, side, pose, contact, m, name):
     if pal.dot(pal0 - f * pal0.dot(f)) < 0:
         pal = -pal
     c = contact(j, f, lat, pal)
-    # Sommets gardés : main, avant-bras, bas du bras jusqu'à SLEEVE au-dessus du coude
+    # Sommets gardés : main, avant-bras, bras jusqu'à l'épaule (manche courte de la tunique)
     names = set(bone_set(side))
     groups = {g.index: g.name for g in body.vertex_groups}
     elbow = j["lowerarm"][0]
@@ -154,21 +154,13 @@ def extract(base, side, pose, contact, m, name):
         d = (v.co - wrist).dot(fore)
         if d < CUFF:
             v.co += v.normal * (0.0006 + 0.0011 * math.exp(-((d - CUFF + 0.003) / 0.004) ** 2))
-        elif (v.co - elbow).dot(up_dir) > -0.015:
-            k = min(1.0, ((v.co - elbow).dot(up_dir) + 0.015) / 0.02)
-            v.co += v.normal * 0.007 * k
+        elif (v.co - elbow).dot(up_dir) > HEM - 0.015:
+            k = min(1.0, ((v.co - elbow).dot(up_dir) - HEM + 0.015) / 0.02)
+            v.co += v.normal * 0.009 * k
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
     body.data = me
-    # Fondu de l'avant-bras (couleur de sommet, alpha) : il s'efface en remontant vers le coude pour ne
-    # pas boucher la vue rapprochée
-    col = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
-    for v in me.vertices:
-        d = (v.co - wrist).dot(fore)
-        a = 1.0 - min(1.0, max(0.0, (d - FADE[0]) / (FADE[1] - FADE[0])))
-        col.data[v.index].color = (1.0, 1.0, 1.0, a * a * (3 - 2 * a))
-    me.color_attributes.active_color = col
     me.materials.clear()
     for k in ("glove", "skin", "scrub"):
         me.materials.append(m[k])
@@ -176,7 +168,7 @@ def extract(base, side, pose, contact, m, name):
         cc = p.center
         if (cc - wrist).dot(fore) < CUFF:
             p.material_index = 0
-        elif (cc - elbow).dot(up_dir) > -0.008:
+        elif (cc - elbow).dot(up_dir) > HEM - 0.008:
             p.material_index = 2
         else:
             p.material_index = 1
@@ -309,11 +301,11 @@ def build_medecin(base, m):
         k = kind[v.index]
         n = v.normal
         if k == "tunic":
-            v.co += n * (0.02 + 0.016 * max(0.0, min(1.0, (hem + 0.15 - v.co.z) / 0.15)))
+            v.co += n * (0.01 + 0.012 * max(0.0, min(1.0, (hem + 0.15 - v.co.z) / 0.15)))
         elif k == "sleeve":
-            v.co += n * 0.016
+            v.co += n * 0.012
         elif k == "pants":
-            v.co += n * (0.016 + 0.016 * max(0.0, min(1.0, (0.6 - v.co.z) / 0.5)))
+            v.co += n * (0.012 + 0.014 * max(0.0, min(1.0, (0.6 - v.co.z) / 0.5)))
         elif k == "shoes":
             v.co += n * 0.01
             v.co.z = max(v.co.z, 0.0)
@@ -390,7 +382,7 @@ def main():
         else:
             side, pose, contact = POSES[name]
             objs = [extract(base, side, pose, contact, m, name)]
-        bl.export(name, objs, export_vertex_color="ACTIVE")
+        bl.export(name, objs)
         if "--preview" in args:
             bl.preview(os.path.join(PREVIEW_DIR, name + ".png"), bl.g(0.25, 0.22, 0.3), bl.g(0.0, 0.02, 0.05), size=(640, 480), samples=12, lens=45, floor=False)
 

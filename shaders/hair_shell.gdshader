@@ -51,17 +51,21 @@ void fragment() {
 	vec3 jitter = (vec3(r, r2, bb_hash(cell + vec3(3.1))) - 0.5) * 0.4;
 	float d = length(f - jitter);
 	float thick = mix(0.36, 0.14, shell) * mix(1.0, 0.8, brow);
-	// De loin, un poil fait moins d'un pixel : on l'épaissit pour éviter le scintillement, et les zones
-	// clairsemées (bords) disparaissent au lieu de faire des points isolés
+	// Lisière : les cheveux raccourcissent vers le bord de la zone (fondu, pas de poils isolés)
+	dens = smoothstep(shell * 0.55, shell * 0.55 + 0.35, dens);
+	// De loin (poil plus petit qu'un pixel) : les coques basses deviennent une calotte pleine, les
+	// hautes disparaissent ; pas de points isolés qui scintillent
 	float fw = length(fwidth(p));
-	thick = max(thick, min(fw * 0.45, 0.5));
-	dens = mix(dens, smoothstep(0.45, 0.7, dens), smoothstep(0.6, 1.6, fw));
+	float far = smoothstep(0.7, 1.4, fw);
 	float keep = step(d, thick) * step(r2, dens * mix(1.0, 0.8, shell));
+	keep = mix(keep, step(shell, 0.35) * step(0.5, dens), far);
 	if (keep < 0.5) {
 		discard;
 	}
 	// Racines plus sombres (ombre entre les cheveux), pointes plus claires, cheveux un peu différents
 	vec3 col = hair_col * mix(0.7, 1.12, shell) * (0.9 + 0.2 * r);
+	// De loin, la calotte garde un grain de mèches (pas un aplat)
+	col *= mix(1.0, 0.8 + 0.35 * bb_noise(vec3(rest.x * 900.0, rest.y * 300.0, rest.z * 900.0)), far);
 	ALBEDO = col;
 	ROUGHNESS = 0.42;
 	SPECULAR = 0.5;
