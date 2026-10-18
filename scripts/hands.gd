@@ -55,15 +55,37 @@ static func scrub_mat() -> StandardMaterial3D:
 	return _mats["tunique"]
 
 
+static func pants_mat() -> StandardMaterial3D:
+	if not _mats.has("pantalon"):
+		var m := scrub_mat().duplicate() as StandardMaterial3D
+		m.albedo_color = Color(0.1, 0.33, 0.4)
+		_mats["pantalon"] = m
+	return _mats["pantalon"]
+
+
+## Sabots de bloc (caoutchouc blanc)
+static func shoes_mat() -> StandardMaterial3D:
+	if not _mats.has("sabots"):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.85, 0.86, 0.87)
+		m.roughness = 0.45
+		_mats["sabots"] = m
+	return _mats["sabots"]
+
+
 ## Matériau du jeu pour une surface exportée de Blender (d'après le nom de son matériau).
 static func mat_for(name: String) -> Material:
 	var n := name.to_lower()
 	if n.begins_with("gant"):
 		return glove_mat()
-	if n.begins_with("peau"):
+	if n.begins_with("peau") or n.begins_with("main"):
 		return skin_mat()
-	if n.begins_with("tunique") or n.begins_with("pantalon"):
+	if n.begins_with("tunique"):
 		return scrub_mat()
+	if n.begins_with("pantalon"):
+		return pants_mat()
+	if n.begins_with("chaussures"):
+		return shoes_mat()
 	return null
 
 
