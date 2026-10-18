@@ -98,6 +98,12 @@ func shot_extra(args: Dictionary) -> void:
 				g._hold = {}
 				g.iv_proc.syringe_progress(0.4)
 		await wait(float(args.get("wait", "2.5")))
+		if args.has("at"):
+			# Vue à la première personne vers un point (ex. la poche sur la potence)
+			game.zone_view.exit()
+			await wait(0.8)
+			var t: PackedFloat64Array = String(args["at"]).split_floats(",")
+			game.player.look_towards(Vector3(t[0], t[1], t[2]))
 	if args.has("aim"):
 		var a: PackedFloat64Array = String(args["aim"]).split_floats(",")
 		_aim_at(Vector3(a[0], a[1], a[2]))
