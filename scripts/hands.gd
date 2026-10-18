@@ -131,6 +131,13 @@ static func _sample_points(n: Node3D) -> PackedVector3Array:
 	return pts
 
 
+## Pose la main telle quelle (objet tenu) : origine sur le point de contact, dos selon la normale.
+static func place(n: Node3D, contact: Vector3, normal: Vector3, fwd: Vector3) -> void:
+	var up := normal.normalized()
+	var f := (fwd - up * fwd.dot(up)).normalized()
+	n.global_transform = Transform3D(Basis(up.cross(-f).normalized(), up, -f).orthonormalized(), contact)
+
+
 ## Pose la main : origine sur le point de contact, dos de la main selon la normale, doigts vers fwd.
 ## Si la main ou l'avant-bras traverse la peau (ou le drap), le poignet se relève autour du point de
 ## contact (jusqu'à 75°), sinon toute la main monte.

@@ -64,6 +64,8 @@ void fragment() {
 	}
 	// Racines plus sombres (ombre entre les cheveux), pointes plus claires, cheveux un peu différents
 	vec3 col = hair_col * mix(0.7, 1.12, shell) * (0.9 + 0.2 * r);
+	// De loin, la calotte garde un grain de mèches (pas un aplat)
+	col *= mix(1.0, 0.8 + 0.35 * bb_noise(vec3(rest.x * 900.0, rest.y * 300.0, rest.z * 900.0)), far);
 	ALBEDO = col;
 	ROUGHNESS = 0.42;
 	SPECULAR = 0.5;

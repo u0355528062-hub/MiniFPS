@@ -285,7 +285,7 @@ func _place_ghost(h: Dictionary) -> void:
 			_ghost.global_transform = Transform3D(gb, p - axis2 * 0.073 + n * 0.001)
 			# Index et majeur posés sur le dessus de l'appareil, qu'ils guident vers le doigt
 			_ghost_hand.visible = true
-			Hands.seat(_ghost_hand, p - axis2 * 0.085 + n * 0.001 + up2 * 0.0105, up2, axis2, 0.0)
+			Hands.place(_ghost_hand, p - axis2 * 0.085 + n * 0.001 + up2 * 0.0105, up2, axis2)
 		"seringue":
 			# Seringue tenue de profil, inclinée vers le point visé (embout à 1,5 cm de la peau). Avant,
 			# elle était alignée sur le regard : on voyait le poussoir blanc de face, avec toutes les
