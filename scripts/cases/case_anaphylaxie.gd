@@ -14,7 +14,7 @@ func _init() -> void:
 	profile = {"name": "Thomas G.", "age": 34, "skin": Color(1.0, 0.94, 0.92), "hair": Color(0.45, 0.3, 0.15), "bald": 0.0, "stubble": 0.2, "collar": false,
 		"reply": "J'ai… la gorge qui serre… ça gratte partout…"}
 	arrival = "Thomas, 34 ans, a été piqué par une guêpe au cou il y a quinze minutes en déjeunant en terrasse. Très vite : plaques rouges partout, lèvres qui gonflent, gêne pour respirer, malaise.\n\nIl est allongé, très rouge, couvert de plaques, il parle d'une voix rauque."
-	arrival_vitals = "Ambulance : FC 135 · PA 72/40 · SpO2 91 % · FR 28"
+	arrival_vitals = "Ambulance : cœur 135/min (FC) · tension 72/40, très basse (PA) · oxygène 91 % (SpO2) · respiration 28/min (FR)"
 	lines = ["Ça gratte partout…", "J'ai la gorge… qui gonfle…", "Je me sens pas bien… la tête tourne…"]
 	diag_ok = "Choc anaphylactique"
 	orient_ok = "Unité d'hospitalisation de courte durée (surveillance)"
@@ -79,7 +79,7 @@ func on_drug(drug: String, dose: float, route: String) -> void:
 	match drug:
 		"adrenaline":
 			if route == "IV" and not physio.in_arrest() and dose >= 0.5:
-				fault("Adrénaline 0,5-1 mg en bolus IV chez un patient qui a un pouls : risque de trouble du rythme mortel", 15.0)
+				fault("Adrénaline injectée d'un coup dans la veine alors que le cœur bat : risque de trouble du rythme mortel", 15.0)
 				physio.give(drug, dose * 0.3, route)
 				physio.set_rhythm("tv")
 				physio.hr = 190.0
@@ -93,7 +93,7 @@ func on_drug(drug: String, dose: float, route: String) -> void:
 			shock = maxf(0.0, shock - 0.05)
 		"midazolam", "morphine":
 			physio.give(drug, dose, route)
-			fault("Sédation dans un choc anaphylactique", 8.0)
+			fault("Calmant (sédatif) dans une allergie grave : dangereux", 8.0)
 		_:
 			physio.give(drug, dose, route)
 
@@ -116,13 +116,13 @@ func objectives() -> Array:
 		if e["data"].get("route", "") == "IM":
 			first_im = true
 	return [
-		["Adrénaline dans les 5 premières minutes", 25.0, adr_t < 300.0],
-		["Adrénaline par voie IM (0,5 mg)", 10.0, first_im],
-		["Oxygène", 8.0, did("o2_masque") or did("o2_nebu")],
-		["Tension surveillée (brassard)", 6.0, did("brassard")],
-		["Voie veineuse + remplissage", 12.0, did("perfusion")],
-		["Corticoïdes", 4.0, did("drug:methylpred")],
-		["Choc contrôlé", 15.0, shock < 0.35],
-		["Diagnostic juste", 10.0, did("diag_ok")],
-		["Surveillance prolongée (UHCD)", 10.0, did("orient_ok")],
+		["Adrénaline dans les 5 premières minutes", 25.0, adr_t < 300.0, "C'est le seul médicament qui arrête la réaction allergique et remonte la tension."],
+		["Adrénaline 0,5 mg dans le muscle de la cuisse (IM)", 10.0, first_im, "Dans le muscle, elle agit vite et sans danger ; d'un coup dans la veine, elle peut affoler le cœur."],
+		["Oxygène au masque", 8.0, did("o2_masque") or did("o2_nebu"), "La gorge et les bronches gonflent : il manque d'oxygène."],
+		["Surveiller la tension (brassard)", 6.0, did("brassard"), "Pour voir si le traitement marche."],
+		["Voie veineuse + poche de sérum", 12.0, did("perfusion"), "Les vaisseaux sont dilatés : il faut les remplir pour remonter la tension."],
+		["Cortisone (méthylprednisolone)", 4.0, did("drug:methylpred"), "Elle évite que la réaction revienne quelques heures plus tard."],
+		["Réaction maîtrisée (tension remontée)", 15.0, shock < 0.35, "Les plaques s'effacent, la tension remonte : le patient est hors de danger."],
+		["Diagnostic : allergie grave (choc anaphylactique)", 10.0, did("diag_ok"), "Dans le dossier (Tab), onglet Conclusion."],
+		["Le garder en surveillance (UHCD)", 10.0, did("orient_ok"), "Une seconde réaction peut survenir dans les heures qui suivent."],
 	]

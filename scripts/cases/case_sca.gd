@@ -17,7 +17,7 @@ func _init() -> void:
 	profile = {"name": "Jean-Pierre M.", "age": 62, "skin": Color(1.0, 0.93, 0.9), "hair": Color(0.55, 0.53, 0.5), "bald": 0.3, "stubble": 0.25, "collar": false,
 		"reply": "Oui docteur… j'ai très mal à la poitrine…"}
 	arrival = "Jean-Pierre, 62 ans, est amené par les pompiers pour une douleur dans la poitrine apparue il y a une heure, au repos, devant la télévision. Il est en sueurs et gris.\n\nIl est installé sur le brancard du déchocage. Rien n'est encore branché."
-	arrival_vitals = "Pompiers : FC 94 · PA 152/94 · SpO2 96 % · FR 20 · douleur 8/10"
+	arrival_vitals = "Pompiers : cœur 94/min (FC) · tension 152/94 (PA) · oxygène 96 % (SpO2) · respiration 20/min (FR) · douleur 8/10"
 	questions = [
 		["Où avez-vous mal ?", "Là, au milieu de la poitrine… ça serre comme un étau. Ça monte dans la mâchoire et le bras gauche."],
 		["Depuis quand ?", "Ça a commencé il y a une heure, d'un coup, je regardais la télé."],
@@ -83,7 +83,7 @@ func tick(_delta: float) -> void:
 
 func on_shock(_energy: int) -> void:
 	if not physio.shockable():
-		fault("Choc délivré sur un rythme non choquable", 10.0)
+		fault("Choc sur un cœur qui ne fibrillait pas (rythme non choquable)", 10.0)
 		return
 	# Fibrillation « primaire » d'un infarctus : le premier choc bien fait la réduit
 	if not game.get("flags").get("pads_bad", false):
@@ -101,18 +101,18 @@ func on_drug(drug: String, dose: float, route: String) -> void:
 	match drug:
 		"adrenaline":
 			if not physio.in_arrest():
-				fault("Adrénaline chez un patient qui fait un infarctus (avec un pouls)", 10.0)
+				fault("Adrénaline chez un patient qui fait un infarctus et dont le cœur bat", 10.0)
 				physio.base["hr"] = 140.0
 		"morphine":
 			if float(physio.totals.get("morphine", 0.0)) > 10.0:
-				fault("Trop de morphine d'un coup (titrer 2 à 3 mg)", 4.0)
+				fault("Trop de morphine d'un coup (2 à 3 mg à la fois)", 4.0)
 		"midazolam":
-			fault("Sédation inutile (et dangereuse)", 4.0)
+			fault("Calmant inutile (et dangereux)", 4.0)
 
 
 func on_event(kind: String, _data: Dictionary) -> void:
 	if kind.begins_with("o2_") and kind != "o2_debit" and physio.spo2 >= 94.0 and not physio.in_arrest():
-		fault("Oxygène inutile (saturation ≥ 94 %) dans un infarctus", 2.0)
+		fault("Oxygène inutile : il en avait assez (94 % ou plus)", 2.0)
 
 
 func lab(exam: String) -> String:
@@ -143,15 +143,15 @@ func objectives() -> Array:
 	var ecg := when("ecg12")
 	var morph_needed := true
 	return [
-		["Scope branché rapidement (< 3 min)", 8.0, when("scope") < 180.0],
-		["ECG 12 dérivations en moins de 10 minutes", 18.0, ecg < 600.0],
-		["Interrogatoire (douleur, antécédents)", 5.0, journal().count("question") >= 3],
-		["Voie veineuse posée", 6.0, did("vvp")],
-		["Aspirine IV", 12.0, did("drug:aspirine")],
-		["Héparine IV", 10.0, did("drug:heparine")],
-		["Douleur soulagée (morphine titrée)", 6.0, did("drug:morphine") or not morph_needed],
-		["Troponine prélevée", 4.0, did("exam:trop")],
-		["Défibrillation de la fibrillation (si elle survient)", 10.0, not _vf_done or _shocked_ok],
-		["Diagnostic juste", 8.0, did("diag_ok")],
-		["Coronarographie en urgence", 13.0, did("orient_ok")],
+		["Brancher le scope en moins de 3 minutes", 8.0, when("scope") < 180.0, "Un infarctus peut faire fibriller le cœur à tout moment : il faut le voir."],
+		["Faire l'ECG en moins de 10 minutes", 18.0, ecg < 600.0, "L'électrocardiogramme montre l'artère bouchée : c'est lui qui déclenche l'urgence."],
+		["L'interroger sur sa douleur (T)", 5.0, journal().count("question") >= 3, "Depuis quand, où, comment : ça confirme l'infarctus."],
+		["Poser une voie veineuse", 6.0, did("vvp"), "Pour les médicaments."],
+		["Aspirine dans la veine", 12.0, did("drug:aspirine"), "Elle empêche le caillot de grossir."],
+		["Héparine dans la veine", 10.0, did("drug:heparine"), "Elle fluidifie le sang autour du caillot."],
+		["Soulager la douleur (morphine, petites doses)", 6.0, did("drug:morphine") or not morph_needed, "La douleur fatigue le cœur ; par petites doses de 2 à 3 mg."],
+		["Prise de sang : marqueur d'infarctus (troponine)", 4.0, did("exam:trop"), "Elle confirme que le muscle du cœur souffre."],
+		["Choquer si le cœur fibrille", 10.0, not _vf_done or _shocked_ok, "Si le cœur se met à trembler, seul le choc électrique le sauve."],
+		["Diagnostic : infarctus", 8.0, did("diag_ok"), "Dans le dossier (Tab), onglet Conclusion."],
+		["L'envoyer déboucher son artère (coronarographie)", 13.0, did("orient_ok"), "Chaque minute compte : le muscle du cœur meurt tant que l'artère est bouchée."],
 	]

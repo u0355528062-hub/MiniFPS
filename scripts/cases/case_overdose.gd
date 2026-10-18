@@ -15,7 +15,7 @@ func _init() -> void:
 	profile = {"name": "Kevin L.", "age": 26, "skin": Color(0.98, 0.93, 0.9), "hair": Color(0.12, 0.08, 0.05), "bald": 0.0, "stubble": 0.55, "collar": false,
 		"reply": "Mmh…"}
 	arrival = "Kevin, 26 ans, a été retrouvé inconscient dans les toilettes d'une gare, une seringue au sol. Les pompiers l'ont ventilé un peu au ballon pendant le transport.\n\nIl ne répond pas, respire à peine, ses lèvres sont bleues."
-	arrival_vitals = "Pompiers : FC 58 · PA 105/65 · SpO2 80 % (air) · FR 5 · Glasgow 6"
+	arrival_vitals = "Pompiers : cœur 58/min (FC) · tension 105/65 (PA) · oxygène 80 %, très bas (SpO2) · respiration 5/min, très lente (FR) · conscience 6/15 (Glasgow)"
 	questions = []
 	diag_ok = "Intoxication aux opiacés"
 	orient_ok = "Unité d'hospitalisation de courte durée (surveillance)"
@@ -66,7 +66,7 @@ func tick(_delta: float) -> void:
 		game.call("event", "reveil", "Il se réveille, respire normalement")
 		if float(physio.levels["naloxone"]) > 0.6:
 			game.call("say", "Putain mais vous avez fait quoi ?! J'ai mal partout, j'ai froid, laissez-moi !", "patient")
-			fault("Naloxone à trop forte dose : sevrage brutal (titrer 0,04 à 0,1 mg)", 6.0)
+			fault("Trop d'antidote (naloxone) : manque brutal ; il fallait de petites doses (0,04 à 0,1 mg)", 6.0)
 			physio.sign_base["sweat"] = 0.7
 		else:
 			game.call("say", "Hein… où je suis… ?", "patient")
@@ -85,11 +85,11 @@ func on_drug(drug: String, dose: float, route: String) -> void:
 	match drug:
 		"naloxone":
 			if route == "IV" and dose >= 0.4:
-				fault("Bolus IV de 0,4 mg de naloxone d'emblée (titrer)", 3.0)
+				fault("0,4 mg de naloxone d'un coup : il fallait commencer petit", 3.0)
 			if not did("glycemie"):
-				fault("Glycémie capillaire non vérifiée avant de conclure à l'overdose", 2.0)
+				fault("Sucre non vérifié avant de conclure à l'overdose", 2.0)
 		"midazolam":
-			fault("Benzodiazépine chez un patient en dépression respiratoire", 10.0)
+			fault("Calmant chez un patient qui respire déjà trop peu", 10.0)
 			physio.base["rr"] = 2.0
 		"morphine":
 			fault("Morphine dans une overdose d'opiacés !", 12.0)
@@ -117,14 +117,14 @@ func ecg12() -> Dictionary:
 func objectives() -> Array:
 	var oxy := did("bavu") or did("o2_masque")
 	return [
-		["Absence de réponse et respiration évaluées", 8.0, did("stimulation") and did("respiration")],
-		["Voies aériennes libérées, oxygénation (ballon ou masque)", 15.0, oxy],
-		["Saturation surveillée (capteur SpO2)", 6.0, did("spo2")],
-		["Glycémie capillaire", 10.0, did("glycemie")],
-		["Pupilles examinées (myosis)", 8.0, did("pupilles")],
-		["Naloxone administrée", 18.0, did("drug:naloxone")],
-		["Réveil sans sevrage brutal", 10.0, _woke and float(physio.totals.get("naloxone", 0.0)) <= 0.5],
-		["Toxiques demandés", 3.0, did("exam:tox")],
-		["Diagnostic juste", 10.0, did("diag_ok")],
-		["Surveillance prolongée (UHCD)", 12.0, did("orient_ok")],
+		["Vérifier s'il répond et s'il respire", 8.0, did("stimulation") and did("respiration"), "Le b.a.-ba : conscience, respiration, pouls."],
+		["Lui donner de l'oxygène (ballon ou masque)", 15.0, oxy, "Il respire trop lentement : il faut l'aider tout de suite."],
+		["Surveiller l'oxygène (pince SpO2)", 6.0, did("spo2"), "Pour voir si l'oxygène remonte."],
+		["Mesurer le sucre (glycémie)", 10.0, did("glycemie"), "Un manque de sucre peut ressembler à une overdose."],
+		["Regarder les pupilles (lampe)", 8.0, did("pupilles"), "Toutes petites (myosis) : signe typique de l'héroïne."],
+		["Donner l'antidote (naloxone)", 18.0, did("drug:naloxone"), "Elle chasse l'héroïne et il se remet à respirer."],
+		["Le réveiller en douceur (petites doses)", 10.0, _woke and float(physio.totals.get("naloxone", 0.0)) <= 0.5, "Trop d'antidote d'un coup provoque un manque brutal : agitation, vomissements."],
+		["Rechercher les drogues (prise de sang)", 3.0, did("exam:tox"), "Pour confirmer ce qu'il a pris."],
+		["Diagnostic : overdose d'opiacés", 10.0, did("diag_ok"), "Dans le dossier (Tab), onglet Conclusion."],
+		["Le garder en surveillance (UHCD)", 12.0, did("orient_ok"), "L'héroïne agit plus longtemps que l'antidote : il peut se rendormir."],
 	]

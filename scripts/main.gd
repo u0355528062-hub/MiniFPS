@@ -3,16 +3,21 @@ extends Node3D
 ## URGENCES — simulateur de médecine d'urgence. Point d'entrée : construit la salle de déchocage,
 ## le patient du cas choisi, sa physiologie, les appareils, le joueur, la vue rapprochée, les gestes,
 ## l'interface et les menus.
-## Déroulé : menu (choix du cas) → transmission → prise en charge → conclusion → compte rendu.
+## Déroulé : menu principal → histoire « Première garde » (intro, puis 3 patients : carton, transmission
+## dialoguée, prise en charge guidée, bilan avec l'avis du chef, transition, fin) ou entraînement
+## libre (choix du cas → transmission → prise en charge → conclusion → bilan).
 ##
 ## Arguments (après « -- ») :
 ##   --case=id                 cas à jouer (acr_fv, sca_st, overdose, hypoglycemie, asthme, anaphylaxie)
 ##   --play                    sauter le menu principal
-##   --autotest                un robot joue le cas idéalement (vérification), --autotest=all : tous
-##   --shot=f.png --view=menu|briefing|player|zone:thorax|... --frames=N   capture d'écran
+##   --story [--chapter=N]     mode histoire (avec --autotest : les 3 patients enchaînés par le robot)
+##   --autotest                un robot joue le cas idéalement (vérification)
+##   --shot=f.png --view=menu|training|story_intro|card|dialogue|tutorial|cart|constantes|briefing|
+##          player|pause|options|end|bilan|story_end|zone:thorax|... --frames=N   capture d'écran
 
 static var skip_menu := false
 static var selected_case := "acr_fv"
+static var pending := ""  ## après rechargement : "story_brief" (carton + transmission), "training"
 
 var room: ERRoom
 var patient: Patient
@@ -27,6 +32,8 @@ var journal := Journal.new()
 var case: Case
 var hud: ERHud
 var menus: Menus
+var dialogue: DialogueBox
+var guide: Guide
 var env: WorldEnvironment
 var flags := {"gants": false}
 var state := "menu"  ## menu, briefing, play, pause, end
@@ -45,9 +52,15 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "1"
-	if args.has("case"):
-		selected_case = args["case"]
 	_testing = args.has("autotest")
+	if args.has("story") and not Story.active:
+		Story.begin(true, _testing or args.has("shot"))
+		Story.chapter = clampi(int(args.get("chapter", "0")), 0, Story.CHAPTERS.size() - 1)
+		pending = "story_brief"
+	if Story.active:
+		selected_case = Story.current()["case"]
+	elif args.has("case"):
+		selected_case = args["case"]
 	var sfx := Sfx.new()
 	sfx.name = "Sons"
 	sfx.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -127,25 +140,44 @@ func _ready() -> void:
 	add_child(menus)
 	menus.build()
 	menus.case_chosen.connect(_choose_case)
+	menus.story_pressed.connect(_start_story)
 	menus.start_pressed.connect(_start)
 	menus.resume_pressed.connect(_resume)
 	menus.restart_pressed.connect(_restart)
+	menus.next_pressed.connect(_story_next)
 	menus.main_menu_pressed.connect(_to_main_menu)
+	menus.training_pressed.connect(_to_training)
 	menus.quit_pressed.connect(func() -> void: _quit())
+	dialogue = DialogueBox.new()
+	dialogue.name = "Dialogues"
+	dialogue.auto = _testing
+	dialogue.patient_profile = case.profile
+	add_child(dialogue)
 	if args.has("quality"):
 		Settings.quality = int(args["quality"])
 	Settings.apply_graphics(env.environment, get_viewport())
 	case.setup()
 	physio.died.connect(_on_died)
 	_sync_patient(0.0)
+	if Story.active:
+		guide = Guide.new()
+		guide.name = "Guide"
+		add_child(guide)
+		guide.setup(self)
 	if _testing or args.has("shot"):
 		await _run_cli()
 		return
-	if skip_menu or args.has("play"):
+	if Story.active and pending == "story_brief":
+		pending = ""
+		_story_briefing()
+	elif skip_menu or args.has("play"):
 		skip_menu = false
 		_go_briefing(true)
 	else:
 		_show_main_menu()
+		if pending == "training":
+			pending = ""
+			menus.show_training()
 
 
 func _define_zones() -> void:
@@ -189,7 +221,7 @@ func _vignette() -> void:
 # ---------------------------------------------------------------- Boucle
 
 func _process(delta: float) -> void:
-	if state == "menu" and _menu_cam:
+	if state in ["menu", "story_intro"] and _menu_cam:
 		_menu_t += delta * 0.06
 		var a := 0.9 + sin(_menu_t) * 0.6
 		var c := Vector3(-0.3, 1.0, 0.0)
@@ -259,7 +291,8 @@ func drug_given(drug: String, dose: float, route: String) -> void:
 	var txt := "%s %s %s" % [Drugs.name_of(drug), Drugs.dose_text(drug, dose), route]
 	event("drug:" + drug, txt, {"dose": dose, "route": route})
 	event("traitement", "")
-	toast("Injecté : " + txt if route in ["IV", "IM"] else txt)
+	var simple := "%s %s — %s" % [Drugs.name_of(drug), Drugs.dose_text(drug, dose), Lexique.route(route).to_lower()]
+	toast("Injecté : " + simple if route in ["IV", "IM"] else simple)
 	Sfx.play("succes", Vector3.INF, -14.0)
 
 
@@ -358,7 +391,7 @@ func evaluate(alive: bool) -> Dictionary:
 		total += float(o[1])
 		if o[2]:
 			got += float(o[1])
-		lines.append([o[0], o[1], o[2]])
+		lines.append([o[0], o[1], o[2], o[3] if o.size() > 3 else ""])
 	var pen := 0.0
 	for e in case.errors:
 		pen += float(e[1])
@@ -385,6 +418,11 @@ func _finish(alive: bool) -> void:
 	var res := evaluate(alive)
 	if not _testing and not args.has("shot"):
 		res["record"] = Records.submit(case.id, res["grade"], res["score"], physio.time)
+	if Story.active:
+		res["chief"] = Story.debrief(Story.chapter, res)
+		Story.record(res)
+	else:
+		res["chief"] = _chief_comment(res)
 	if _testing:
 		print("FIN DU CAS %s — %s — note %s (%d/100) — vivant : %s — erreurs : %s" % [case.id, case.name, res["grade"], int(res["score"]), alive, str(case.errors)])
 		for l in res["objectives"]:
@@ -396,6 +434,7 @@ func _finish(alive: bool) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.enabled = false
 	hud.visible = false
+	dialogue.hide_bark()
 	menus.show_end(res)
 
 
@@ -472,6 +511,7 @@ func _show_main_menu() -> void:
 func _choose_case(case_id: String) -> void:
 	if _leaving or state != "menu":
 		return
+	Story.stop()
 	if case_id == case.id:
 		_go_briefing()
 		return
@@ -515,6 +555,8 @@ func _start() -> void:
 
 
 func _on_pause_key() -> void:
+	if dialogue and dialogue.active:
+		return
 	match state:
 		"play":
 			if hud.any_panel_open():
@@ -546,6 +588,8 @@ func _restart() -> void:
 	_leaving = true
 	get_tree().paused = false
 	skip_menu = true
+	if Story.active:
+		pending = "story_brief"
 	await menus.fade(true, 0.35)
 	get_tree().reload_current_scene()
 
@@ -556,8 +600,90 @@ func _to_main_menu() -> void:
 	_leaving = true
 	get_tree().paused = false
 	skip_menu = false
+	Story.stop()
 	await menus.fade(true, 0.35)
 	get_tree().reload_current_scene()
+
+
+func _to_training() -> void:
+	if state == "menu":
+		menus.show_training()
+		return
+	pending = "training"
+	_to_main_menu()
+
+
+## Avis du chef en entraînement libre (selon la note).
+func _chief_comment(res: Dictionary) -> String:
+	if not res["alive"]:
+		return "On l'a perdu. Relis les objectifs manqués : souvent, c'est le premier geste qui a manqué ou qui est venu trop tard."
+	match res["grade"]:
+		"S":
+			return "Parfait, rien à redire. Tu peux viser le même résultat plus vite."
+		"A":
+			return "Très bonne prise en charge. Il ne manque presque rien."
+		"B":
+			return "C'est bien. Regarde les objectifs manqués : ce sont eux qui feront la différence."
+		"C":
+			return "Le patient s'en sort, mais plusieurs choses importantes ont manqué. Recommence en suivant la liste « À faire »."
+	return "Il y a beaucoup à revoir. Pas d'inquiétude : recommence, en suivant la liste « À faire » en haut à gauche."
+
+
+# ---------------------------------------------------------------- Histoire
+
+## Menu → histoire : l'intro (sur le fond animé de la salle) puis le premier patient.
+func _start_story(fresh: bool) -> void:
+	if _leaving or state != "menu":
+		return
+	Story.begin(fresh)
+	menus.hide_all()
+	if Story.chapter == 0:
+		state = "story_intro"
+		dialogue.patient_profile = {}
+		await dialogue.play(Story.intro_lines())
+	_leaving = true
+	selected_case = Story.current()["case"]
+	skip_menu = true
+	pending = "story_brief"
+	await menus.fade(true, 0.5)
+	get_tree().reload_current_scene()
+
+
+## Carton du chapitre, transmission en dialogue, puis on entre dans le box.
+func _story_briefing() -> void:
+	state = "briefing"
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	hud.visible = false
+	player.enabled = false
+	player.camera.current = true
+	var ch: Dictionary = Story.current()
+	menus.set_black(true)
+	await menus.show_chapter_card("Patient %d / 3%s" % [Story.chapter + 1, "  ·  tutoriel" if ch.get("tutorial", false) else ""], ch["title"], ch["time"], 0.1 if _testing else 2.0)
+	await menus.hide_chapter_card(0.1 if _testing else 0.8)
+	await dialogue.play(Story.briefing_lines(Story.chapter))
+	state = "briefing"
+	_start()
+
+
+## Bilan → patient suivant (ou fin de la garde).
+func _story_next() -> void:
+	if _leaving:
+		return
+	if Story.advance():
+		_leaving = true
+		selected_case = Story.current()["case"]
+		skip_menu = true
+		pending = "story_brief"
+		await menus.fade(true, 0.5)
+		get_tree().reload_current_scene()
+		return
+	menus.hide_all()
+	hud.visible = false
+	await dialogue.play(Story.ending_lines())
+	if _testing:
+		print("FIN DE L'HISTOIRE — %s" % str(Story.results))
+		return
+	menus.show_story_end()
 
 
 func _build_environment() -> void:
@@ -592,6 +718,9 @@ func _build_environment() -> void:
 # ---------------------------------------------------------------- Tests et captures
 
 func _run_cli() -> void:
+	if args.has("autotest") and Story.active:
+		await _story_autotest()
+		return
 	state = "play"
 	hud.visible = true
 	player.enabled = true
@@ -606,11 +735,106 @@ func _run_cli() -> void:
 		await _take_shot()
 
 
+## Test du mode histoire : intro, puis pour chaque patient carton + transmission (dialogues passés
+## automatiquement), le robot joue, bilan, patient suivant ; à la fin, le dialogue de fin.
+func _story_autotest() -> void:
+	if Story.chapter == 0 and not Story.results.has(0):
+		print("HISTOIRE : intro (%d répliques)" % Story.intro_lines().size())
+		await dialogue.play(Story.intro_lines())
+	print("HISTOIRE : patient %d / 3 — %s (%s)" % [Story.chapter + 1, Story.current()["title"], case.id])
+	await _story_briefing()
+	var bot := ERBot.new()
+	bot.game = self
+	add_child(bot)
+	await bot.run()
+	if guide and guide.is_tutorial():
+		print("HISTOIRE : tutoriel, étape %d / %d atteinte" % [mini(guide.current + 1, guide.steps.size()), guide.steps.size()])
+	await get_tree().create_timer(2.0).timeout
+	print("HISTOIRE : avis du chef — %s" % Story.debrief(Story.chapter, Story.results.get(Story.chapter, {})))
+	var last := Story.chapter >= Story.CHAPTERS.size() - 1
+	await _story_next()
+	if last:
+		await _quit()
+
+
 func _take_shot() -> void:
 	var view: String = args.get("view", "player")
 	if view == "menu":
 		_show_main_menu()
 		_menu_t = 0.9
+	elif view == "training":
+		_show_main_menu()
+		_menu_t = 0.9
+		menus.show_training()
+	elif view == "story_intro":
+		_show_main_menu()
+		_menu_t = 0.9
+		menus.hide_all()
+		state = "story_intro"
+		dialogue.patient_profile = {}
+		var lines: Array = Story.intro_lines()
+		dialogue.auto = false
+		dialogue.play([lines[int(args.get("line", "1"))]])
+		await get_tree().create_timer(3.0).timeout
+	elif view == "card":
+		state = "briefing"
+		hud.visible = false
+		var ch: Dictionary = Story.current() if Story.active else Story.CHAPTERS[1]
+		menus.show_chapter_card("Patient %d / 3" % (Story.chapter + 1), ch["title"], ch["time"], 0.0)
+		await get_tree().create_timer(1.5).timeout
+	elif view == "dialogue":
+		state = "briefing"
+		hud.visible = false
+		player.enabled = false
+		dialogue.auto = false
+		var bl: Array = Story.briefing_lines(Story.chapter)
+		dialogue.play([bl[clampi(int(args.get("line", "0")), 0, bl.size() - 1)]])
+		await get_tree().create_timer(3.5).timeout
+	elif view in ["tutorial", "cart", "constantes", "pause", "options", "bilan", "story_end"]:
+		state = "play"
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if view == "constantes":
+			var bot := ERBot.new()
+			bot.game = self
+			add_child(bot)
+			bot.g = gestures
+			bot.inv = inv
+			bot._monitor()
+			inv.add("glucometre")
+		if args.has("at"):
+			var t2: PackedFloat64Array = args["at"].split_floats(",")
+			player.look_towards(Vector3(t2[0], t2[1], t2[2]))
+		if view == "cart":
+			hud.open_cart("chariot")
+			if args.has("tab"):
+				var tb: Button = hud.marks.get("cart:tab:" + String(args["tab"]))
+				if tb:
+					tb.button_pressed = true
+					tb.pressed.emit()
+		if guide and args.has("step"):
+			guide.current = -1
+			for i in guide.steps.size():
+				guide._latched[i] = i < int(args["step"])
+		await get_tree().create_timer(1.0).timeout
+		if args.has("bark"):
+			var rules: Array = Story.coach_rules(Story.chapter)
+			var r: Dictionary = rules[clampi(int(args["bark"]), 0, rules.size() - 1)] if not rules.is_empty() else {"who": "sophie", "text": "Bonjour !"}
+			dialogue.bark(r["who"], r["text"])
+			await get_tree().create_timer(0.6).timeout
+		if view == "pause":
+			state = "pause"
+			menus.show_pause()
+		elif view == "options":
+			menus.open_options(func() -> void: pass)
+		elif view == "bilan":
+			_finish(true)
+			await get_tree().create_timer(0.5).timeout
+		elif view == "story_end":
+			Story.results = {0: {"grade": "A", "score": 88.0, "alive": true}, 1: {"grade": "S", "score": 100.0, "alive": true}, 2: {"grade": "B", "score": 71.0, "alive": true}}
+			hud.visible = false
+			dialogue.hide_bark()
+			menus.show_story_end()
+		await get_tree().create_timer(1.0).timeout
 	elif view == "briefing":
 		state = "briefing"
 		hud.visible = false
