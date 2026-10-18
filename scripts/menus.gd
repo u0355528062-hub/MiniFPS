@@ -368,10 +368,10 @@ func _case_card(e: Dictionary) -> Button:
 	var chips := UIKit.hbox(8)
 	txt.add_child(chips)
 	var lvl: int = e["level"]
-	chips.add_child(UIKit.chip(["", "Facile", "Moyen", "Difficile"][lvl], [UIKit.OK, UIKit.OK, UIKit.WARN, UIKit.BAD][lvl], Color(0.03, 0.05, 0.06), 13))
-	chips.add_child(UIKit.chip("~%d min" % e["minutes"], Color(1, 1, 1, 0.1), UIKit.TEXT_DIM, 13))
+	chips.add_child(UIKit.chip(["", "Facile", "Moyen", "Difficile"][lvl], [UIKit.OK, UIKit.OK, UIKit.WARN, UIKit.BAD][lvl], Color(0.03, 0.05, 0.06), 15))
+	chips.add_child(UIKit.chip("~%d min" % e["minutes"], Color(1, 1, 1, 0.1), UIKit.TEXT_DIM, 15))
 	txt.add_child(UIKit.text(e["name"], 26, UIKit.TEXT, 800))
-	txt.add_child(UIKit.para(e["tag"], 17, UIKit.TEXT_DIM, 520.0))
+	txt.add_child(UIKit.para(e["tag"], 18, UIKit.TEXT_DIM, 540.0))
 	var right := UIKit.vbox(2)
 	right.alignment = BoxContainer.ALIGNMENT_CENTER
 	right.custom_minimum_size.x = 110

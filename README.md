@@ -14,6 +14,29 @@ s'améliore si tu fais ce qu'il faut… ou s'aggrave, jusqu'à mourir.
   cuisse, défibrillateur, scope, ECG, débitmètre) : la souris est libre pour viser au millimètre
   sur la peau, on tourne autour de la zone (clic droit), on zoome (molette), on se décale (ZQSD).
 
+## Histoire : « Première garde »
+
+Tu es un jeune interne qui fait sa toute première nuit aux urgences, avec **Sophie** (infirmière) et
+le **Dr Marchand** (médecin sénior). Trois patients à la suite, entre des dialogues (portrait, texte
+qui s'écrit, choix de réponse) :
+
+1. **Patrick, hypoglycémie — tutoriel.** Sophie guide chaque geste pas à pas (regarder, marcher,
+   gants, vue rapprochée, appeler, respiration, pouls, glycémie, scope, voie veineuse — ou elle la pose
+   pour toi —, seringue de sucre, injection, interrogatoire, conclusion), avec consignes, touches,
+   flèches dans la salle et cadres lumineux sur les boutons. On ne peut pas échouer gravement.
+2. **Thomas, choc anaphylactique.** Plus de guidage pas à pas : le chef et l'infirmière donnent des
+   conseils si tu traînes ; Sophie peut proposer de poser la voie veineuse.
+3. **Michel, arrêt cardiaque en fibrillation** : l'apothéose.
+
+Après chaque patient : bilan (note, objectifs atteints ou manqués expliqués simplement, erreurs) et
+avis du chef ; transition, puis la fin de la garde. La progression est sauvegardée
+(`user://records.cfg`). L'**entraînement libre** donne accès aux 6 cas depuis le menu principal.
+
+Les termes médicaux sont expliqués partout : « Oxygène (SpO2) », « Tension (PNI) », « dans la veine
+(IV) », « ballon d'oxygène (BAVU) »… La liste **À faire** (en haut à gauche, touche O pour la
+masquer) montre ce qui est attendu et se coche au fur et à mesure ; les constantes passent du vert à
+l'orange puis au rouge selon la gravité.
+
 ## Les cas
 
 | Cas | Patient | Ce qu'il faut faire |
@@ -98,7 +121,10 @@ Carte graphique compatible Vulkan conseillée ; la qualité se règle dans **Opt
 
 ```
 godot --headless --path . -- --case=acr_fv --autotest      # un robot joue le cas idéalement
-godot --path . -- --case=sca_st --shot=f.png --view=zone:thorax   # capture (menu, briefing, player, zone:…)
+godot --headless --path . -- --story --autotest            # l'histoire : intro, 3 patients (robot), fin
+godot --path . -- --case=sca_st --shot=f.png --view=zone:thorax   # capture (menu, training, story_intro,
+#   card, dialogue, tutorial, cart, constantes, briefing, player, pause, options, bilan, story_end, zone:…)
+#   avec --story --chapter=N --step=N --line=N --tab=Examen pour les écrans de l'histoire
 ```
 
 ## Crédits
