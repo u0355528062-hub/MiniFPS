@@ -22,9 +22,9 @@ const TITLES := ["pose le garrot au-dessus du coude", "désinfecte la peau", "ch
 ## Objets du chariot qui lancent la pose quand on clique sur un bras
 const KIT := ["garrot", "antiseptique", "catheter18", "catheter20"]
 const ELBOW_T := 0.46  ## pli du coude (fraction du bras, 0 : épaule, 1 : bout des doigts)
-const ANGLE_IN := 18.0  ## angle de ponction (degrés)
-const ANGLE_FLAT := 6.0  ## angle du cathéter une fois posé
-const DEPTH_VEIN := 0.0045  ## profondeur de la pointe dans la veine (m)
+const ANGLE_IN := 22.0  ## angle de ponction (degrés)
+const ANGLE_FLAT := 9.0  ## angle du cathéter une fois posé (embase à plat sur la peau)
+const DEPTH_VEIN := 0.011  ## avancée de la pointe (le long de l'aiguille) quand elle entre dans la veine, ~4 mm sous la peau
 const PULL_PX := 260.0  ## garrot : distance de souris pour serrer
 const RUB_PX := 900.0  ## désinfection : distance de frottement
 const PALPATE_S := 1.0
@@ -85,7 +85,7 @@ func setup(p_gestures: Node) -> void:
 	physio = g.physio
 	patient = g.patient
 	for s in ["L", "R"]:
-		var mid := Patient.arm_top(s, 0.55)
+		var mid := Patient.arm_top(s, 0.5)
 		var yaw := 0.0 if s == "L" else PI
 		zv.define("perf_" + s, "Voie veineuse — bras %s" % ("gauche" if s == "L" else "droit"), mid + Vector3(0, 0.01, 0), yaw, 64.0, 0.36, 0.1, 0.8)
 	zv.entered.connect(_on_zone_entered)
@@ -537,7 +537,7 @@ func press(h: Dictionary) -> void:
 				toast("Désinfecte le pli du coude et l'avant-bras, là où tu vas piquer", false)
 				return
 			if _stain == null:
-				var t2 := clampf(arm_t(h["pos"]), 0.5, 0.62)
+				var t2 := clampf(arm_t(h["pos"]), 0.47, 0.62)
 				_stain_c = Patient.arm_top(side, t2)
 				_stain = _decal(_textures()["stain"], _stain_c, Patient.arm_dir(side, t2), Vector2(0.08, 0.13), 0.0)
 			_act = {"kind": "desinf"}
@@ -711,7 +711,7 @@ func _advance(px: float) -> void:
 	match _phase:
 		0, 1:
 			_phase = 1
-			_depth = clampf(_depth + px / PUSH_PX * 0.012, -0.006, 0.008)
+			_depth = clampf(_depth + px / PUSH_PX * 0.012, -0.006, 0.013)
 			game.call("set_progress", clampf((_depth + 0.006) / (DEPTH_VEIN + 0.006), 0.0, 1.0), "L'aiguille entre…")
 			if _depth >= DEPTH_VEIN:
 				_in_vein()

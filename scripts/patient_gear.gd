@@ -257,7 +257,7 @@ func remove_cuff() -> void:
 
 # ---------------------------------------------------------------- Garrot, voie veineuse
 
-const IV_LIFT := 0.0032  ## l'embase du cathéter posé repose sur la peau (hauteur de son axe)
+const IV_LIFT := 0.0018  ## hauteur de l'axe du cathéter posé au point de ponction (embase à plat sur la peau)
 static var _scenes := {}
 
 
@@ -279,7 +279,8 @@ static func iv_pose(p: Vector3, d: Vector3, n: Vector3, angle_deg: float, s: flo
 	var a := deg_to_rad(angle_deg)
 	var z := (d * cos(a) - n * sin(a)).normalized()
 	var y := (n * cos(a) + d * sin(a)).normalized()
-	return Transform3D(Basis(y.cross(z), y, z), p + z * s)
+	# (la carte de hauteur peut être un peu au-dessus du maillage : point de ponction 0,8 mm plus bas)
+	return Transform3D(Basis(y.cross(z), y, z), p - n * 0.0008 + z * s)
 
 
 func catheter_node(gauge: String) -> Node3D:

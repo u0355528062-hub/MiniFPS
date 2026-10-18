@@ -221,6 +221,10 @@ func say(text: String, who := "patient") -> void:
 
 
 func set_progress(v: float, label: String) -> void:
+	# En vue rapprochée, la barre passe en bas de l'écran (elle ne cache pas le geste)
+	var dy := maxf(70.0, _root.size.y * 0.5 - 170.0) if zone else 70.0
+	_progress.position.y = dy
+	_progress_lbl.position.y = dy + 16.0
 	_progress.visible = v > 0.0
 	_progress_lbl.visible = v > 0.0
 	_progress.value = v

@@ -170,13 +170,13 @@ func _iv(side := "R", stop_after := 7) -> void:
 			pr.drag(h, Vector2(IVProcedure.PULL_PX, 0.0))
 			pr.release(h),
 		func() -> void:  # 2. désinfection en frottant
-			var h: Dictionary = arm.call(0.56)
+			var h: Dictionary = arm.call(0.5)
 			pr.press(h)
 			for k in 10:
 				pr.drag(h, Vector2(IVProcedure.RUB_PX / 10.0, 0.0))
 			pr.release(h),
-		func() -> void:  # 3. palpation de la veine de l'avant-bras
-			var q: Vector3 = (pr.vein_by("avant_bras", side)["pts"] as PackedVector3Array)[1]
+		func() -> void:  # 3. palpation de la veine du pli du coude
+			var q: Vector3 = (pr.vein_by("pli", side)["pts"] as PackedVector3Array)[1]
 			pr.press({"pos": q, "normal": Vector3.UP, "collider": null})
 			pr._palpate(pr.vein_near(q, side)),
 		func() -> void:  # 4. ponction : l'aiguille entre, reflux, on avance le cathéter, on retire l'aiguille
