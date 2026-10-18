@@ -62,15 +62,15 @@ func _ready() -> void:
 	_shade = TextureRect.new()
 	var g := Gradient.new()
 	g.set_color(0, Color(0, 0.01, 0.02, 0.0))
-	g.set_color(1, Color(0, 0.01, 0.02, 0.75))
+	g.add_point(0.5, Color(0, 0.01, 0.02, 0.0))
+	g.set_color(g.get_point_count() - 1, Color(0, 0.01, 0.02, 0.75))
 	var gt := GradientTexture2D.new()
 	gt.gradient = g
 	gt.fill_from = Vector2(0, 0)
 	gt.fill_to = Vector2(0, 1)
 	_shade.texture = gt
 	_shade.stretch_mode = TextureRect.STRETCH_SCALE
-	_shade.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_shade.offset_top = -480
+	_shade.set_anchors_preset(Control.PRESET_FULL_RECT)  # tout l'écran : un clic n'importe où fait avancer
 	_shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	_shade.gui_input.connect(_on_click)
 	_root.add_child(_shade)
