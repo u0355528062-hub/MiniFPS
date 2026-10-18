@@ -434,6 +434,7 @@ func _finish(alive: bool) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.enabled = false
 	hud.visible = false
+	dialogue.hide_bark()
 	menus.show_end(res)
 
 
@@ -815,6 +816,11 @@ func _take_shot() -> void:
 			for i in guide.steps.size():
 				guide._latched[i] = i < int(args["step"])
 		await get_tree().create_timer(1.0).timeout
+		if args.has("bark"):
+			var rules: Array = Story.coach_rules(Story.chapter)
+			var r: Dictionary = rules[clampi(int(args["bark"]), 0, rules.size() - 1)] if not rules.is_empty() else {"who": "sophie", "text": "Bonjour !"}
+			dialogue.bark(r["who"], r["text"])
+			await get_tree().create_timer(0.6).timeout
 		if view == "pause":
 			state = "pause"
 			menus.show_pause()
@@ -826,6 +832,7 @@ func _take_shot() -> void:
 		elif view == "story_end":
 			Story.results = {0: {"grade": "A", "score": 88.0, "alive": true}, 1: {"grade": "S", "score": 100.0, "alive": true}, 2: {"grade": "B", "score": 71.0, "alive": true}}
 			hud.visible = false
+			dialogue.hide_bark()
 			menus.show_story_end()
 		await get_tree().create_timer(1.0).timeout
 	elif view == "briefing":
