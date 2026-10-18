@@ -157,8 +157,11 @@ func scope_leads() -> int:
 func place_spo2(side: String) -> void:
 	_remove("spo2")
 	spo2_side = side
-	var tip := Patient.arm_point(side, 1.0)
-	var dir := Patient.arm_dir(side, 0.97)
+	# Pince sur la dernière phalange de l'index (main à plat sur le drap)
+	var ph := Patient.index_finger(side)
+	var dip: Vector3 = ph[0]
+	var tip: Vector3 = ph[1]
+	var dir := (tip - dip).normalized()
 	var lat := dir.cross(Vector3.UP).normalized()
 	var up := lat.cross(dir).normalized()
 	var clip := Node3D.new()

@@ -312,3 +312,82 @@ def curl(arm_ob, side, amounts, thumb=(0.0, 0.0, 0.0)):
             pb.rotation_mode = "XYZ"
             pb.rotation_euler = (math.radians(deg), 0.0, 0.0)
     bpy.context.view_layer.update()
+
+
+def eye_centers(base, eyes_ob):
+    """Centre et rayon de chaque globe oculaire (repère MakeHuman, décimètres) : {+1: (c, r), -1: ...}
+    (+1 : œil gauche du personnage, côté +X)."""
+    pts = np.array([(v.co.x / SCALE, v.co.z / SCALE, -v.co.y / SCALE) for v in eyes_ob.data.vertices])
+    out = {}
+    for s in (1, -1):
+        e = pts[pts[:, 0] * s > 0]
+        # Le globe est une sphère dont dépasse un rebord plat (la profondeur donne le rayon)
+        c = (e.max(axis=0) + e.min(axis=0)) * 0.5
+        out[s] = (c, float(e[:, 2].max() - e[:, 2].min()) * 0.5)
+    return out
+
+
+def close_eyelids(base, eyes, lid=0.012, close_at=0.3, reach_up=0.6, reach_down=0.45):
+    """Positions des sommets paupières fermées (pour une cible de forme) : la paupière supérieure
+    descend sur le globe jusqu'à la ligne de fermeture (au tiers inférieur de la fente), l'inférieure
+    remonte un peu ; la peau suit en s'amortissant vers le sourcil et la joue. Calcul en coordonnées
+    sphériques autour du centre de chaque œil (phi : azimut, theta : hauteur). La fente palpébrale est
+    mesurée par des rayons lancés du centre de l'œil : là où ils ne rencontrent pas la peau, l'œil est
+    visible."""
+    from mathutils.bvhtree import BVHTree
+    v = base.v.copy()
+    polys = [vi for vi, ti, g in base.faces if g == "body"]
+    tree = BVHTree.FromPolygons([Vector(p) for p in base.v], polys)
+    bodyv = np.array(sorted(base.groups["body"]))
+
+    def fall(t):
+        t = np.clip(t, 0.0, 1.0)
+        return 1.0 - t * t * (3 - 2 * t)
+
+    for s, (c, R) in eyes.items():
+        # Fente : pour chaque azimut, bornes haute et basse des directions sans peau devant l'œil
+        phis = np.radians(np.arange(-80, 81, 2.0))
+        ths = np.radians(np.arange(-60, 61, 1.0))
+        cols = []
+        for ph in phis:
+            open_th = []
+            for th in ths:
+                d = Vector((math.cos(th) * math.sin(ph), math.sin(th), math.cos(th) * math.cos(ph)))
+                hit = tree.ray_cast(Vector(c), d, R * 1.8)
+                if hit[0] is None:
+                    open_th.append(th)
+            if open_th:
+                cols.append((ph, max(open_th), min(open_th)))
+        cols = np.array(cols)
+        pa, pb = cols[0, 0], cols[-1, 0]
+        q = base.v[bodyv] - c
+        rr = np.linalg.norm(q, axis=1)
+        sel = (rr < R * 3.2) & (q[:, 2] > -R * 0.2)
+        idx = bodyv[sel]
+        q = q[sel]
+        r = rr[sel]
+        phi = np.arctan2(q[:, 0], q[:, 2])
+        th = np.arctan2(q[:, 1], np.hypot(q[:, 0], q[:, 2]))
+        pc = np.clip(phi, pa, pb)
+        th_u = np.interp(pc, cols[:, 0], cols[:, 1])
+        th_l = np.interp(pc, cols[:, 0], cols[:, 2])
+        th_c = th_l + close_at * (th_u - th_l)
+        mid = (th_u + th_l) * 0.5
+        # Au-delà des coins : la peau ne bouge plus
+        wphi = 1.0 - np.clip(np.abs(phi - pc) / 0.12, 0.0, 1.0)
+        wphi = wphi * wphi * (3 - 2 * wphi)
+        upper = th >= mid
+        shift = np.where(upper, (th_c - th_u) * fall((th - th_u) / reach_up), (th_c - th_l) * fall((th_l - th) / reach_down))
+        shift *= wphi
+        th2 = th + shift
+        # Rebord replié sous le globe : reste de son côté de la ligne de fermeture
+        th2 = np.where(upper, np.maximum(th2, th_c), np.minimum(th2, th_c))
+        inside = r < R * 0.995
+        moved = np.abs(th2 - th) > 1e-6
+        # La paupière glisse sur le globe : jamais à moins d'une épaisseur de sa surface
+        r2 = np.where(moved & ~inside, np.maximum(r, R + lid), r)
+        newp = c + np.stack([r2 * np.cos(th2) * np.sin(phi), r2 * np.sin(th2), r2 * np.cos(th2) * np.cos(phi)], 1)
+        v[idx] = np.where(moved[:, None], newp, base.v[idx])
+        print("paupière", s, "sommets déplacés", int(moved.sum()),
+              "fente %.0f..%.0f°, hauteur max %.0f°, R %.3f" % (math.degrees(pa), math.degrees(pb), math.degrees((cols[:, 1] - cols[:, 2]).max()), R))
+    return v

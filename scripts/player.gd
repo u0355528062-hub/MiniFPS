@@ -2,7 +2,8 @@ class_name Player
 extends CharacterBody3D
 ## Urgentiste à la première personne : ZQSD (ou WASD, flèches) pour marcher, souris pour regarder,
 ## Maj pour aller plus vite, Ctrl pour se pencher. Le viseur désigne ce qu'on peut utiliser (zone
-## du patient, appareil, chariot...) : clic gauche (ou E) pour l'utiliser.
+## du patient, appareil, chariot...) : clic gauche (ou E) pour l'utiliser. En baissant la tête, on voit
+## son corps (tunique et pantalon de bloc, sabots, mains nues ou gantées), qui se penche avec lui.
 
 signal pause_requested
 signal interact_requested(it: Interactable)
@@ -14,6 +15,9 @@ const LEAN_FWD := 0.28
 const WALK := 1.4
 const RUN := 2.6
 const REACH := 1.9
+const BODY_GLB := "res://assets/models/medecin.glb"
+## Inclinaison du buste quand on se penche (degrés)
+const BODY_LEAN := 24.0
 
 var camera: Camera3D
 var head: Node3D
@@ -23,6 +27,10 @@ var aimed: Interactable
 var sim_look := Vector2.INF
 var sim_lean := -1.0
 
+var body: Node3D  ## corps de l'urgentiste (sans tête : la caméra est à la place des yeux)
+var _buste: Node3D
+var _hands_mi: Array = []  ## [MeshInstance3D, surface] des mains (gants)
+var _gloved := false
 var _yaw := 0.0
 var _pitch := -0.35
 var _bob_t := 0.0
@@ -53,6 +61,32 @@ func build(at: Vector3, look_at_point: Vector3) -> void:
 	position = at
 	floor_max_angle = deg_to_rad(50)
 	look_towards(look_at_point)
+	_build_body()
+
+
+## Corps vu à la première personne (tools/blender/build_mains.py) : pieds à l'origine, yeux à la
+## verticale de l'origine, regard vers -Z.
+func _build_body() -> void:
+	var sc: PackedScene = load(BODY_GLB)
+	body = sc.instantiate()
+	body.name = "Corps"
+	add_child(body)
+	Hands.dress(body)
+	_buste = body.find_child("Buste", true, false) as Node3D
+	for mi in body.find_children("*", "MeshInstance3D", true, false):
+		var m3 := mi as MeshInstance3D
+		for i in m3.mesh.get_surface_count():
+			var src := m3.mesh.surface_get_material(i)
+			if src and src.resource_name.to_lower().begins_with("main"):
+				_hands_mi.append([m3, i])
+	_set_gloves(false)
+
+
+## Mains nues ou gantées (gants nitrile).
+func _set_gloves(on: bool) -> void:
+	_gloved = on
+	for e in _hands_mi:
+		(e[0] as MeshInstance3D).set_surface_override_material(e[1], Hands.glove_mat() if on else Hands.skin_mat())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -151,6 +185,16 @@ func _physics_process(delta: float) -> void:
 	_bob = Vector3(cos(_bob_t * 0.5) * amp * 0.6, -absf(sin(_bob_t)) * amp, 0.0)
 	var lean := smoothstep(0.0, 1.0, crouch)
 	head.position = Vector3(0, EYE - LEAN_DOWN * lean, -LEAN_FWD * lean) + _bob
+	if body:
+		# Le corps n'est visible qu'à la première personne (la caméra de la vue rapprochée tourne autour
+		# du patient et pourrait passer dedans)
+		body.visible = enabled
+		if _buste:
+			_buste.rotation.x = -deg_to_rad(BODY_LEAN) * lean
+		var flags: Variant = get_parent().get("flags")
+		var gloves: bool = flags is Dictionary and bool((flags as Dictionary).get("gants", false))
+		if gloves != _gloved:
+			_set_gloves(gloves)
 	camera.fov = Settings.fov
 	if enabled:
 		_update_aim()

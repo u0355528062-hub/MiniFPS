@@ -22,6 +22,7 @@ from mathutils.bvhtree import BVHTree
 sys.path.insert(0, os.path.dirname(__file__))
 import bl  # noqa: E402
 import mh  # noqa: E402
+from build_skin import hair_weights  # noqa: E402
 
 DATA = os.path.join(bl.ROOT, "assets", "data")
 TABLE = 0.80
@@ -45,6 +46,18 @@ def build_body():
     mh.skin(body, arm)
     eyes = mh.fit_proxy(b, mh.MHDATA + "/eyes/high-poly/high-poly.mhclo", "Yeux", bl.mat("Oeil", (0.9, 0.9, 0.9), 0.1))
     mh.rigid_to_bone(eyes, arm, "head")
+    # Paupières fermées (cible de forme « yeux_fermes ») et zone des poils (coques de cheveux)
+    open_v = b.v.copy()
+    b.v = mh.close_eyelids(b, mh.eye_centers(b, eyes))
+    closed = mh.build_mesh(b, {"body"}, "PeauFermee")
+    mh.skin(closed, arm)
+    hair = mh.build_mesh(b, {"body"}, "Poils", bl.mat("Poils", (0.1, 0.08, 0.06), 0.6))
+    mh.skin(hair, arm)
+    b.v = open_v
+    hair_open = mh.build_mesh(b, {"body"}, "PoilsOuverts")
+    mh.skin(hair_open, arm)
+    scalp, brows, beard = hair_weights(b)
+    hair_w = np.maximum(scalp, np.maximum(brows, beard))
     # Pose couchée : bras le long du corps, un peu écartés, paumes contre le matelas (vers l'arrière),
     # doigts détendus ; pieds en légère flexion plantaire
     bpy.context.view_layer.objects.active = arm
@@ -67,17 +80,48 @@ def build_body():
         joints[bn] = (mh.bone_head(arm, bn).copy(), mh.bone_tail(arm, bn).copy())
     for s in "lr":
         joints["tip_" + s] = (mh.bone_tail(arm, "middle_03_" + s).copy(), None)
-    mh.bake_pose([body, eyes])
+        joints["index_03_" + s] = (mh.bone_head(arm, "index_03_" + s).copy(), mh.bone_tail(arm, "index_03_" + s).copy())
+    mh.bake_pose([body, eyes, closed, hair, hair_open])
     bpy.data.objects.remove(arm)
+    add_shape_key(body, closed, "yeux_fermes")
+    add_shape_key(hair, hair_open, "yeux_fermes", reverse=True)
+    keep_faces(hair, hair_w > 0.03)
     mh.remove_loose(body)
-    return body, eyes, joints
+    mh.remove_loose(hair)
+    return body, eyes, hair, joints
+
+
+def add_shape_key(ob, other, name, reverse=False):
+    """Cible de forme de ob vers les positions de other (même maillage). reverse : ob a déjà la forme
+    cible ; la forme de base devient celle de other (poils construits paupières fermées)."""
+    if reverse:
+        target = [v.co.copy() for v in ob.data.vertices]
+        for v, w in zip(ob.data.vertices, other.data.vertices):
+            v.co = w.co
+    else:
+        target = [v.co.copy() for v in other.data.vertices]
+    ob.shape_key_add(name="Base")
+    k = ob.shape_key_add(name=name)
+    for d, co in zip(k.data, target):
+        d.co = co
+    bpy.data.objects.remove(other)
+
+
+def keep_faces(ob, vmask):
+    """Garde les faces dont au moins un sommet est dans le masque (indices du maillage de base)."""
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    drop = [f for f in bm.faces if not any(vmask[v.index] for v in f.verts)]
+    bmesh.ops.delete(bm, geom=drop, context="FACES_ONLY")
+    bm.to_mesh(ob.data)
+    bm.free()
 
 
 def lay_down(objs, joints):
     """Debout -> couché sur le dos, tête vers +X (jeu), face vers le haut, gauche vers +Z."""
     M = Matrix(((0, 0, 1, 0), (-1, 0, 0, 0), (0, -1, 0, 0), (0, 0, 0, 1)))
     for ob in objs:
-        ob.data.transform(M)
+        ob.data.transform(M, shape_keys=True)
     for k in joints:
         h, t = joints[k]
         joints[k] = (M @ h, (M @ t) if t is not None else None)
@@ -89,7 +133,7 @@ def lay_down(objs, joints):
     th = math.atan((heel.z - back.z) / (heel.x - back.x))
     R = Matrix.Translation(back) @ Matrix.Rotation(th, 4, "Y") @ Matrix.Translation(-back)
     for ob in objs:
-        ob.data.transform(R)
+        ob.data.transform(R, shape_keys=True)
     for k in joints:
         h, t = joints[k]
         joints[k] = (R @ h, (R @ t) if t is not None else None)
@@ -100,7 +144,7 @@ def lay_down(objs, joints):
     zmin = min(v.co.z for v in objs[0].data.vertices if abs(v.co.y) < 0.12 and v.co.x > -0.9)
     T = Matrix.Translation(Vector((OLD_SHOULDER_X + 0.02 - sh.x, -sh.y, TABLE - zmin - 0.006)))
     for ob in objs:
-        ob.data.transform(T)
+        ob.data.transform(T, shape_keys=True)
     for k in joints:
         h, t = joints[k]
         joints[k] = (T @ h, (T @ t) if t is not None else None)
@@ -139,11 +183,62 @@ def height_map(objs, path, like):
     return t
 
 
+class NdImage:
+    """Les quelques filtres de scipy.ndimage utilisés pour le drap (si scipy est absent), en numpy :
+    mêmes bords (« reflect »)."""
+
+    @staticmethod
+    def _grey(a, offsets, fn):
+        r = max(max(abs(i), abs(j)) for i, j in offsets)
+        p = np.pad(a, r, mode="symmetric")
+        out = None
+        for i, j in offsets:
+            sh = p[r + i:r + i + a.shape[0], r + j:r + j + a.shape[1]]
+            out = sh.copy() if out is None else fn(out, sh)
+        return out
+
+    @staticmethod
+    def grey_dilation(a, size=None, footprint=None):
+        if footprint is None:
+            footprint = np.ones(size, bool)
+        cy, cx = footprint.shape[0] // 2, footprint.shape[1] // 2
+        offs = [(i - cy, j - cx) for i, j in zip(*np.nonzero(footprint))]
+        return NdImage._grey(a, offs, np.maximum)
+
+    @staticmethod
+    def grey_closing(a, footprint):
+        d = NdImage.grey_dilation(a, footprint=footprint)
+        cy, cx = footprint.shape[0] // 2, footprint.shape[1] // 2
+        offs = [(cy - i, cx - j) for i, j in zip(*np.nonzero(footprint))]
+        return NdImage._grey(d, offs, np.minimum)
+
+    @staticmethod
+    def gaussian_filter(a, sigma):
+        sig = sigma if isinstance(sigma, (tuple, list)) else (sigma, sigma)
+        out = a.astype(np.float64)
+        for ax, sg in enumerate(sig):
+            r = int(4.0 * sg + 0.5)
+            x = np.arange(-r, r + 1)
+            k = np.exp(-0.5 * (x / sg) ** 2)
+            k /= k.sum()
+            pad = [(0, 0), (0, 0)]
+            pad[ax] = (r, r)
+            p = np.pad(out, pad, mode="symmetric")
+            acc = np.zeros_like(out)
+            for i, w in enumerate(k):
+                acc += w * (p[i:i + out.shape[0], :] if ax == 0 else p[:, i:i + out.shape[1]])
+            out = acc
+        return out
+
+
 def sheet(body):
     """Drap blanc sur le bassin et les jambes, calculé sur la carte de hauteur du corps (sans les
     bras : ils restent posés dessus) : le tissu fait pont entre les jambes, retombe sur les côtés du
     brancard et au bout, ourlet replié en haut, quelques plis."""
-    from scipy import ndimage
+    try:
+        from scipy import ndimage
+    except ImportError:
+        ndimage = NdImage
     # Sommets des bras : repérés par leurs os (groupes de sommets gardés après la pose)
     arm_groups = {g.index for g in body.vertex_groups if any(k in g.name for k in ("upperarm", "lowerarm", "hand", "index", "middle", "ring", "pinky", "thumb"))}
     arm_ids = set()
@@ -219,8 +314,14 @@ def sheet(body):
     return cloth
 
 
-def landmarks(t_body, joints, path):
+def landmarks(t_body, joints, path, eyes):
     lm = json.load(open(path))
+    # Yeux : devant du globe (centre de la cornée), gauche du patient en +Z
+    pts = np.array([game(eyes.matrix_world @ v.co) for v in eyes.data.vertices])
+    for side, sz in (("L", 1), ("R", -1)):
+        e = pts[pts[:, 2] * sz > 0]
+        c = (e.max(axis=0) + e.min(axis=0)) * 0.5
+        lm["eye_" + side] = [round(float(c[0]), 4), round(float(e[:, 1].max()), 4), round(float(c[2]), 4)]
 
     def bh(x, z):
         return top_hit(t_body, x, z)
@@ -243,6 +344,10 @@ def landmarks(t_body, joints, path):
         tip = game(joints["tip_" + s][0])
         lm["fingertip_" + side] = [tip[0], bh(tip[0], tip[2]), tip[2]]
         lm["arm_top_y_" + side] = max(l[1] + l[3] for l in line)
+        # Dernière phalange de l'index (oxymètre, glycémie capillaire) : articulation et bout
+        h, t = joints["index_03_" + s]
+        lm["index_dip_" + side] = [round(c, 4) for c in game(h)]
+        lm["index_tip_" + side] = [round(c, 4) for c in game(t)]
     hd = game(joints["head"][0])
     ht = game(joints["head"][1])
     nk = game(joints["neck_01"][0])
@@ -275,17 +380,17 @@ def landmarks(t_body, joints, path):
 
 def main():
     bl.reset()
-    body, eyes, joints = build_body()
-    lay_down([body, eyes], joints)
-    for ob in (body, eyes):
+    body, eyes, hair, joints = build_body()
+    lay_down([body, eyes, hair], joints)
+    for ob in (body, eyes, hair):
         bl.bake_transforms(ob)
     t_body = height_map([body], os.path.join(DATA, "peau_dos_hauteur.bin"), os.path.join(DATA, "peau_dos_hauteur.bin"))
-    landmarks(t_body, joints, os.path.join(DATA, "patient_dos.json"))
+    landmarks(t_body, joints, os.path.join(DATA, "patient_dos.json"), eyes)
     cl = sheet(body)
     height_map([cl], os.path.join(DATA, "drap_dos_hauteur.bin"), os.path.join(DATA, "drap_dos_hauteur.bin"))
     bl.export("drap_dos", [cl])
     bpy.data.objects.remove(cl)
-    bl.export("patient_urg", [body, eyes])
+    bl.export("patient_urg", [body, eyes, hair])
     if "--preview" in sys.argv:
         bl.preview("/tmp/apercus/patient_couche.png", bl.g(-0.2, 2.0, 1.4), bl.g(-0.3, 0.9, 0.0), size=(900, 600), lens=35)
 

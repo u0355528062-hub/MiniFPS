@@ -117,9 +117,14 @@ Carte graphique compatible Vulkan conseillée ; la qualité se règle dans **Opt
   soluté, stéthoscope, glucomètre, électrodes… et le décor de la salle (`build_salle.py`) :
   échographe, pousse-seringues, étagère à bacs colorés, poubelles DASRI, fauteuil roulant, rideau,
   horloge, panneau Sortie, distributeurs de gel et de gants, prises ; affiches (`tools/build_affiches.py`).
-- Patient : peau de l'atlas **Z-Anatomy** (CC BY-SA 4.0), signes cliniques dessinés en temps réel
-  (pâleur, cyanose, sueurs, marbrures, urticaire, rougeur, veines sous garrot), respiration, thorax
-  qui s'enfonce sous le massage.
+- Patient : humain **MakeHuman** (CC0) couché, textures de peau cuites dans Blender (teint, pores,
+  lèvres, ongles), cheveux courts, sourcils et barbe naissante, yeux texturés (pupilles en myosis ou
+  en mydriase), paupières qui se ferment quand il est inconscient ; signes cliniques dessinés en temps
+  réel (pâleur, cyanose, sueurs, marbrures, urticaire, rougeur, veines sous garrot), respiration,
+  thorax qui s'enfonce sous le massage. Repères du thorax d'après l'atlas **Z-Anatomy** (CC BY-SA 4.0).
+- Soignant : mains gantées (nitrile) aux vraies proportions (main MakeHuman), posées pour chaque geste
+  sur la peau sans la traverser ; corps en tenue de bloc visible en baissant la tête
+  (`tools/blender/build_mains.py`).
 - Radio du thorax **calculée sur l'anatomie** : rayons lancés à travers le corps, les poumons et les
   os de l'atlas (`tools/blender/build_xray.py`).
 - Éclairage de salle (dalles, lampe d'examen), occlusion ambiante, réflexions, illumination globale
@@ -138,4 +143,5 @@ godot --path . -- --case=sca_st --shot=f.png --view=zone:thorax   # capture (men
 ## Crédits
 
 Anatomie : Z-Anatomy (Gauthier Kervyn, CC BY-SA 4.0), d'après BodyParts3D (DBCLS, CC BY-SA).
+Humains : MakeHuman et MPFB2 (maillage, squelette, yeux, CC0).
 Police : Inter (SIL OFL). Moteur : Godot Engine (MIT).

@@ -3,9 +3,10 @@ extends Node3D
 ## Patient des urgences, couché sur le dos sur le brancard : tête vers +X, côté gauche du patient
 ## vers +Z (côté du soignant), milieu du sternum en X = Z = 0.
 ##
-## Corps : peau de l'atlas Z-Anatomy (CC BY-SA 4.0), repères anatomiques mesurés sur l'atlas
-## (sternum, clavicules, côtes et espaces intercostaux, bras, cou, visage). Les signes cliniques
-## (pâleur, cyanose, sueurs, marbrures, urticaire, rougeur) sont réglés par la physiologie ; le
+## Corps : humain MakeHuman (CC0) couché, textures de peau cuites (tools/blender/build_skin.py),
+## cheveux courts en coques, yeux et paupières qui se ferment (cible de forme) ; repères anatomiques
+## (sternum, clavicules, côtes et espaces intercostaux de l'atlas Z-Anatomy, bras, cou, visage).
+## Les signes cliniques (pâleur, cyanose, sueurs, marbrures, urticaire, rougeur) sont réglés par la physiologie ; le
 ## thorax se soulève à chaque respiration et s'enfonce sous les mains pendant le massage.
 ## Zones cliquables (tête, cou, thorax, abdomen, bras, mains, jambes) : vue rapprochée du geste.
 
@@ -27,7 +28,12 @@ const LAYER_DEVICE := 8
 const CHEST_X := Vector4(-0.36, -0.2, 0.08, 0.2)
 const CHEST_Z := Vector2(0.1, 0.2)
 const CHEST_H := Vector2(0.06, 0.16)
-const ATLAS := [Vector4(0, 0, 1, 0), Vector4(0, -1, 0, 0.95031), Vector4(1, 0, 0, 1.29927)]
+## Repères le long du bras (ligne centrale, 0 : épaule, 1 : bout du majeur) : coude, poignet
+const ARM_ELBOW := 0.333
+const ARM_WRIST := 0.667
+## Coques des cheveux courts (nombre, longueur des cheveux en m)
+const HAIR_SHELLS := 10
+const HAIR_LEN := 0.0065
 
 static var landmarks := {}
 static var HEART_C := Vector3(-0.024, 0.976, 0.032)
@@ -45,6 +51,13 @@ static var _step := 0.0025
 
 var skin_mat: ShaderMaterial
 var skin_mesh: MeshInstance3D
+var eye_mat: ShaderMaterial
+var hair_mat: ShaderMaterial
+var _hair_shells: Array[MeshInstance3D] = []
+var _eye_meshes: Array = []
+## Paupières : ouverture voulue et actuelle (0 fermées, 1 grand ouvertes)
+var _lids_target := 0.0
+var _lids := 0.0
 var sheet: Node3D
 var zones := {}  ## id -> Interactable
 var gear: PatientGear
@@ -195,6 +208,11 @@ static func arm_point(side: String, t: float) -> Vector3:
 	return Vector3(lerpf(a[0], b[0], k), lerpf(a[1], b[1], k), lerpf(a[2], b[2], k))
 
 
+## Dernière phalange de l'index : [articulation, bout] (oxymètre, glycémie capillaire).
+static func index_finger(side: String) -> Array:
+	return [lm("index_dip_" + side), lm("index_tip_" + side)]
+
+
 static func arm_dir(side: String, t: float) -> Vector3:
 	return (arm_point(side, minf(1.0, t + 0.04)) - arm_point(side, maxf(0.0, t - 0.04))).normalized()
 
@@ -215,29 +233,41 @@ func build(profile: Dictionary) -> void:
 	add_child(body)
 	skin_mat = ShaderMaterial.new()
 	skin_mat.shader = preload("res://shaders/patient_skin.gdshader")
-	skin_mat.set_shader_parameter("skin_albedo", Tex.get_tex("skin_albedo"))
+	skin_mat.set_shader_parameter("peau_albedo", Tex.get_tex("peau_albedo"))
+	skin_mat.set_shader_parameter("peau_normal", Tex.get_tex("peau_normal"))
+	skin_mat.set_shader_parameter("peau_masques", Tex.get_tex("peau_masques"))
+	skin_mat.set_shader_parameter("peau_poils", Tex.get_tex("peau_poils"))
 	skin_mat.set_shader_parameter("skin_normal", Tex.get_tex("skin_normal"))
 	skin_mat.set_shader_parameter("skin_rough", Tex.get_tex("skin_rough"))
 	skin_mat.set_shader_parameter("mottle", Tex.get_tex("tissue_mottle"))
-	skin_mat.set_shader_parameter("atlas_rx", ATLAS[0])
-	skin_mat.set_shader_parameter("atlas_ry", ATLAS[1])
-	skin_mat.set_shader_parameter("atlas_rz", ATLAS[2])
 	skin_mat.set_shader_parameter("chest_x", CHEST_X)
 	skin_mat.set_shader_parameter("chest_z", CHEST_Z)
 	skin_mat.set_shader_parameter("chest_h", CHEST_H)
 	skin_mat.set_shader_parameter("table_top", TABLE_TOP)
+	var tl := lm("fingertip_L")
+	var tr := lm("fingertip_R")
+	skin_mat.set_shader_parameter("fingertips", Vector4(tl.x, tl.z, tr.x, tr.z))
+	_set_hair_params(skin_mat, profile)
 	skin_mat.set_shader_parameter("skin_tint", profile.get("skin", Color(0.99, 0.95, 0.94)))
-	skin_mat.set_shader_parameter("hair_col", profile.get("hair", Color(0.045, 0.032, 0.025)))
-	skin_mat.set_shader_parameter("stubble", profile.get("stubble", 0.3))
-	skin_mat.set_shader_parameter("bald", profile.get("bald", 0.0))
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		var m3 := mi as MeshInstance3D
-		if m3.name == "Peau":
-			skin_mesh = m3
-			m3.material_override = skin_mat
-			# La peau bouge (respiration, massage) : boîte englobante un peu agrandie
-			m3.extra_cull_margin = 0.05
-			_add_trimesh(m3)
+		match String(m3.name):
+			"Peau":
+				skin_mesh = m3
+				m3.material_override = skin_mat
+				# La peau bouge (respiration, massage) : boîte englobante un peu agrandie
+				m3.extra_cull_margin = 0.05
+				_add_trimesh(m3)
+			"Yeux":
+				eye_mat = ShaderMaterial.new()
+				eye_mat.shader = preload("res://shaders/eye.gdshader")
+				eye_mat.set_shader_parameter("iris_tex", Tex.get_tex("oeil_iris"))
+				m3.material_override = eye_mat
+			"Poils":
+				_build_hair(m3, profile)
+	_eye_meshes = [skin_mesh]
+	_eye_meshes.append_array(_hair_shells)
+	_apply_lids()
 	# Drap blanc sur les jambes
 	var sh: PackedScene = load(SHEET_GLB)
 	sheet = sh.instantiate()
@@ -256,6 +286,37 @@ func build(profile: Dictionary) -> void:
 	gear.patient = self
 	add_child(gear)
 	gear.build(profile)
+
+
+## Couleur des poils, barbe naissante et calvitie (zone dégarnie sur le dessus et l'avant du crâne).
+func _set_hair_params(m: ShaderMaterial, profile: Dictionary) -> void:
+	var head_top := float(landmarks.get("head_top_x", 0.49))
+	var nose := lm("nose_tip")
+	m.set_shader_parameter("hair_col", profile.get("hair", Color(0.045, 0.032, 0.025)))
+	m.set_shader_parameter("stubble", profile.get("stubble", 0.3))
+	m.set_shader_parameter("bald", profile.get("bald", 0.0))
+	m.set_shader_parameter("crown", Vector4(head_top - 0.035, nose.y - 0.035, 0.0, 0.1))
+
+
+## Cheveux courts, sourcils, barbe : coques superposées au-dessus de la peau (même maillage décalé
+## le long des normales dans le shader, une instance par hauteur).
+func _build_hair(src: MeshInstance3D, profile: Dictionary) -> void:
+	hair_mat = ShaderMaterial.new()
+	hair_mat.shader = preload("res://shaders/hair_shell.gdshader")
+	hair_mat.set_shader_parameter("peau_poils", Tex.get_tex("peau_poils"))
+	hair_mat.set_shader_parameter("hair_len", HAIR_LEN)
+	_set_hair_params(hair_mat, profile)
+	src.visible = false
+	for i in HAIR_SHELLS:
+		var sh := MeshInstance3D.new()
+		sh.name = "Cheveux%d" % i
+		sh.mesh = src.mesh
+		sh.material_override = hair_mat
+		sh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		sh.set_instance_shader_parameter("shell", (i + 1.0) / HAIR_SHELLS)
+		src.get_parent().add_child(sh)
+		sh.transform = src.transform
+		_hair_shells.append(sh)
 
 
 ## Corps solide pour viser précisément la peau (rayon de la souris en vue rapprochée).
@@ -282,7 +343,7 @@ func _build_zones() -> void:
 	for side in ["L", "R"]:
 		var s := 1.0 if side == "L" else -1.0
 		var sh := arm_point(side, 0.05)
-		var wr := arm_point(side, 0.8)
+		var wr := arm_point(side, ARM_WRIST)
 		var tip := arm_point(side, 1.0)
 		var c := (sh + wr) * 0.5
 		var len := Vector2(sh.x - wr.x, sh.z - wr.z).length()
@@ -309,10 +370,27 @@ func set_signs(s: Dictionary) -> void:
 	for k in ["pallor", "cyanosis", "sweat", "mottling", "urticaria", "flush"]:
 		if s.has(k):
 			skin_mat.set_shader_parameter(k, clampf(float(s[k]), 0.0, 1.0))
+	if eye_mat and s.has("pallor"):
+		eye_mat.set_shader_parameter("pallor", clampf(float(s["pallor"]), 0.0, 1.0))
 
 
+## Ouverture des yeux (0 : fermés, 1 : grands ouverts) ; les paupières y vont en une fraction de
+## seconde.
 func set_eyes_open(v: float) -> void:
-	skin_mat.set_shader_parameter("eyes_open", v)
+	_lids_target = clampf(v, 0.0, 1.0)
+
+
+## Diamètre des pupilles (mm) : myosis, mydriase.
+func set_pupils(mm: float) -> void:
+	if eye_mat:
+		eye_mat.set_shader_parameter("pupil_mm", mm)
+
+
+func _apply_lids() -> void:
+	for mi in _eye_meshes:
+		var m3 := mi as MeshInstance3D
+		if m3 and m3.mesh and m3.mesh.get_blend_shape_count() > 0:
+			m3.set_blend_shape_value(0, 1.0 - _lids)
 
 
 ## Une insufflation au ballon : le thorax se soulève (si les voies aériennes sont libres).
@@ -365,4 +443,7 @@ func _process(delta: float) -> void:
 		if _assist_t > 1.6:
 			_assist = 0.0
 	breath_now = spont * BREATH_AMP
+	if absf(_lids - _lids_target) > 0.001:
+		_lids = move_toward(_lids, _lids_target, delta * 5.0)
+		_apply_lids()
 	skin_mat.set_shader_parameter("breath", breath_now)
