@@ -183,9 +183,9 @@ func _iv(side := "R", stop_after := 7) -> void:
 			var h: Dictionary = {"pos": pr.chosen["p"], "normal": Vector3.UP, "collider": null}
 			pr.press(h)
 			for k in 6:
-				pr.drag(h, Vector2.UP * IVProcedure.PUSH_PX * 0.5)
+				pr.drag(h, pr._screen_dir() * IVProcedure.PUSH_PX * 0.5)
 			for k in 6:
-				pr.drag(h, Vector2.DOWN * IVProcedure.PUSH_PX * 0.5)
+				pr.drag(h, -pr._screen_dir() * IVProcedure.PUSH_PX * 0.5)
 			pr.release(h),
 		func() -> void:  # 5. garrot desserré
 			pr.press(arm.call(0.36)),
@@ -200,7 +200,7 @@ func _iv(side := "R", stop_after := 7) -> void:
 			_log("ÉCHEC : voie veineuse bloquée à l'étape %d (%s)" % [pr.step + 1, IVProcedure.STEPS[pr.step]])
 			return
 		(steps[i] as Callable).call()
-		if i == 3 and stop_after > 4:
+		if i == 3 and stop_after > 4 and g.gear.has_iv():
 			# Prélèvement sur le cathéter (avant de desserrer le garrot)
 			_take("tubes")
 			inv.select_id("tubes")
