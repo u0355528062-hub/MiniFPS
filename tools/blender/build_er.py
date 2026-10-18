@@ -715,16 +715,39 @@ def build_thermometre(m):
 
 
 def build_poche(m):
-    """Poche de soluté (500 mL) avec tubulure et chambre compte-gouttes, accrochée par l'œillet en
-    (0, 0, 0)."""
+    """Poche souple de soluté (NaCl 0,9 % 500 mL) : enveloppe en coussin translucide, soudures haut
+    et bas, étiquette imprimée et graduations, deux sites en bas (perforateur de la tubulure, site
+    d'injection), perforateur et chambre compte-gouttes avec niveau de liquide. Accrochée par
+    l'œillet en (0, 0, 0) ; le bas de la chambre compte-gouttes est à y = -0,322."""
     p = []
-    bag = bl.box("poche", (0.11, 0.03, 0.2), g(0, -0.12, 0), bl.mat("Poche", (0.9, 0.94, 0.97), 0.1, 0.0, 0.5, alpha=0.35), bev=0.012)
+    film = bl.mat("Poche", (0.9, 0.94, 0.97), 0.18, 0.0, 0.5, alpha=0.32)
+    fluid = bl.mat("Soluté", (0.8, 0.88, 0.96), 0.12, 0.0, 0.5, alpha=0.28)
+    ink = bl.mat("Encre poche", (0.1, 0.3, 0.65), 0.5)
+    # Enveloppe en coussin (boîte très arrondie aplatie), soudure du haut avec l'œillet
+    bag = bl.box("poche", (0.12, 0.034, 0.19), g(0, -0.125, 0), film, bev=0.016, seg=4)
     p.append(bag)
-    p.append(bl.box("liquide", (0.1, 0.022, 0.15), g(0, -0.145, 0), bl.mat("Soluté", (0.82, 0.88, 0.95), 0.05, 0.0, 0.5, alpha=0.3), bev=0.008))
-    p.append(bl.box("etiquette", (0.07, 0.032, 0.06), g(0, -0.1, 0), m["white"]))
-    p.append(bl.torus("oeillet", 0.008, 0.002, g(0, -0.01, 0), m["clear"], rot=(D(90), 0, 0), major=16, minor=6))
-    p.append(bl.cyl_between("embout", g(0, -0.22, 0), g(0, -0.25, 0), 0.005, m["clear"], verts=12))
-    p.append(bl.cyl_between("chambre", g(0, -0.25, 0), g(0, -0.31, 0), 0.009, m["clear"], verts=16))
+    p.append(bl.box("soudure_haut", (0.12, 0.004, 0.018), g(0, -0.025, 0), film, bev=0.002))
+    p.append(bl.box("soudure_bas", (0.11, 0.004, 0.014), g(0, -0.222, 0), film, bev=0.002))
+    p.append(bl.box("liquide", (0.108, 0.026, 0.15), g(0, -0.142, 0), fluid, bev=0.012, seg=3))
+    p.append(bl.torus("oeillet", 0.008, 0.0022, g(0, -0.012, 0), film, rot=(D(90), 0, 0), major=16, minor=6))
+    # Étiquette imprimée (face avant +Z) et graduations
+    p.append(bl.box("etiquette", (0.08, 0.001, 0.07), g(0, -0.105, 0.0175), m["white"]))
+    p.append(bl.text("produit", "NaCl 0,9 %", 0.012, g(0, -0.09, 0.0182), ink, extrude=0.0002))
+    p.append(bl.text("volume", "500 mL", 0.014, g(0, -0.11, 0.0182), ink, extrude=0.0002))
+    p.append(bl.box("bande", (0.08, 0.001, 0.008), g(0, -0.13, 0.0182), ink))
+    for k in range(5):
+        p.append(bl.box("grad", (0.012 if k % 2 == 0 else 0.007, 0.001, 0.0012), g(0.048, -0.15 - k * 0.012, 0.0175), ink))
+    # Sites en bas : perforateur (vers la tubulure) et site d'injection bleu
+    p.append(bl.cyl_between("site_perf", g(-0.018, -0.226, 0), g(-0.018, -0.25, 0), 0.0045, film, verts=14))
+    p.append(bl.cyl_between("site_inj", g(0.02, -0.226, 0), g(0.02, -0.245, 0), 0.0045, film, verts=14))
+    p.append(bl.cyl_between("bouchon_inj", g(0.02, -0.245, 0), g(0.02, -0.252, 0), 0.0055, m["blue"], verts=14))
+    # Perforateur et chambre compte-gouttes
+    clear = bl.mat("Chambre gouttes", (0.94, 0.96, 0.98), 0.15, 0.0, 0.5, alpha=0.35)
+    p.append(bl.cyl_between("perforateur", g(-0.018, -0.25, 0), g(-0.018, -0.262, 0), 0.006, m["white"], verts=16))
+    p.append(bl.box("ailette_perf", (0.022, 0.003, 0.008), g(-0.018, -0.257, 0), m["white"]))
+    p.append(bl.lathe("chambre", [(0.0035, 0.0), (0.0095, 0.004), (0.0095, 0.05), (0.004, 0.056), (0.0025, 0.06)], clear, segments=24,
+                      loc=g(-0.018, -0.322, 0)))
+    p.append(bl.cyl_between("niveau", g(-0.018, -0.316, 0), g(-0.018, -0.296, 0), 0.0085, fluid, verts=20))
     return grouped({"poche": p})
 
 
